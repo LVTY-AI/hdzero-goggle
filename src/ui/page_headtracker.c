@@ -350,6 +350,7 @@ static void page_headtracker_on_click_page2(uint8_t key, int sel) {
         ht_set_alarm_angle();
     }
 }
+
 static void page_headtracker_on_click(uint8_t key, int sel) {
     if (sel == 0) {
         btn_group_toggle_sel(&page_select);

@@ -44,7 +44,17 @@ static bool is_moving = true;
 static volatile bool calibrating = false;
 static int calibration_count = 0;
 
+// Intrinsic Tait-Bryan body-frame rotation (X -> Y -> Z, see util/math.c::rotate)
+// applied identically to gyro and accel before Madgwick fusion. Aligns IMU
+// axes with the device frame so pan/tilt/roll are independent at Madgwick output.
+#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
+// 23 deg accounts for the goggle visor cant.
 static const float imu_orientation[3] = {0.0 * DEG_TO_RAD, -90.0 * DEG_TO_RAD, (-90.0 + 23.0) * DEG_TO_RAD};
+#elif defined(HDZBOXPRO)
+// BoxPro IMU is mounted at ~30 deg around device-X (chip not horizontal).
+// Determined empirically; do not change without re-tuning on hardware.
+static const float imu_orientation[3] = {-30.0 * DEG_TO_RAD, -90.0 * DEG_TO_RAD, -67.0 * DEG_TO_RAD};
+#endif
 
 static const int ppmMaxPulse = 500;
 static const int ppmMinPulse = -500;
@@ -330,8 +340,6 @@ static void calculate_orientation() {
 
     calc_gyr(gyrAngle);
     calc_acc(accAngle);
-    // LOGI("ACC=%.2f,%.2f,%.2f\tGYR=%.2f,%.2f,%.2f", accAngle[0], accAngle[1], accAngle[2],
-    //     gyrAngle[0], gyrAngle[1], gyrAngle[2]);
 
     MadgwickAHRSupdateIMU(gyrAngle[0] * DEG_TO_RAD, gyrAngle[1] * DEG_TO_RAD, gyrAngle[2] * DEG_TO_RAD,
                           accAngle[0], accAngle[1], accAngle[2]);
