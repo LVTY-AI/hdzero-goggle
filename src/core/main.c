@@ -22,6 +22,7 @@ SDL_mutex *global_sdl_mutex;
 #include "core/app_state.h"
 #include "core/common.hh"
 #include "core/elrs.h"
+#include "core/scan_core.h"
 #include "core/ht.h"
 #include "core/input_device.h"
 #include "core/osd.h"
@@ -159,6 +160,9 @@ int main(int argc, char *argv[]) {
     // 1. Recall configuration
     settings_init();
     settings_load();
+#if defined(HDZBOXPRO)
+    scan_core_self_check();
+#endif
     language_init();
     pclk_phase_init();
 
