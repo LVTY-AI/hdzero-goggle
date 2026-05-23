@@ -102,6 +102,7 @@ static auto_result_t auto_results[AUTO_RESULT_MAX];
 static size_t auto_result_count = 0;
 static int auto_select_index = 0;
 static lv_obj_t *auto_list = NULL;
+static lv_obj_t *auto_focused_btn = NULL;
 #endif
 
 static void select_signal(channel_t *channel) {
@@ -399,10 +400,11 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
 
 #if defined(HDZBOXPRO)
     // Auto-mode results list, hidden by default. Reuses cont2 (the grid container).
+    // Positioned absolutely (not grid-managed) so it covers the full container
+    // regardless of the grid template.
     auto_list = lv_list_create(cont2);
+    lv_obj_set_pos(auto_list, 0, 0);
     lv_obj_set_size(auto_list, lv_pct(100), lv_pct(100));
-    lv_obj_set_grid_cell(auto_list, LV_GRID_ALIGN_STRETCH, 0, 4,
-                         LV_GRID_ALIGN_STRETCH, 0, 5);
     lv_obj_add_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
     // If the initial mode is Auto, show the list and hide the grid cells.
     if (scan_mode == SCAN_MODE_AUTO) {
@@ -580,6 +582,7 @@ static int8_t scan_now_auto(void) {
           compare_results_desc);
 
     // Render results into the list widget.
+    auto_focused_btn = NULL;
     if (auto_list) lv_obj_clean(auto_list);
     for (size_t i = 0; i < auto_result_count; i++) {
         char row[64];
@@ -594,6 +597,10 @@ static int8_t scan_now_auto(void) {
     }
 
     auto_select_index = 0;
+    auto_focused_btn = lv_obj_get_child(auto_list, 0);
+    if (auto_focused_btn) {
+        lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
+    }
     lv_label_set_text(label, _lang("Scanning done"));
 
     // Restore progress bar range to the default used by HDZ/Analog modes.
@@ -708,13 +715,23 @@ static void page_scannow_on_roller(uint8_t key) {
 #if defined(HDZBOXPRO)
     if (scan_mode == SCAN_MODE_AUTO) {
         if (auto_result_count == 0) return;
+        int new_index = auto_select_index;
         if (key == DIAL_KEY_UP && auto_select_index + 1 < (int)auto_result_count) {
-            auto_select_index++;
+            new_index = auto_select_index + 1;
         } else if (key == DIAL_KEY_DOWN && auto_select_index > 0) {
-            auto_select_index--;
+            new_index = auto_select_index - 1;
         }
-        lv_obj_t *btn = lv_obj_get_child(auto_list, auto_select_index);
-        if (btn) lv_obj_scroll_to_view(btn, LV_ANIM_ON);
+        if (new_index != auto_select_index) {
+            if (auto_focused_btn) {
+                lv_obj_clear_state(auto_focused_btn, LV_STATE_FOCUSED);
+            }
+            auto_select_index = new_index;
+            auto_focused_btn = lv_obj_get_child(auto_list, auto_select_index);
+            if (auto_focused_btn) {
+                lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
+                lv_obj_scroll_to_view(auto_focused_btn, LV_ANIM_ON);
+            }
+        }
         return;
     }
 #endif

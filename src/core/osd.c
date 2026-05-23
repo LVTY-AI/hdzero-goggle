@@ -398,10 +398,10 @@ char *channel2str_tagged(int protocol, uint8_t channel_index) {
     char *base;
     if (protocol == 1 /* PROTOCOL_HDZ */) {
         base = channel2str(1, g_setting.source.hdzero_band, channel_index);
-        snprintf(buf, sizeof(buf), "%s\xC2\xB7HDZ", base); // U+00B7 middle dot
+        snprintf(buf, sizeof(buf), "%s/HDZ", base);
     } else if (protocol == 2 /* PROTOCOL_ANALOG */) {
         base = channel2str(0, 0, channel_index);
-        snprintf(buf, sizeof(buf), "%s\xC2\xB7ANA", base);
+        snprintf(buf, sizeof(buf), "%s/ANA", base);
     } else {
         snprintf(buf, sizeof(buf), "----");
     }
