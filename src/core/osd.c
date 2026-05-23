@@ -393,6 +393,21 @@ char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // cha
     }
 }
 
+char *channel2str_tagged(int protocol, uint8_t channel_index) {
+    static char buf[16];
+    char *base;
+    if (protocol == 1 /* PROTOCOL_HDZ */) {
+        base = channel2str(1, g_setting.source.hdzero_band, channel_index);
+        snprintf(buf, sizeof(buf), "%s\xC2\xB7HDZ", base); // U+00B7 middle dot
+    } else if (protocol == 2 /* PROTOCOL_ANALOG */) {
+        base = channel2str(0, 0, channel_index);
+        snprintf(buf, sizeof(buf), "%s\xC2\xB7ANA", base);
+    } else {
+        snprintf(buf, sizeof(buf), "----");
+    }
+    return buf;
+}
+
 void osd_channel_show(bool bShow) {
     uint8_t ch;
     lv_color_t color;

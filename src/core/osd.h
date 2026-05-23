@@ -97,6 +97,12 @@ void osd_rec_update(bool enable);
 void osd_show(bool show);
 void osd_update_element_positions();
 char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel);
+// Returns a channel label tagged with the protocol that produced it, e.g.
+// "R1·HDZ" or "F4·ANA". The `protocol` parameter takes scan_protocol_t
+// values (1 = PROTOCOL_HDZ, 2 = PROTOCOL_ANALOG); other values yield "----".
+// Declared as `int` (not `scan_protocol_t`) so osd.h does not need to include
+// scan_core.h.
+char *channel2str_tagged(int protocol, uint8_t channel_index);
 void load_fc_osd_font(uint8_t);
 void *thread_osd(void *ptr);
 void osd_resource_path(char *buf, const char *fmt, osd_resource_t osd_resource_type, ...);
