@@ -463,10 +463,13 @@ static int8_t scan_now_analog(uint8_t band_idx) {
         scan_probe_analog(global_idx, &rssi_mv, &valid);
         if (valid) {
             channel_status_tb[i].is_valid = 1;
-            // Scale RSSI mV (~500..3300 typical) to gain buckets 0..~100 used by
-            // set_signal_bar. Dividing by 32 maps the ~1600 mV midpoint to ~50,
-            // giving a rough but visually reasonable signal-strength display.
-            channel_status_tb[i].gain = (int)(rssi_mv / 32);
+            // set_signal_bar buckets were tuned for HDZ gain (0..60). Map RSSI mV
+            // to that range with a coarse /32 divisor and clamp.
+            {
+                uint16_t scaled = rssi_mv / 32;
+                if (scaled > 60) scaled = 60;
+                channel_status_tb[i].gain = (uint8_t)scaled;
+            }
             set_signal_bar(&channel_tb[i],
                            channel_status_tb[i].is_valid,
                            channel_status_tb[i].gain);
@@ -545,7 +548,21 @@ static void page_scannow_enter() {
             g_autoscan_exit = true;
 
         app_state_push(APP_STATE_VIDEO);
-        app_switch_to_hdzero(false);
+#if defined(HDZBOXPRO)
+        if (scan_mode == SCAN_MODE_ANALOG) {
+            // valid_channel_tb[0] is the cell index within the current band.
+            uint8_t band = g_setting.source.analog_scan_band;
+            uint8_t ch_in_band = valid_channel_tb[0] & 0x7F;
+            uint8_t global_idx = band * 8 + ch_in_band;
+            g_setting.source.analog_channel = global_idx + 1;
+            ini_putl("source", "analog_channel",
+                     g_setting.source.analog_channel, SETTING_INI);
+            app_switch_to_analog(0);
+        } else
+#endif
+        {
+            app_switch_to_hdzero(false);
+        }
     }
 
     if (auto_scaned_cnt == -1)
@@ -556,6 +573,7 @@ static void page_scannow_exit() {
 #if defined(HDZBOXPRO)
     if (scan_mode == SCAN_MODE_ANALOG) {
         rtc6715.init(0, 0); // power down analog RX on exit
+        return;             // HDZ was never opened in this mode
     }
 #endif
     HDZero_Close();
