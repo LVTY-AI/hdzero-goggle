@@ -35,6 +35,16 @@ typedef struct {
 extern const scan_freq_entry_t scan_freq_table[];
 extern const size_t            scan_freq_table_len;
 
+// Analog channel idx (0..47) → freq in MHz. Matches rtc6715 tab[] ordering
+// (A, B, E, F, R, L). Use this when the analog index lookup in
+// scan_freq_table needs a frequency fallback (some indices alias the same
+// frequency and are merged — e.g. analog F8 idx=31 is at 5880 MHz, the same
+// row as R7 idx=38).
+extern const uint16_t scan_analog_idx_to_mhz[48];
+
+// Returns the scan_freq_table index whose freq_mhz matches, or -1 if absent.
+int scan_freq_table_find_by_mhz(uint16_t mhz);
+
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out);
 

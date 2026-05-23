@@ -119,6 +119,28 @@ const scan_freq_entry_t scan_freq_table[] = {
 const size_t scan_freq_table_len =
     sizeof(scan_freq_table) / sizeof(scan_freq_table[0]);
 
+// Analog channel idx (0..47) → frequency in MHz. Matches the rtc6715 tab[]
+// ordering (A, B, E, F, R, L). Used to fall back when an analog channel idx
+// isn't directly present in scan_freq_table (because multiple analog indices
+// alias the same frequency and are merged — see the 5880 MHz note above).
+const uint16_t scan_analog_idx_to_mhz[48] = {
+    5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725, // A1..A8
+    5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866, // B1..B8
+    5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945, // E1..E8
+    5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880, // F1..F8
+    5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917, // R1..R8
+    5333, 5373, 5413, 5453, 5493, 5533, 5573, 5613, // L1..L8
+};
+
+int scan_freq_table_find_by_mhz(uint16_t mhz) {
+    for (size_t i = 0; i < scan_freq_table_len; i++) {
+        if (scan_freq_table[i].freq_mhz == mhz) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 // Tunable: fraction of (calib_max - calib_min) above calib_min that counts as
 // "signal present". 0.20 is a starting value, may need adjustment after
 // hardware testing.

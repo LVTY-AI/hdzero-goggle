@@ -700,16 +700,13 @@ static void page_scannow_enter() {
 
 static void page_scannow_exit() {
 #if defined(HDZBOXPRO)
-    if (scan_mode == SCAN_MODE_ANALOG) {
+    if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
         rtc6715.init(0, 0); // power down analog RX on exit
-        return;             // HDZ was never opened in this mode
-    }
-    if (scan_mode == SCAN_MODE_AUTO) {
-        rtc6715.init(0, 0);
-        HDZero_Close();
-        return;
     }
 #endif
+    // HDZero_Close() is idempotent (resets DM5680 baseband and clears
+    // hdzero_open flag). Always call so a session that ran scan_now_hdzero
+    // but exited in a different mode still tears down the HDZ pipeline.
     HDZero_Close();
 }
 

@@ -98,6 +98,14 @@ static int find_freq_table_index(void) {
                 return (int)i;
             }
         }
+        // Fallback: some analog indices alias another protocol's row at the
+        // same frequency (e.g. analog F8 idx=31 lives in the R7 row at
+        // 5880 MHz). Look up the frequency for this index and find the row
+        // by MHz so the dial starts at the correct position.
+        if (ch >= 0 && ch < 48) {
+            int idx = scan_freq_table_find_by_mhz(scan_analog_idx_to_mhz[ch]);
+            if (idx >= 0) return idx;
+        }
     }
     return 0;
 }
