@@ -51,6 +51,7 @@ enum {
     ROW_BOXPRO_HDZ_BAND,
     ROW_BOXPRO_HDZ_WIDTH,
     ROW_BOXPRO_ANALOG_RATIO,
+    ROW_BOXPRO_AUTO_DETECT,
     ROW_BOXPRO_TEST_PATTERN,
     ROW_BOXPRO_BACK,
     ROW_BOXPRO_COUNT
@@ -90,6 +91,7 @@ enum {
 #define ROW_HDZ_BAND     ROW_BOXPRO_HDZ_BAND
 #define ROW_HDZ_WIDTH    ROW_BOXPRO_HDZ_WIDTH
 #define ROW_ANALOG_RATIO ROW_BOXPRO_ANALOG_RATIO
+#define ROW_AUTO_DETECT  ROW_BOXPRO_AUTO_DETECT
 #define ROW_TEST_PATTERN ROW_BOXPRO_TEST_PATTERN
 #define ROW_BACK         ROW_BOXPRO_BACK
 #define ROW_COUNT        ROW_BOXPRO_COUNT
@@ -115,6 +117,7 @@ static lv_obj_t *label[6] = {NULL};
 static uint8_t oled_tst_mode = 0; // 0=Normal, 1=CB, 2=Grid, 3=All Black, 4=All White, 5=Boot logo
 static bool in_sourcepage = false;
 static btn_group_t btn_group0, btn_group1, btn_group2, btn_group3;
+static btn_group_t btn_group_auto_detect;
 
 static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     char buf[128];
@@ -167,6 +170,14 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     create_btn_group_item(&btn_group3, cont, 2, _lang("Analog Ratio"), _lang("4:3"), _lang("16:9"), "", "", ROW_ANALOG_RATIO);
     btn_group_set_sel(&btn_group3, g_setting.source.analog_ratio);
+
+#if defined(HDZBOXPRO)
+    create_btn_group_item(&btn_group_auto_detect, cont, 2,
+                          _lang("Auto Protocol Detect"),
+                          _lang("Off"), _lang("On"), "", "", ROW_AUTO_DETECT);
+    btn_group_set_sel(&btn_group_auto_detect,
+                      g_setting.source.auto_protocol_detect ? 1 : 0);
+#endif
 
     if (g_setting.storage.selftest) {
         label[4] = create_label_item(cont, "Display Pattern: Normal", 1, ROW_TEST_PATTERN, 3);
@@ -359,6 +370,15 @@ static void page_source_on_click(uint8_t key, int sel) {
         g_setting.source.analog_ratio = btn_group_get_sel(&btn_group3);
         ini_putl("source", "analog_ratio", g_setting.source.analog_ratio, SETTING_INI);
         break;
+#if defined(HDZBOXPRO)
+    case ROW_AUTO_DETECT:
+        btn_group_toggle_sel(&btn_group_auto_detect);
+        g_setting.source.auto_protocol_detect =
+            (btn_group_get_sel(&btn_group_auto_detect) == 1);
+        settings_put_bool("source", "auto_protocol_detect",
+                          g_setting.source.auto_protocol_detect);
+        break;
+#endif
     case ROW_TEST_PATTERN:
         if (g_setting.storage.selftest && label[4]) {
             uint8_t oled_te = (oled_tst_mode != 0);
