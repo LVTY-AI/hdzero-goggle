@@ -77,6 +77,12 @@ static lv_coord_t row_dsc1[] = {UI_SCANNOW_SCANNER_ROWS};
 static lv_coord_t col_dsc2[] = {UI_SCANNOW_SIGNAL_COLS};
 static lv_coord_t row_dsc2[] = {UI_SCANNOW_SIGNAL_ROWS};
 #if defined(HDZBOXPRO)
+typedef enum {
+    SCAN_MODE_HDZERO = 0,
+    SCAN_MODE_ANALOG = 1,
+    SCAN_MODE_AUTO   = 2,
+} scan_mode_t;
+
 static scan_mode_t scan_mode = SCAN_MODE_HDZERO;
 static lv_obj_t *mode_dropdown = NULL;
 #endif
@@ -228,7 +234,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(progressbar, lv_color_make(0xff, 0xff, 0xff), LV_PART_MAIN);
     lv_obj_set_style_radius(progressbar, 0, LV_PART_MAIN);
-#ifdef HDZBOXPRO
+#if defined(HDZBOXPRO)
     lv_obj_set_style_bg_color(progressbar, lv_color_make(0, 0x80, 0), LV_PART_INDICATOR);
 #else
     lv_obj_set_style_bg_color(progressbar, lv_color_make(0, 0xff, 0), LV_PART_INDICATOR);

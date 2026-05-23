@@ -15,12 +15,6 @@ typedef enum {
     LOW_BAND = 1,
 } band_t;
 
-typedef enum {
-    SCAN_MODE_HDZERO = 0,
-    SCAN_MODE_ANALOG = 1,
-    SCAN_MODE_AUTO   = 2,
-} scan_mode_t;
-
 int scan(void);
 int scan_reinit(void);
 void autoscan_exit(void);
