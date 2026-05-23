@@ -2,16 +2,7 @@
 
 #if defined(HDZBOXPRO)
 
-#include <stdio.h>
-#include <unistd.h>
-
 #include <log/log.h>
-
-#include "core/common.hh"
-#include "core/settings.h"
-#include "driver/dm5680.h"
-#include "driver/dm6302.h"
-#include "driver/rtc6715.h"
 
 // Unified table: one row per distinct 5.8GHz frequency, deduplicated across
 // HDZero and analog protocols. Sorted strictly ascending by freq_mhz.
@@ -19,10 +10,9 @@
 // Analog channel indices match RTC6715 tab order: 0..7=A, 8..15=B, 16..23=E,
 // 24..31=F, 32..39=R, 40..47=L.
 //
-// Note: analog F8 (idx 31, 5880 MHz) collides with HDZ R7 (also 5880 MHz).
-// The merged row at 5880 uses analog R7 (idx 38). Analog F8 (idx 31) is
-// unreachable via this unified table by design; use scan_probe_analog(31, ...)
-// directly if needed.
+// Note: analog F8 (idx 31) and analog R7 (idx 38) are both 5880 MHz (identical
+// RTC6715 PLL register). The merged row uses idx 38 so the user-facing label
+// matches HDZ R7 nomenclature. idx 31 produces identical RF output.
 const scan_freq_entry_t scan_freq_table[] = {
     // L band analog (40..47) interleaved with HDZ Low band (band=1, ch 0..7).
     // Analog L: 5333, 5373, 5413, 5453, 5493, 5533, 5573, 5613
@@ -79,7 +69,7 @@ const scan_freq_entry_t scan_freq_table[] = {
     { 5860,  -1,  -1, 30 }, // analog F7
     { 5865,  -1,  -1,  0 }, // analog A1
     { 5866,  -1,  -1, 15 }, // analog B8
-    { 5880,   0,   6, 38 }, // HDZ R7 + analog R7 (analog F8 idx 31 dropped — collision)
+    { 5880,   0,   6, 38 }, // HDZ R7 + analog R7; analog F8 (idx 31) same freq, see note above
     { 5885,  -1,  -1, 20 }, // analog E5
     { 5905,  -1,  -1, 21 }, // analog E6
     { 5917,   0,   7, 39 }, // HDZ R8 + analog R8
