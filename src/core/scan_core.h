@@ -45,6 +45,7 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry);
 
 void scan_core_self_check(void);
 void scan_core_idle_tick(void);
+void scan_core_notify_analog_powered_on(void);
 
 #endif // HDZBOXPRO
 

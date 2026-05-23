@@ -20,10 +20,19 @@
 static struct timespec last_probe_ts = {0};
 // Set by scan_core_idle_tick when analog is powered down; cleared by
 // scan_probe_analog so the next probe re-inits the chip before tuning.
-static bool analog_powered_down = false;
+static volatile bool analog_powered_down = false;
 
 static void mark_probe_activity(void) {
     clock_gettime(CLOCK_MONOTONIC, &last_probe_ts);
+}
+
+// Called when a caller has just powered RTC6715 on themselves (e.g. the
+// manual band scanner in page_scannow.c) so that scan_probe_analog does
+// not redundantly re-init when its first call sees a stale "powered down"
+// flag.
+void scan_core_notify_analog_powered_on(void) {
+    analog_powered_down = false;
+    mark_probe_activity();
 }
 
 static bool probe_idle_expired(int idle_secs) {
@@ -165,8 +174,10 @@ bool scan_probe_hdzero(uint8_t band, uint8_t channel,
 bool scan_probe_analog(uint8_t channel_idx,
                        uint16_t *rssi_mv_out, bool *valid_out) {
     mark_probe_activity();
-    // Re-power analog if idle-timeout powered it down.
     if (analog_powered_down) {
+        // rtc6715.init(1, 0) includes a 200ms power-on stabilization delay.
+        // This is additive to the 50ms PLL-lock usleep below; first probe
+        // after an idle power-down therefore stalls ~250ms instead of 50ms.
         rtc6715.init(1, 0);
         analog_powered_down = false;
     }

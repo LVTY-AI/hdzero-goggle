@@ -509,6 +509,7 @@ static int8_t scan_now_analog(uint8_t band_idx) {
 
     // Power on RTC6715; HDZ stays closed while we probe analog channels.
     rtc6715.init(1, 0);
+    scan_core_notify_analog_powered_on();
 
     for (uint8_t i = 0; i < 8; i++) {
         uint8_t global_idx = band_idx * 8 + i; // 0..47
@@ -556,6 +557,7 @@ static int8_t scan_now_auto(void) {
 
     // Power on both radios for the scan.
     rtc6715.init(1, 0);
+    scan_core_notify_analog_powered_on();
     HDZero_open(g_setting.source.hdzero_bw);
 
     snprintf(buf, sizeof(buf), "%s...", _lang("Scanning"));
