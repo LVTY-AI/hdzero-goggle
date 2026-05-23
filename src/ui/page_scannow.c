@@ -13,6 +13,7 @@
 #include "../conf/ui.h"
 
 #include "core/app_state.h"
+#include "core/scan_core.h"
 #include "core/common.hh"
 #include "core/defines.h"
 #include "core/msp_displayport.h"
@@ -294,31 +295,6 @@ static void user_clear_signal(void) {
     }
 }
 
-uint8_t max4(uint8_t a1, uint8_t a2, uint8_t a3, uint8_t a4) {
-    uint8_t b1 = (a1 > a2) ? a1 : a2;
-    uint8_t b2 = (a3 > a4) ? a3 : a4;
-    return (b1 > b2) ? b1 : b2;
-}
-
-void scan_channel(band_t band, uint8_t channel, uint8_t *gain_ret, bool *valid) {
-    uint8_t vld0, vld1;
-    uint8_t gain[4];
-
-    DM6302_SetChannel(band, channel);
-
-    usleep(100000);
-    DM5680_clear_vldflg();
-    DM5680_req_vldflg();
-
-    DM6302_get_gain(gain);
-    *gain_ret = max4(gain[0], gain[1], gain[2], gain[3]);
-
-    vld0 = rx_status[0].rx_valid;
-    vld1 = rx_status[1].rx_valid;
-    *valid = vld0 | vld1;
-
-    LOGI("Scan band:%d, channel%d: valid:%d, gain:%d", band, channel, *valid, *gain_ret);
-}
 
 int8_t scan_now(void) {
     uint8_t ch, gain;
@@ -344,7 +320,7 @@ int8_t scan_now(void) {
     lv_timer_handler();
 
     for (ch = 0; ch < HDZERO_CHANNEL_NUM; ch++) {
-        scan_channel(g_setting.source.hdzero_band, ch, &gain, &valid);
+        scan_probe_hdzero(g_setting.source.hdzero_band, ch, &gain, &valid);
         if (valid) {
             channel_status_tb[ch].is_valid = 1;
             channel_status_tb[ch].gain = gain;

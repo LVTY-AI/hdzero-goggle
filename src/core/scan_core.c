@@ -2,7 +2,12 @@
 
 #if defined(HDZBOXPRO)
 
+#include <unistd.h>
+
 #include <log/log.h>
+
+#include "driver/dm5680.h"
+#include "driver/dm6302.h"
 
 // Unified table: one row per distinct 5.8GHz frequency, deduplicated across
 // HDZero and analog protocols. Sorted strictly ascending by freq_mhz.
@@ -82,10 +87,27 @@ const size_t scan_freq_table_len =
 
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out) {
-    (void)band; (void)channel;
-    if (gain_out)  *gain_out  = 0;
-    if (valid_out) *valid_out = false;
-    return false;
+    uint8_t gain[4];
+
+    DM6302_SetChannel(band, channel);
+
+    usleep(100000);
+    DM5680_clear_vldflg();
+    DM5680_req_vldflg();
+
+    DM6302_get_gain(gain);
+    uint8_t b1 = (gain[0] > gain[1]) ? gain[0] : gain[1];
+    uint8_t b2 = (gain[2] > gain[3]) ? gain[2] : gain[3];
+    uint8_t max_gain = (b1 > b2) ? b1 : b2;
+
+    bool valid = (rx_status[0].rx_valid | rx_status[1].rx_valid) != 0;
+
+    if (gain_out)  *gain_out  = max_gain;
+    if (valid_out) *valid_out = valid;
+
+    LOGI("scan_probe_hdzero band:%u ch:%u valid:%d gain:%u",
+         band, channel, valid, max_gain);
+    return valid;
 }
 
 bool scan_probe_analog(uint8_t channel_idx,
