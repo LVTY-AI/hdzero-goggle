@@ -19,7 +19,6 @@
 #include "core/msp_displayport.h"
 #include "core/osd.h"
 #include "core/settings.h"
-#include "driver/dm5680.h"
 #include "driver/dm6302.h"
 #include "driver/fbtools.h"
 #include "driver/hardware.h"
