@@ -87,6 +87,21 @@ typedef enum {
 static scan_mode_t scan_mode = SCAN_MODE_HDZERO;
 static lv_obj_t *mode_dropdown = NULL;
 static lv_obj_t *band_dropdown = NULL;
+
+#define AUTO_RESULT_MAX 32
+
+typedef struct {
+    uint16_t freq_mhz;
+    scan_protocol_t protocol;
+    int8_t   hdz_channel;
+    int8_t   analog_channel;
+    uint8_t  strength;
+} auto_result_t;
+
+static auto_result_t auto_results[AUTO_RESULT_MAX];
+static size_t auto_result_count = 0;
+static int auto_select_index = 0;
+static lv_obj_t *auto_list = NULL;
 #endif
 
 static void select_signal(channel_t *channel) {
@@ -240,7 +255,24 @@ static void on_mode_dropdown_change(lv_event_t *e) {
             lv_obj_add_flag(band_dropdown, LV_OBJ_FLAG_HIDDEN);
         }
     }
-    page_scannow_set_channel_label();
+
+    if (auto_list) {
+        if (scan_mode == SCAN_MODE_AUTO) {
+            lv_obj_clear_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
+            // Hide the 8/12-cell grid in Auto mode.
+            for (int i = 0; i < BASE_CH_NUM; i++) {
+                lv_obj_add_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
+            }
+        } else {
+            lv_obj_add_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
+            // Restore grid visibility via the existing helper.
+            page_scannow_set_channel_label();
+        }
+    } else {
+        page_scannow_set_channel_label();
+    }
 }
 #endif
 
@@ -364,6 +396,24 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         create_channel_switch(cont2, ((i >> 1) << 2) + col_offset, row_offset + (i & 0x01), &channel_tb[8 + i]);
     }
     page_scannow_set_channel_label();
+
+#if defined(HDZBOXPRO)
+    // Auto-mode results list, hidden by default. Reuses cont2 (the grid container).
+    auto_list = lv_list_create(cont2);
+    lv_obj_set_size(auto_list, lv_pct(100), lv_pct(100));
+    lv_obj_set_grid_cell(auto_list, LV_GRID_ALIGN_STRETCH, 0, 4,
+                         LV_GRID_ALIGN_STRETCH, 0, 5);
+    lv_obj_add_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
+    // If the initial mode is Auto, show the list and hide the grid cells.
+    if (scan_mode == SCAN_MODE_AUTO) {
+        lv_obj_clear_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
+        for (int i = 0; i < BASE_CH_NUM; i++) {
+            lv_obj_add_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+#endif
 
     return page;
 }
@@ -490,8 +540,66 @@ static int8_t scan_now_analog(uint8_t band_idx) {
     return valid_index ? (int8_t)valid_index : -1;
 }
 
+static int compare_results_desc(const void *a, const void *b) {
+    const auto_result_t *ra = a;
+    const auto_result_t *rb = b;
+    if (rb->strength != ra->strength)
+        return (int)rb->strength - (int)ra->strength;
+    return (int)ra->freq_mhz - (int)rb->freq_mhz;
+}
+
 static int8_t scan_now_auto(void) {
-    return -1; // implemented in Task 9
+    char buf[128];
+    auto_result_count = 0;
+
+    // Power on both radios for the scan.
+    rtc6715.init(1, 0);
+    HDZero_open(g_setting.source.hdzero_bw);
+
+    snprintf(buf, sizeof(buf), "%s...", _lang("Scanning"));
+    lv_label_set_text(label, buf);
+    lv_bar_set_range(progressbar, 0, (int32_t)scan_freq_table_len);
+    lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
+    lv_timer_handler();
+
+    for (size_t i = 0; i < scan_freq_table_len; i++) {
+        scan_result_t r = scan_probe_both(&scan_freq_table[i]);
+        if (r.protocol != PROTOCOL_NONE && auto_result_count < AUTO_RESULT_MAX) {
+            auto_result_t *out = &auto_results[auto_result_count++];
+            out->freq_mhz       = scan_freq_table[i].freq_mhz;
+            out->protocol       = r.protocol;
+            out->hdz_channel    = scan_freq_table[i].hdz_channel;
+            out->analog_channel = scan_freq_table[i].analog_channel;
+            out->strength       = r.strength;
+        }
+        lv_bar_set_value(progressbar, (int32_t)(i + 1), LV_ANIM_OFF);
+        lv_timer_handler();
+    }
+
+    qsort(auto_results, auto_result_count, sizeof(auto_result_t),
+          compare_results_desc);
+
+    // Render results into the list widget.
+    if (auto_list) lv_obj_clean(auto_list);
+    for (size_t i = 0; i < auto_result_count; i++) {
+        char row[64];
+        const auto_result_t *res = &auto_results[i];
+        uint8_t ch_idx = (res->protocol == PROTOCOL_HDZ)
+                            ? (uint8_t)res->hdz_channel + 1
+                            : (uint8_t)res->analog_channel + 1;
+        snprintf(row, sizeof(row), "%s   %3u%%",
+                 channel2str_tagged((int)res->protocol, ch_idx),
+                 res->strength);
+        if (auto_list) lv_list_add_btn(auto_list, NULL, row);
+    }
+
+    auto_select_index = 0;
+    lv_label_set_text(label, _lang("Scanning done"));
+
+    // Restore progress bar range to the default used by HDZ/Analog modes.
+    lv_bar_set_range(progressbar, 0, 14);
+
+    return auto_result_count ? (int8_t)auto_result_count : -1;
 }
 
 static int8_t scan_now_dispatch(void) {
@@ -549,7 +657,19 @@ static void page_scannow_enter() {
 
         app_state_push(APP_STATE_VIDEO);
 #if defined(HDZBOXPRO)
-        if (scan_mode == SCAN_MODE_ANALOG) {
+        if (scan_mode == SCAN_MODE_AUTO) {
+            const auto_result_t *res = &auto_results[0];
+            if (res->protocol == PROTOCOL_HDZ) {
+                g_setting.scan.channel = (uint8_t)res->hdz_channel + 1;
+                ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
+                app_switch_to_hdzero(false);
+            } else if (res->protocol == PROTOCOL_ANALOG) {
+                g_setting.source.analog_channel = (uint8_t)res->analog_channel + 1;
+                ini_putl("source", "analog_channel",
+                         g_setting.source.analog_channel, SETTING_INI);
+                app_switch_to_analog(0);
+            }
+        } else if (scan_mode == SCAN_MODE_ANALOG) {
             // valid_channel_tb[0] is the cell index within the current band.
             uint8_t band = g_setting.source.analog_scan_band;
             uint8_t ch_in_band = valid_channel_tb[0] & 0x7F;
@@ -575,11 +695,29 @@ static void page_scannow_exit() {
         rtc6715.init(0, 0); // power down analog RX on exit
         return;             // HDZ was never opened in this mode
     }
+    if (scan_mode == SCAN_MODE_AUTO) {
+        rtc6715.init(0, 0);
+        HDZero_Close();
+        return;
+    }
 #endif
     HDZero_Close();
 }
 
 static void page_scannow_on_roller(uint8_t key) {
+#if defined(HDZBOXPRO)
+    if (scan_mode == SCAN_MODE_AUTO) {
+        if (auto_result_count == 0) return;
+        if (key == DIAL_KEY_UP && auto_select_index + 1 < (int)auto_result_count) {
+            auto_select_index++;
+        } else if (key == DIAL_KEY_DOWN && auto_select_index > 0) {
+            auto_select_index--;
+        }
+        lv_obj_t *btn = lv_obj_get_child(auto_list, auto_select_index);
+        if (btn) lv_obj_scroll_to_view(btn, LV_ANIM_ON);
+        return;
+    }
+#endif
     if (valid_channel_tb[0] == -1)
         return;
 
@@ -595,19 +733,34 @@ static void page_scannow_on_roller(uint8_t key) {
 
 static void page_scannow_on_click(uint8_t key, int sel) {
 #if defined(HDZBOXPRO)
+    if (scan_mode == SCAN_MODE_AUTO) {
+        if (auto_result_count == 0) return;
+        const auto_result_t *res = &auto_results[auto_select_index];
+        app_state_push(APP_STATE_VIDEO);
+        if (res->protocol == PROTOCOL_HDZ) {
+            g_setting.scan.channel = (uint8_t)res->hdz_channel + 1;
+            ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
+            app_switch_to_hdzero(false);
+        } else if (res->protocol == PROTOCOL_ANALOG) {
+            g_setting.source.analog_channel = (uint8_t)res->analog_channel + 1;
+            ini_putl("source", "analog_channel",
+                     g_setting.source.analog_channel, SETTING_INI);
+            app_switch_to_analog(0);
+        }
+        return;
+    }
     if (scan_mode == SCAN_MODE_ANALOG) {
         if (valid_channel_tb[0] == -1) return;
         uint8_t band = g_setting.source.analog_scan_band;
         uint8_t ch_in_band = (uint8_t)(valid_channel_tb[user_select_index] & 0x7F);
         uint8_t global_idx = band * 8 + ch_in_band;
-        g_setting.source.analog_channel = global_idx + 1; // 1-indexed
+        g_setting.source.analog_channel = global_idx + 1;
         ini_putl("source", "analog_channel",
                  g_setting.source.analog_channel, SETTING_INI);
         app_state_push(APP_STATE_VIDEO);
         app_switch_to_analog(0);
         return;
     }
-    // Task 9 will add Auto mode here.
 #endif
     app_state_push(APP_STATE_VIDEO);
     app_switch_to_hdzero(false);
