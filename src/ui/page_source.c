@@ -174,9 +174,9 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
 #if defined(HDZBOXPRO)
     create_btn_group_item(&btn_group_auto_detect, cont, 2,
                           _lang("Auto Protocol Detect"),
-                          _lang("Off"), _lang("On"), "", "", ROW_AUTO_DETECT);
+                          _lang("On"), _lang("Off"), "", "", ROW_AUTO_DETECT);
     btn_group_set_sel(&btn_group_auto_detect,
-                      g_setting.source.auto_protocol_detect ? 1 : 0);
+                      g_setting.source.auto_protocol_detect ? 0 : 1);
 #endif
 
     if (g_setting.storage.selftest) {
@@ -374,7 +374,7 @@ static void page_source_on_click(uint8_t key, int sel) {
     case ROW_AUTO_DETECT:
         btn_group_toggle_sel(&btn_group_auto_detect);
         g_setting.source.auto_protocol_detect =
-            (btn_group_get_sel(&btn_group_auto_detect) == 1);
+            (btn_group_get_sel(&btn_group_auto_detect) == 0);
         settings_put_bool("source", "auto_protocol_detect",
                           g_setting.source.auto_protocol_detect);
         break;
