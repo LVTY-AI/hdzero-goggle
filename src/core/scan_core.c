@@ -159,9 +159,56 @@ bool scan_probe_analog(uint8_t channel_idx,
     return valid;
 }
 
+// Map raw signal strength to 0..100 for sorting.
+static uint8_t hdz_strength_norm(uint8_t gain) {
+    // Existing scanner's antenna bar treats gain <= 77 as valid range.
+    // Map 0..80 → 0..100, clamp at 100.
+    uint32_t s = (uint32_t)gain * 100u / 80u;
+    if (s > 100) s = 100;
+    return (uint8_t)s;
+}
+
+static uint8_t analog_strength_norm(uint16_t rssi_mv) {
+    uint16_t cmin = g_setting.analog_rssi.calib_min;
+    uint16_t cmax = g_setting.analog_rssi.calib_max;
+    if (cmax <= cmin || rssi_mv <= cmin) return 0;
+    if (rssi_mv >= cmax) return 100;
+    return (uint8_t)(((uint32_t)(rssi_mv - cmin) * 100u) / (cmax - cmin));
+}
+
 scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
     scan_result_t r = { PROTOCOL_NONE, 0, 0, 0 };
-    (void)entry;
+
+    // Probe analog first (slower PLL).
+    bool analog_valid = false;
+    uint16_t analog_mv = 0;
+    if (entry->analog_channel >= 0) {
+        scan_probe_analog((uint8_t)entry->analog_channel,
+                          &analog_mv, &analog_valid);
+    }
+
+    // Probe HDZero.
+    bool hdz_valid = false;
+    uint8_t hdz_gain = 0;
+    if (entry->hdz_band >= 0 && entry->hdz_channel >= 0) {
+        scan_probe_hdzero((uint8_t)entry->hdz_band,
+                          (uint8_t)entry->hdz_channel,
+                          &hdz_gain, &hdz_valid);
+    }
+
+    // Tie-break: HDZ wins if both valid.
+    if (hdz_valid) {
+        r.protocol  = PROTOCOL_HDZ;
+        r.hdz_gain  = hdz_gain;
+        r.strength  = hdz_strength_norm(hdz_gain);
+    } else if (analog_valid) {
+        r.protocol  = PROTOCOL_ANALOG;
+        r.analog_mv = analog_mv;
+        r.strength  = analog_strength_norm(analog_mv);
+    }
+
+    LOGI("scan_probe_both freq=%u protocol=%d strength=%u",
+         entry->freq_mhz, r.protocol, r.strength);
     return r;
 }
 
