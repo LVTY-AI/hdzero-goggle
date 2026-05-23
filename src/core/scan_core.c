@@ -6,8 +6,10 @@
 
 #include <log/log.h>
 
+#include "core/settings.h"
 #include "driver/dm5680.h"
 #include "driver/dm6302.h"
+#include "driver/rtc6715.h"
 
 // Unified table: one row per distinct 5.8GHz frequency, deduplicated across
 // HDZero and analog protocols. Sorted strictly ascending by freq_mhz.
@@ -85,6 +87,28 @@ const scan_freq_entry_t scan_freq_table[] = {
 const size_t scan_freq_table_len =
     sizeof(scan_freq_table) / sizeof(scan_freq_table[0]);
 
+// Tunable: fraction of (calib_max - calib_min) above calib_min that counts as
+// "signal present". 0.20 is a starting value, may need adjustment after
+// hardware testing.
+#define ANALOG_SIGNAL_THRESH_FRAC_NUM 20
+#define ANALOG_SIGNAL_THRESH_FRAC_DEN 100
+
+// Fallback threshold in mV when calibration is missing/corrupt.
+#define ANALOG_SIGNAL_THRESH_FALLBACK_MV 1500
+
+static uint16_t analog_signal_threshold_mv(void) {
+    uint16_t cmin = g_setting.analog_rssi.calib_min;
+    uint16_t cmax = g_setting.analog_rssi.calib_max;
+    if (cmax <= cmin) {
+        LOGW("analog_rssi calibration invalid (min=%u max=%u), using %u mV fallback",
+             cmin, cmax, ANALOG_SIGNAL_THRESH_FALLBACK_MV);
+        return ANALOG_SIGNAL_THRESH_FALLBACK_MV;
+    }
+    return cmin + (uint16_t)(((uint32_t)(cmax - cmin)
+                              * ANALOG_SIGNAL_THRESH_FRAC_NUM)
+                             / ANALOG_SIGNAL_THRESH_FRAC_DEN);
+}
+
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out) {
     uint8_t gain[4];
@@ -112,10 +136,24 @@ bool scan_probe_hdzero(uint8_t band, uint8_t channel,
 
 bool scan_probe_analog(uint8_t channel_idx,
                        uint16_t *rssi_mv_out, bool *valid_out) {
-    (void)channel_idx;
-    if (rssi_mv_out) *rssi_mv_out = 0;
-    if (valid_out)   *valid_out   = false;
-    return false;
+    // Caller must have invoked rtc6715.init(1, ...) before scanning.
+    rtc6715.set_ch(channel_idx);
+    usleep(50000); // RTC6715 PLL lock time
+
+    int mv = rtc6715_get_rssi();
+    if (mv < 0) mv = 0;
+    if (mv > 65535) mv = 65535;
+    uint16_t rssi = (uint16_t)mv;
+
+    uint16_t thresh = analog_signal_threshold_mv();
+    bool valid = rssi > thresh;
+
+    if (rssi_mv_out) *rssi_mv_out = rssi;
+    if (valid_out)   *valid_out   = valid;
+
+    LOGI("scan_probe_analog ch:%u rssi:%u mv (thresh=%u) valid:%d",
+         channel_idx, rssi, thresh, valid);
+    return valid;
 }
 
 scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
