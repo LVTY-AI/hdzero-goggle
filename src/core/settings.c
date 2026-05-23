@@ -359,10 +359,10 @@ void settings_load(void) {
     g_setting.source.hdzero_band = ini_getl("source", "hdzero_band", g_setting_defaults.source.hdzero_band, SETTING_INI);
     g_setting.source.hdzero_bw = ini_getl("source", "hdzero_bw", g_setting_defaults.source.hdzero_bw, SETTING_INI);
     g_setting.source.analog_channel = ini_getl("source", "analog_channel", g_setting_defaults.source.analog_channel, SETTING_INI);
-    g_setting.source.auto_protocol_detect = ini_getbool("source", "auto_protocol_detect", g_setting_defaults.source.auto_protocol_detect ? 1 : 0, SETTING_INI) != 0;
+    g_setting.source.auto_protocol_detect = settings_get_bool("source", "auto_protocol_detect", g_setting_defaults.source.auto_protocol_detect);
     g_setting.source.analog_scan_band = ini_getl("source", "analog_scan_band", g_setting_defaults.source.analog_scan_band, SETTING_INI);
     if (g_setting.source.analog_scan_band > 5) {
-        g_setting.source.analog_scan_band = 4;
+        g_setting.source.analog_scan_band = g_setting_defaults.source.analog_scan_band;
     }
     if (g_setting.scan.channel > HDZERO_CHANNEL_NUM) {
         g_setting.scan.channel = 1;
