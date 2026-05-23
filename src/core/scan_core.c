@@ -100,8 +100,12 @@ static uint16_t analog_signal_threshold_mv(void) {
     uint16_t cmin = g_setting.analog_rssi.calib_min;
     uint16_t cmax = g_setting.analog_rssi.calib_max;
     if (cmax <= cmin) {
-        LOGW("analog_rssi calibration invalid (min=%u max=%u), using %u mV fallback",
-             cmin, cmax, ANALOG_SIGNAL_THRESH_FALLBACK_MV);
+        static bool warned = false;
+        if (!warned) {
+            LOGW("analog_rssi calibration invalid (min=%u max=%u), using %u mV fallback",
+                 cmin, cmax, ANALOG_SIGNAL_THRESH_FALLBACK_MV);
+            warned = true;
+        }
         return ANALOG_SIGNAL_THRESH_FALLBACK_MV;
     }
     return cmin + (uint16_t)(((uint32_t)(cmax - cmin)
@@ -142,7 +146,6 @@ bool scan_probe_analog(uint8_t channel_idx,
 
     int mv = rtc6715_get_rssi();
     if (mv < 0) mv = 0;
-    if (mv > 65535) mv = 65535;
     uint16_t rssi = (uint16_t)mv;
 
     uint16_t thresh = analog_signal_threshold_mv();
