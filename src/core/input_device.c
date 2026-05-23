@@ -67,10 +67,17 @@ static pthread_t input_device_pid;
 static int btn_value = 0;
 
 // action: 1 = tune up, 2 = tune down, 3 = confirm
+#if defined(HDZBOXPRO)
+static int auto_detect_freq_idx = -1;
+#endif
+
 void exit_tune_channel() {
     tune_state = 0;
     tune_timer = 0;
     channel_osd_mode = 0;
+#if defined(HDZBOXPRO)
+    auto_detect_freq_idx = -1;
+#endif
 }
 
 #if defined(HDZBOXPRO)
@@ -101,6 +108,7 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
                              const scan_result_t *r,
                              bool send_msp) {
     if (r->protocol == PROTOCOL_HDZ) {
+        dvr_cmd(DVR_STOP);
         if (g_source_info.source != SOURCE_HDZERO) {
             app_switch_to_hdzero(false);
         }
@@ -110,12 +118,12 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
                 g_setting.scan.channel = new_ch;
                 ini_putl("scan", "channel",
                          g_setting.scan.channel, SETTING_INI);
-                dvr_cmd(DVR_STOP);
                 hdzero_switch_channel(g_setting.scan.channel - 1);
                 if (send_msp) msp_channel_update();
             }
         }
     } else if (r->protocol == PROTOCOL_ANALOG) {
+        dvr_cmd(DVR_STOP);
         if (g_source_info.source != SOURCE_AV_MODULE) {
             app_switch_to_analog(0);
         }
@@ -125,12 +133,12 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
                 g_setting.source.analog_channel = new_ch;
                 ini_putl("source", "analog_channel",
                          g_setting.source.analog_channel, SETTING_INI);
-                dvr_cmd(DVR_STOP);
                 rtc6715.set_ch(g_setting.source.analog_channel - 1);
                 if (send_msp) msp_channel_update();
             }
         }
     } else {
+        dvr_cmd(DVR_STOP);
         // No signal: stay on current source, but tune to the entry's
         // matching protocol channel so subsequent navigation makes sense.
         if (g_source_info.source == SOURCE_HDZERO && entry->hdz_channel >= 0) {
@@ -170,16 +178,15 @@ void tune_channel(uint8_t action) {
 
         // Auto-detect path: walk the unified frequency table on UP/DOWN,
         // probe both protocols on CLICK/PRESS.
-        static int freq_idx = -1;
-        if (freq_idx < 0) freq_idx = find_freq_table_index();
+        if (auto_detect_freq_idx < 0) auto_detect_freq_idx = find_freq_table_index();
 
         if (action == DIAL_KEY_UP) {
-            freq_idx = (freq_idx + 1) % (int)scan_freq_table_len;
+            auto_detect_freq_idx = (auto_detect_freq_idx + 1) % (int)scan_freq_table_len;
         } else if (action == DIAL_KEY_DOWN) {
-            freq_idx = (freq_idx - 1 + (int)scan_freq_table_len)
+            auto_detect_freq_idx = (auto_detect_freq_idx - 1 + (int)scan_freq_table_len)
                        % (int)scan_freq_table_len;
         } else if (action == DIAL_KEY_CLICK || action == DIAL_KEY_PRESS) {
-            const scan_freq_entry_t *entry = &scan_freq_table[freq_idx];
+            const scan_freq_entry_t *entry = &scan_freq_table[auto_detect_freq_idx];
             scan_result_t r = scan_probe_both(entry);
             apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS);
             channel_osd_mode = CHANNEL_SHOWTIME;
@@ -191,11 +198,16 @@ void tune_channel(uint8_t action) {
         }
 
         // For UP/DOWN: set OSD preview to the current entry's "primary" channel.
-        const scan_freq_entry_t *entry = &scan_freq_table[freq_idx];
-        if (entry->hdz_channel >= 0) {
+        const scan_freq_entry_t *entry = &scan_freq_table[auto_detect_freq_idx];
+        // Only show OSD preview if the entry has a channel that matches the
+        // currently-active source's namespace. Mismatch (e.g. analog-only entry
+        // while still on HDZ) would format an out-of-range index.
+        if (g_source_info.source == SOURCE_HDZERO && entry->hdz_channel >= 0) {
             channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
-        } else if (entry->analog_channel >= 0) {
+        } else if (g_source_info.source == SOURCE_AV_MODULE && entry->analog_channel >= 0) {
             channel_osd_mode = 0x80 | ((uint8_t)entry->analog_channel + 1);
+        } else {
+            channel_osd_mode = 0;  // mismatched protocol; no safe preview text
         }
         tune_timer = TUNER_TIMER_LEN;
         tune_state = 2;
