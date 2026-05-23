@@ -136,7 +136,18 @@ int statusbar_init(void) {
     lv_label_set_recolor(label[STS_SDCARD], true);
 
     if (g_source_info.source == SOURCE_HDZERO) {
-        snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"), channel2str(1, g_setting.source.hdzero_band, g_setting.scan.channel & 0x7F));
+#if defined(HDZBOXPRO)
+        if (g_setting.source.auto_protocol_detect) {
+            snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
+                     channel2str_tagged(1 /* PROTOCOL_HDZ */,
+                                        g_setting.scan.channel & 0x7F));
+        } else
+#endif
+        {
+            snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"),
+                     channel2str(1, g_setting.source.hdzero_band,
+                                 g_setting.scan.channel & 0x7F));
+        }
     } else if (g_source_info.source == SOURCE_HDMI_IN) {
         snprintf(buf, sizeof(buf), "HDMI %s", _lang("In"));
     } else if (g_source_info.source == SOURCE_AV_IN) {
@@ -145,7 +156,17 @@ int statusbar_init(void) {
 #if defined(HDZGOGGLE)
         sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
 #elif defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-        sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"), channel2str(0, 0, g_setting.source.analog_channel));
+#if defined(HDZBOXPRO)
+        if (g_setting.source.auto_protocol_detect) {
+            snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
+                     channel2str_tagged(2 /* PROTOCOL_ANALOG */,
+                                        g_setting.source.analog_channel));
+        } else
+#endif
+        {
+            sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
+                    channel2str(0, 0, g_setting.source.analog_channel));
+        }
 #endif
     } else {
         sprintf(buf, " ");
@@ -224,7 +245,18 @@ void statubar_update(void) {
     if (channel_changed || (source_last != g_source_info.source) || (hdzero_band_last != g_setting.source.hdzero_band)) {
         memset(buf, 0, sizeof(buf));
         if (g_source_info.source == SOURCE_HDZERO) {
-            snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"), channel2str(1, g_setting.source.hdzero_band, g_setting.scan.channel & 0x7F));
+#if defined(HDZBOXPRO)
+            if (g_setting.source.auto_protocol_detect) {
+                snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
+                         channel2str_tagged(1 /* PROTOCOL_HDZ */,
+                                            g_setting.scan.channel & 0x7F));
+            } else
+#endif
+            {
+                snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"),
+                         channel2str(1, g_setting.source.hdzero_band,
+                                     g_setting.scan.channel & 0x7F));
+            }
         } else if (g_source_info.source == SOURCE_HDMI_IN) {
             snprintf(buf, sizeof(buf), "HDMI %s", _lang("In"));
         } else if (g_source_info.source == SOURCE_AV_IN) {
@@ -233,7 +265,17 @@ void statubar_update(void) {
 #if defined(HDZGOGGLE)
             sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
 #elif defined(HDZGOGGLE2) || defined(HDZBOXPRO)
-            sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"), channel2str(0, 0, g_setting.source.analog_channel));
+#if defined(HDZBOXPRO)
+            if (g_setting.source.auto_protocol_detect) {
+                snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
+                         channel2str_tagged(2 /* PROTOCOL_ANALOG */,
+                                            g_setting.source.analog_channel));
+            } else
+#endif
+            {
+                sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
+                        channel2str(0, 0, g_setting.source.analog_channel));
+            }
 #endif
         } else {
             sprintf(buf, " ");
