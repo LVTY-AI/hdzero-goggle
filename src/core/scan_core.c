@@ -2,6 +2,7 @@
 
 #if defined(HDZBOXPRO)
 
+#include <time.h>
 #include <unistd.h>
 
 #include <log/log.h>
@@ -10,6 +11,28 @@
 #include "driver/dm5680.h"
 #include "driver/dm6302.h"
 #include "driver/rtc6715.h"
+#include "ui/page_common.h"
+
+// Idle-timeout power management state.
+// Written from probe calls (UI thread); read+written from thread_peripheral.
+// Tearing on struct timespec is benign — at worst the idle check fires one
+// tick early/late.  No mutex needed for this level of precision.
+static struct timespec last_probe_ts = {0};
+// Set by scan_core_idle_tick when analog is powered down; cleared by
+// scan_probe_analog so the next probe re-inits the chip before tuning.
+static bool analog_powered_down = false;
+
+static void mark_probe_activity(void) {
+    clock_gettime(CLOCK_MONOTONIC, &last_probe_ts);
+}
+
+static bool probe_idle_expired(int idle_secs) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return (now.tv_sec - last_probe_ts.tv_sec) >= idle_secs;
+}
+
+#define IDLE_TIMEOUT_SECS 5
 
 // Unified table: one row per distinct 5.8GHz frequency, deduplicated across
 // HDZero and analog protocols. Sorted strictly ascending by freq_mhz.
@@ -115,6 +138,7 @@ static uint16_t analog_signal_threshold_mv(void) {
 
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out) {
+    mark_probe_activity();
     uint8_t gain[4];
 
     DM6302_SetChannel(band, channel);
@@ -140,7 +164,12 @@ bool scan_probe_hdzero(uint8_t band, uint8_t channel,
 
 bool scan_probe_analog(uint8_t channel_idx,
                        uint16_t *rssi_mv_out, bool *valid_out) {
-    // Caller must have invoked rtc6715.init(1, ...) before scanning.
+    mark_probe_activity();
+    // Re-power analog if idle-timeout powered it down.
+    if (analog_powered_down) {
+        rtc6715.init(1, 0);
+        analog_powered_down = false;
+    }
     rtc6715.set_ch(channel_idx);
     usleep(50000); // RTC6715 PLL lock time
 
@@ -178,6 +207,7 @@ static uint8_t analog_strength_norm(uint16_t rssi_mv) {
 }
 
 scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
+    mark_probe_activity();
     scan_result_t r = { PROTOCOL_NONE, 0, 0, 0 };
 
     // Probe analog first (slower PLL).
@@ -211,6 +241,22 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
     LOGI("scan_probe_both freq=%u protocol=%d strength=%u",
          entry->freq_mhz, r.protocol, r.strength);
     return r;
+}
+
+void scan_core_idle_tick(void) {
+    if (!g_setting.source.auto_protocol_detect) return;
+    if (last_probe_ts.tv_sec == 0) return;  // no probes yet, nothing to do
+    if (!probe_idle_expired(IDLE_TIMEOUT_SECS)) return;
+
+    // Power down whichever radio is NOT currently sourcing video.
+    if (g_source_info.source == SOURCE_HDZERO) {
+        rtc6715.init(0, 0);
+        analog_powered_down = true;
+    }
+    // HDZ stays on continuously: there's no safe mid-video close hook.
+
+    // Reset timestamp so we don't repeat the power-down on subsequent ticks.
+    last_probe_ts.tv_sec = 0;
 }
 
 void scan_core_self_check(void) {

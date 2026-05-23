@@ -11,6 +11,7 @@
 #include <log/log.h>
 
 #include "core/app_state.h"
+#include "core/scan_core.h"
 #include "core/battery.h"
 #include "core/common.hh"
 #include "core/defines.h"
@@ -237,6 +238,10 @@ static void *thread_peripheral(void *ptr) {
             g_latency_locked = (bool)Get_VideoLatancy_status();
             check_source_signal(record_vtmg_change);
             record_vtmg_change = 0;
+
+#if defined(HDZBOXPRO)
+            scan_core_idle_tick();
+#endif
         }
         j++;
         usleep(2000);
