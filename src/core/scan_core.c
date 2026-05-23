@@ -161,9 +161,10 @@ bool scan_probe_analog(uint8_t channel_idx,
 
 // Map raw signal strength to 0..100 for sorting.
 static uint8_t hdz_strength_norm(uint8_t gain) {
-    // Existing scanner's antenna bar treats gain <= 77 as valid range.
-    // Map 0..80 → 0..100, clamp at 100.
-    uint32_t s = (uint32_t)gain * 100u / 80u;
+    // DM6302 gain table is 0..60 (see driver/dm6302.c DM6302_gain_tab).
+    // Map 0..60 → 0..100; clamp at 100 in case the table returns 61 (no-match
+    // sentinel) or a future driver widens the range.
+    uint32_t s = (uint32_t)gain * 100u / 60u;
     if (s > 100) s = 100;
     return (uint8_t)s;
 }
