@@ -23,6 +23,7 @@
 #include "driver/fbtools.h"
 #include "driver/hardware.h"
 #include "driver/i2c.h"
+#include "driver/rtc6715.h"
 #include "driver/screen.h"
 #include "driver/uart.h"
 #include "lang/language.h"
@@ -85,6 +86,7 @@ typedef enum {
 
 static scan_mode_t scan_mode = SCAN_MODE_HDZERO;
 static lv_obj_t *mode_dropdown = NULL;
+static lv_obj_t *band_dropdown = NULL;
 #endif
 
 static void select_signal(channel_t *channel) {
@@ -168,23 +170,38 @@ static void create_channel_switch(lv_obj_t *parent, int col, int row, channel_t 
 
 void page_scannow_set_channel_label(void) {
     static const char *race_band_channel_str[] = {"R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "E1", "F1", "F2", "F4"};
-    static const char *low_band_channel_str[] = {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"};
+    static const char *low_band_channel_str[]  = {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"};
     uint8_t i;
 
-    // set channel label
+#if defined(HDZBOXPRO)
+    if (scan_mode == SCAN_MODE_ANALOG) {
+        static const char *analog_band_letters[6] = {"A", "B", "E", "F", "R", "L"};
+        static char buf[8][4];
+        const char *letter = analog_band_letters[g_setting.source.analog_scan_band & 0x07];
+        for (i = 0; i < 8; i++) {
+            snprintf(buf[i], sizeof(buf[i]), "%s%d", letter, i + 1);
+            lv_label_set_text(channel_tb[i].label, buf[i]);
+        }
+        // Analog always uses exactly 8 cells; hide the extra 4 Race-band cells.
+        for (i = 8; i < BASE_CH_NUM; i++) {
+            lv_obj_add_flag(channel_tb[i].img0, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(channel_tb[i].img1, LV_OBJ_FLAG_HIDDEN);
+        }
+        return;
+    }
+#endif
+
     if (g_setting.source.hdzero_band == RACE_BAND) {
-        // race band
         for (i = 0; i < BASE_CH_NUM; i++) {
             lv_label_set_text(channel_tb[i].label, race_band_channel_str[i]);
         }
-
         for (i = 8; i < BASE_CH_NUM; i++) {
             lv_obj_clear_flag(channel_tb[i].img0, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(channel_tb[i].img1, LV_OBJ_FLAG_HIDDEN);
         }
     } else {
-        // lowband
         for (i = 0; i < 8; i++) {
             lv_label_set_text(channel_tb[i].label, low_band_channel_str[i]);
         }
@@ -203,10 +220,27 @@ void page_scannow_set_channel_label(void) {
 // 1420-256
 // 1164
 #if defined(HDZBOXPRO)
+static void on_band_dropdown_change(lv_event_t *e) {
+    lv_obj_t *dd = lv_event_get_target(e);
+    uint8_t band = (uint8_t)lv_dropdown_get_selected(dd);
+    g_setting.source.analog_scan_band = band;
+    ini_putl("source", "analog_scan_band", band, SETTING_INI);
+    page_scannow_set_channel_label();
+}
+
 static void on_mode_dropdown_change(lv_event_t *e) {
     lv_obj_t *dd = lv_event_get_target(e);
     scan_mode = (scan_mode_t)lv_dropdown_get_selected(dd);
     LOGI("scan_mode -> %d", scan_mode);
+
+    if (band_dropdown) {
+        if (scan_mode == SCAN_MODE_ANALOG) {
+            lv_obj_clear_flag(band_dropdown, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(band_dropdown, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    page_scannow_set_channel_label();
 }
 #endif
 
@@ -268,9 +302,10 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_style_pad_top(label2, UI_SCANNOW_NOTE_PAD, 0);
     lv_label_set_long_mode(label2, LV_LABEL_LONG_WRAP);
 #if defined(HDZBOXPRO)
-    // On BoxPro row 0 of col 2 is reserved for the Mode dropdown; notes start at row 1.
+    // On BoxPro: row 0 = Mode dropdown, row 1 = Band dropdown, row 2 = notes.
+    // label2 is shifted to row 2 (rowspan=1) to make room for the band dropdown at row 1.
     lv_obj_set_grid_cell(label2, LV_GRID_ALIGN_START, 2, 1,
-                         LV_GRID_ALIGN_START, 1, 2);
+                         LV_GRID_ALIGN_START, 2, 1);
 
     mode_dropdown = lv_dropdown_create(cont1);
     lv_dropdown_set_options(mode_dropdown, "HDZero\nAnalog\nAuto");
@@ -290,6 +325,18 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     }
     lv_obj_add_event_cb(mode_dropdown, on_mode_dropdown_change,
                         LV_EVENT_VALUE_CHANGED, NULL);
+
+    band_dropdown = lv_dropdown_create(cont1);
+    lv_dropdown_set_options(band_dropdown, "A\nB\nE\nF\nR\nL");
+    lv_obj_set_grid_cell(band_dropdown, LV_GRID_ALIGN_END, 2, 1,
+                         LV_GRID_ALIGN_START, 1, 1);
+    lv_dropdown_set_selected(band_dropdown, g_setting.source.analog_scan_band);
+    lv_obj_add_event_cb(band_dropdown, on_band_dropdown_change,
+                        LV_EVENT_VALUE_CHANGED, NULL);
+    // Hidden unless Mode == Analog. Sync initial visibility with scan_mode set above.
+    if (scan_mode != SCAN_MODE_ANALOG) {
+        lv_obj_add_flag(band_dropdown, LV_OBJ_FLAG_HIDDEN);
+    }
 #else
     lv_obj_set_grid_cell(label2, LV_GRID_ALIGN_START, 2, 1,
                          LV_GRID_ALIGN_START, 0, 3);
@@ -392,8 +439,52 @@ static int8_t scan_now_hdzero(void) {
 
 #if defined(HDZBOXPRO)
 static int8_t scan_now_analog(uint8_t band_idx) {
-    (void)band_idx;
-    return -1; // implemented in Task 8
+    char buf[128];
+    uint16_t rssi_mv;
+    bool valid;
+    uint8_t valid_index = 0;
+
+    snprintf(buf, sizeof(buf), "%s...", _lang("Scanning"));
+    lv_label_set_text(label, buf);
+    lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
+    lv_timer_handler();
+
+    // Reset state for the 8 visible cells.
+    for (uint8_t ch = 0; ch < BASE_CH_NUM; ch++) {
+        valid_channel_tb[ch] = -1;
+        channel_status_tb[ch].is_valid = 0;
+    }
+
+    // Power on RTC6715; HDZ stays closed while we probe analog channels.
+    rtc6715.init(1, 0);
+
+    for (uint8_t i = 0; i < 8; i++) {
+        uint8_t global_idx = band_idx * 8 + i; // 0..47
+        scan_probe_analog(global_idx, &rssi_mv, &valid);
+        if (valid) {
+            channel_status_tb[i].is_valid = 1;
+            // Scale RSSI mV (~500..3300 typical) to gain buckets 0..~100 used by
+            // set_signal_bar. Dividing by 32 maps the ~1600 mV midpoint to ~50,
+            // giving a rough but visually reasonable signal-strength display.
+            channel_status_tb[i].gain = (int)(rssi_mv / 32);
+            set_signal_bar(&channel_tb[i],
+                           channel_status_tb[i].is_valid,
+                           channel_status_tb[i].gain);
+        }
+        lv_bar_set_value(progressbar, (int)((i + 1) * 14 / 8), LV_ANIM_OFF);
+        lv_timer_handler();
+    }
+    lv_bar_set_value(progressbar, 14, LV_ANIM_OFF);
+
+    for (uint8_t ch = 0; ch < 8; ch++) {
+        if (channel_status_tb[ch].is_valid) {
+            valid_channel_tb[valid_index++] = ch;
+        }
+    }
+
+    user_select_signal();
+    lv_label_set_text(label, _lang("Scanning done"));
+    return valid_index ? (int8_t)valid_index : -1;
 }
 
 static int8_t scan_now_auto(void) {
@@ -462,6 +553,11 @@ static void page_scannow_enter() {
 }
 
 static void page_scannow_exit() {
+#if defined(HDZBOXPRO)
+    if (scan_mode == SCAN_MODE_ANALOG) {
+        rtc6715.init(0, 0); // power down analog RX on exit
+    }
+#endif
     HDZero_Close();
 }
 
@@ -480,6 +576,21 @@ static void page_scannow_on_roller(uint8_t key) {
 }
 
 static void page_scannow_on_click(uint8_t key, int sel) {
+#if defined(HDZBOXPRO)
+    if (scan_mode == SCAN_MODE_ANALOG) {
+        if (valid_channel_tb[0] == -1) return;
+        uint8_t band = g_setting.source.analog_scan_band;
+        uint8_t ch_in_band = (uint8_t)(valid_channel_tb[user_select_index] & 0x7F);
+        uint8_t global_idx = band * 8 + ch_in_band;
+        g_setting.source.analog_channel = global_idx + 1; // 1-indexed
+        ini_putl("source", "analog_channel",
+                 g_setting.source.analog_channel, SETTING_INI);
+        app_state_push(APP_STATE_VIDEO);
+        app_switch_to_analog(0);
+        return;
+    }
+    // Task 9 will add Auto mode here.
+#endif
     app_state_push(APP_STATE_VIDEO);
     app_switch_to_hdzero(false);
 }
