@@ -76,6 +76,10 @@ static lv_coord_t col_dsc1[] = {UI_SCANNOW_SCANNER_COLS};
 static lv_coord_t row_dsc1[] = {UI_SCANNOW_SCANNER_ROWS};
 static lv_coord_t col_dsc2[] = {UI_SCANNOW_SIGNAL_COLS};
 static lv_coord_t row_dsc2[] = {UI_SCANNOW_SIGNAL_ROWS};
+#if defined(HDZBOXPRO)
+static scan_mode_t scan_mode = SCAN_MODE_HDZERO;
+static lv_obj_t *mode_dropdown = NULL;
+#endif
 
 static void select_signal(channel_t *channel) {
     for (int i = 0; i < BASE_CH_NUM; i++) {
@@ -192,6 +196,14 @@ void page_scannow_set_channel_label(void) {
 // 255.6
 // 1420-256
 // 1164
+#if defined(HDZBOXPRO)
+static void on_mode_dropdown_change(lv_event_t *e) {
+    lv_obj_t *dd = lv_event_get_target(e);
+    scan_mode = (scan_mode_t)lv_dropdown_get_selected(dd);
+    LOGI("scan_mode -> %d", scan_mode);
+}
+#endif
+
 static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     char buf[256];
 
@@ -249,8 +261,33 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_style_text_color(label2, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
     lv_obj_set_style_pad_top(label2, UI_SCANNOW_NOTE_PAD, 0);
     lv_label_set_long_mode(label2, LV_LABEL_LONG_WRAP);
+#if defined(HDZBOXPRO)
+    // On BoxPro row 0 of col 2 is reserved for the Mode dropdown; notes start at row 1.
+    lv_obj_set_grid_cell(label2, LV_GRID_ALIGN_START, 2, 1,
+                         LV_GRID_ALIGN_START, 1, 2);
+
+    mode_dropdown = lv_dropdown_create(cont1);
+    lv_dropdown_set_options(mode_dropdown, "HDZero\nAnalog\nAuto");
+    lv_obj_set_grid_cell(mode_dropdown, LV_GRID_ALIGN_END, 2, 1,
+                         LV_GRID_ALIGN_START, 0, 1);
+    {
+        uint16_t default_mode;
+        if (g_setting.source.auto_protocol_detect) {
+            default_mode = SCAN_MODE_AUTO;
+        } else if (g_source_info.source == SOURCE_AV_MODULE) {
+            default_mode = SCAN_MODE_ANALOG;
+        } else {
+            default_mode = SCAN_MODE_HDZERO;
+        }
+        lv_dropdown_set_selected(mode_dropdown, default_mode);
+        scan_mode = (scan_mode_t)default_mode;
+    }
+    lv_obj_add_event_cb(mode_dropdown, on_mode_dropdown_change,
+                        LV_EVENT_VALUE_CHANGED, NULL);
+#else
     lv_obj_set_grid_cell(label2, LV_GRID_ALIGN_START, 2, 1,
                          LV_GRID_ALIGN_START, 0, 3);
+#endif
 
     lv_obj_t *cont2 = lv_obj_create(page);
     lv_obj_set_size(cont2, UI_SCANNOW_FREQ_SIZE);
@@ -295,7 +332,7 @@ static void user_clear_signal(void) {
 }
 
 
-int8_t scan_now(void) {
+static int8_t scan_now_hdzero(void) {
     uint8_t ch, gain;
     bool valid;
     uint8_t valid_index;
@@ -347,6 +384,26 @@ int8_t scan_now(void) {
         return valid_index;
 }
 
+#if defined(HDZBOXPRO)
+static int8_t scan_now_analog(uint8_t band_idx) {
+    (void)band_idx;
+    return -1; // implemented in Task 8
+}
+
+static int8_t scan_now_auto(void) {
+    return -1; // implemented in Task 9
+}
+
+static int8_t scan_now_dispatch(void) {
+    switch (scan_mode) {
+    case SCAN_MODE_HDZERO: return scan_now_hdzero();
+    case SCAN_MODE_ANALOG: return scan_now_analog(g_setting.source.analog_scan_band);
+    case SCAN_MODE_AUTO:   return scan_now_auto();
+    }
+    return -1;
+}
+#endif
+
 int scan_reinit(void) {
     lv_label_set_text(label, _lang("Scanning ready"));
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
@@ -357,8 +414,16 @@ int scan_reinit(void) {
 
 int scan(void) {
     g_scanning = true;
+#if defined(HDZBOXPRO)
+    // SOURCE_HDZERO is set only for the HDZ mode path; Analog/Auto manage source on click.
+    if (scan_mode == SCAN_MODE_HDZERO) {
+        g_source_info.source = SOURCE_HDZERO;
+    }
+    int8_t ret = scan_now_dispatch();
+#else
     g_source_info.source = SOURCE_HDZERO;
-    int8_t ret = scan_now();
+    int8_t ret = scan_now_hdzero();
+#endif
     g_scanning = false;
     return ret;
 }
