@@ -28,6 +28,7 @@
 #include "core/app_state.h"
 #include "core/dvr.h"
 #include "core/elrs.h"
+#include "core/scan_core.h"
 #include "core/settings.h"
 #include "core/sleep_mode.h"
 #include "driver/beep.h"
@@ -72,6 +73,77 @@ void exit_tune_channel() {
     channel_osd_mode = 0;
 }
 
+#if defined(HDZBOXPRO)
+static int find_freq_table_index(void) {
+    if (g_source_info.source == SOURCE_HDZERO) {
+        uint8_t ch = (g_setting.scan.channel - 1) & 0x7F;
+        int8_t  band = (int8_t)g_setting.source.hdzero_band;
+        for (size_t i = 0; i < scan_freq_table_len; i++) {
+            if (scan_freq_table[i].hdz_band == band &&
+                scan_freq_table[i].hdz_channel == (int8_t)ch) {
+                return (int)i;
+            }
+        }
+    } else if (g_source_info.source == SOURCE_AV_MODULE) {
+        int8_t ch = (int8_t)((g_setting.source.analog_channel - 1) & 0x7F);
+        for (size_t i = 0; i < scan_freq_table_len; i++) {
+            if (scan_freq_table[i].analog_channel == ch) {
+                return (int)i;
+            }
+        }
+    }
+    return 0;
+}
+#endif
+
+#if defined(HDZBOXPRO)
+static void apply_freq_entry(const scan_freq_entry_t *entry,
+                             const scan_result_t *r,
+                             bool send_msp) {
+    if (r->protocol == PROTOCOL_HDZ) {
+        if (g_source_info.source != SOURCE_HDZERO) {
+            app_switch_to_hdzero(false);
+        }
+        if (entry->hdz_channel >= 0) {
+            uint8_t new_ch = (uint8_t)entry->hdz_channel + 1;
+            if (g_setting.scan.channel != new_ch) {
+                g_setting.scan.channel = new_ch;
+                ini_putl("scan", "channel",
+                         g_setting.scan.channel, SETTING_INI);
+                dvr_cmd(DVR_STOP);
+                hdzero_switch_channel(g_setting.scan.channel - 1);
+                if (send_msp) msp_channel_update();
+            }
+        }
+    } else if (r->protocol == PROTOCOL_ANALOG) {
+        if (g_source_info.source != SOURCE_AV_MODULE) {
+            app_switch_to_analog(0);
+        }
+        if (entry->analog_channel >= 0) {
+            uint8_t new_ch = (uint8_t)entry->analog_channel + 1;
+            if (g_setting.source.analog_channel != new_ch) {
+                g_setting.source.analog_channel = new_ch;
+                ini_putl("source", "analog_channel",
+                         g_setting.source.analog_channel, SETTING_INI);
+                dvr_cmd(DVR_STOP);
+                rtc6715.set_ch(g_setting.source.analog_channel - 1);
+                if (send_msp) msp_channel_update();
+            }
+        }
+    } else {
+        // No signal: stay on current source, but tune to the entry's
+        // matching protocol channel so subsequent navigation makes sense.
+        if (g_source_info.source == SOURCE_HDZERO && entry->hdz_channel >= 0) {
+            g_setting.scan.channel = (uint8_t)entry->hdz_channel + 1;
+            hdzero_switch_channel(g_setting.scan.channel - 1);
+        } else if (g_source_info.source == SOURCE_AV_MODULE && entry->analog_channel >= 0) {
+            g_setting.source.analog_channel = (uint8_t)entry->analog_channel + 1;
+            rtc6715.set_ch(g_setting.source.analog_channel - 1);
+        }
+    }
+}
+#endif
+
 void tune_channel(uint8_t action) {
     static uint8_t channel = 0;
 
@@ -90,6 +162,46 @@ void tune_channel(uint8_t action) {
 #endif
 
     LOGI("tune_channel:%d", action);
+
+#if defined(HDZBOXPRO)
+    if (g_setting.source.auto_protocol_detect &&
+        (g_source_info.source == SOURCE_HDZERO ||
+         g_source_info.source == SOURCE_AV_MODULE)) {
+
+        // Auto-detect path: walk the unified frequency table on UP/DOWN,
+        // probe both protocols on CLICK/PRESS.
+        static int freq_idx = -1;
+        if (freq_idx < 0) freq_idx = find_freq_table_index();
+
+        if (action == DIAL_KEY_UP) {
+            freq_idx = (freq_idx + 1) % (int)scan_freq_table_len;
+        } else if (action == DIAL_KEY_DOWN) {
+            freq_idx = (freq_idx - 1 + (int)scan_freq_table_len)
+                       % (int)scan_freq_table_len;
+        } else if (action == DIAL_KEY_CLICK || action == DIAL_KEY_PRESS) {
+            const scan_freq_entry_t *entry = &scan_freq_table[freq_idx];
+            scan_result_t r = scan_probe_both(entry);
+            apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS);
+            channel_osd_mode = CHANNEL_SHOWTIME;
+            tune_state = 1;
+            tune_timer = 0;
+            return;
+        } else {
+            return;
+        }
+
+        // For UP/DOWN: set OSD preview to the current entry's "primary" channel.
+        const scan_freq_entry_t *entry = &scan_freq_table[freq_idx];
+        if (entry->hdz_channel >= 0) {
+            channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
+        } else if (entry->analog_channel >= 0) {
+            channel_osd_mode = 0x80 | ((uint8_t)entry->analog_channel + 1);
+        }
+        tune_timer = TUNER_TIMER_LEN;
+        tune_state = 2;
+        return;
+    }
+#endif
 
     if (tune_state == 0) {
         channel_osd_mode = 0;
