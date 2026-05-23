@@ -7,6 +7,7 @@
 #include "core/battery.h"
 #include "core/common.hh"
 #include "core/osd.h"
+#include "core/scan_core.h"
 #include "driver/beep.h"
 #include "lang/language.h"
 #include "ui/page_common.h"
@@ -139,7 +140,7 @@ int statusbar_init(void) {
 #if defined(HDZBOXPRO)
         if (g_setting.source.auto_protocol_detect) {
             snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                     channel2str_tagged(1 /* PROTOCOL_HDZ */,
+                     channel2str_tagged(PROTOCOL_HDZ,
                                         g_setting.scan.channel & 0x7F));
         } else
 #endif
@@ -155,14 +156,16 @@ int statusbar_init(void) {
     } else if (g_source_info.source == SOURCE_AV_MODULE) {
 #if defined(HDZGOGGLE)
         sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
-#elif defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-#if defined(HDZBOXPRO)
+#elif defined(HDZBOXPRO)
         if (g_setting.source.auto_protocol_detect) {
             snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                     channel2str_tagged(2 /* PROTOCOL_ANALOG */,
+                     channel2str_tagged(PROTOCOL_ANALOG,
                                         g_setting.source.analog_channel));
-        } else
-#endif
+        } else {
+            sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
+                    channel2str(0, 0, g_setting.source.analog_channel));
+        }
+#elif defined(HDZGOGGLE2)
         {
             sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
                     channel2str(0, 0, g_setting.source.analog_channel));
@@ -248,7 +251,7 @@ void statubar_update(void) {
 #if defined(HDZBOXPRO)
             if (g_setting.source.auto_protocol_detect) {
                 snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                         channel2str_tagged(1 /* PROTOCOL_HDZ */,
+                         channel2str_tagged(PROTOCOL_HDZ,
                                             g_setting.scan.channel & 0x7F));
             } else
 #endif
@@ -264,14 +267,16 @@ void statubar_update(void) {
         } else if (g_source_info.source == SOURCE_AV_MODULE) {
 #if defined(HDZGOGGLE)
             sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
-#elif defined(HDZGOGGLE2) || defined(HDZBOXPRO)
-#if defined(HDZBOXPRO)
+#elif defined(HDZBOXPRO)
             if (g_setting.source.auto_protocol_detect) {
                 snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                         channel2str_tagged(2 /* PROTOCOL_ANALOG */,
+                         channel2str_tagged(PROTOCOL_ANALOG,
                                             g_setting.source.analog_channel));
-            } else
-#endif
+            } else {
+                sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
+                        channel2str(0, 0, g_setting.source.analog_channel));
+            }
+#elif defined(HDZGOGGLE2)
             {
                 sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
                         channel2str(0, 0, g_setting.source.analog_channel));
