@@ -266,6 +266,7 @@ typedef struct {
     uint8_t analog_channel;
     bool    auto_protocol_detect; // BoxPro: probe both HDZ + analog on dial events
     uint8_t analog_scan_band;     // BoxPro: last band picked on analog scan (0..5 = A,B,E,F,R,L)
+    uint8_t scan_mode_initial;    // BoxPro: last Mode selected on Scan Now page (0=HDZ, 1=Analog, 2=Auto)
 } setting_sources_t;
 
 typedef struct {

@@ -232,6 +232,7 @@ const setting_t g_setting_defaults = {
         .hdzero_bw = SETTING_SOURCES_HDZERO_BW_WIDE,
         .auto_protocol_detect = false,
         .analog_scan_band = 4, // R band
+        .scan_mode_initial = 2, // Auto/Both
     },
     .language = {
         .lang = LANG_ENGLISH_DEFAULT,
@@ -363,6 +364,10 @@ void settings_load(void) {
     g_setting.source.analog_scan_band = ini_getl("source", "analog_scan_band", g_setting_defaults.source.analog_scan_band, SETTING_INI);
     if (g_setting.source.analog_scan_band > 5) {
         g_setting.source.analog_scan_band = g_setting_defaults.source.analog_scan_band;
+    }
+    g_setting.source.scan_mode_initial = ini_getl("source", "scan_mode_initial", g_setting_defaults.source.scan_mode_initial, SETTING_INI);
+    if (g_setting.source.scan_mode_initial > 2) {
+        g_setting.source.scan_mode_initial = g_setting_defaults.source.scan_mode_initial;
     }
     if (g_setting.scan.channel > HDZERO_CHANNEL_NUM) {
         g_setting.scan.channel = 1;

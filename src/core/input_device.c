@@ -117,34 +117,64 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
                              bool send_msp) {
     if (r->protocol == PROTOCOL_HDZ) {
         dvr_cmd(DVR_STOP);
-        if (g_source_info.source != SOURCE_HDZERO) {
-            app_switch_to_hdzero(false);
-        }
+
+        // Persist the new channel FIRST so a subsequent source switch
+        // (app_switch_to_hdzero(true)) tunes directly to it instead of the
+        // old value and then we re-tune.
+        bool channel_changed = false;
         if (entry->hdz_channel >= 0) {
             uint8_t new_ch = (uint8_t)entry->hdz_channel + 1;
             if (g_setting.scan.channel != new_ch) {
                 g_setting.scan.channel = new_ch;
                 ini_putl("scan", "channel",
                          g_setting.scan.channel, SETTING_INI);
-                hdzero_switch_channel(g_setting.scan.channel - 1);
-                if (send_msp) msp_channel_update();
+                channel_changed = true;
             }
         }
+
+        if (g_source_info.source != SOURCE_HDZERO) {
+            // Cross-protocol switch. app_switch_to_hdzero(true) reads
+            // g_setting.scan.channel (just persisted above) and tunes to it.
+            // We must also commit app_state + g_source_info.source + dvr
+            // routing (matches the page_source.c pattern); without this,
+            // periodic checks see stale source and the next dial click
+            // re-runs this whole ~1.4s switch path.
+            app_switch_to_hdzero(true);
+            app_state_push(APP_STATE_VIDEO);
+            g_source_info.source = SOURCE_HDZERO;
+            dvr_select_audio_source(g_setting.record.audio_source);
+            dvr_enable_line_out(true);
+        } else if (channel_changed) {
+            // Already on HDZ: lightweight retune only.
+            hdzero_switch_channel(g_setting.scan.channel - 1);
+        }
+        if (send_msp) msp_channel_update();
     } else if (r->protocol == PROTOCOL_ANALOG) {
         dvr_cmd(DVR_STOP);
-        if (g_source_info.source != SOURCE_AV_MODULE) {
-            app_switch_to_analog(0);
-        }
+
+        bool channel_changed = false;
         if (entry->analog_channel >= 0) {
             uint8_t new_ch = (uint8_t)entry->analog_channel + 1;
             if (g_setting.source.analog_channel != new_ch) {
                 g_setting.source.analog_channel = new_ch;
                 ini_putl("source", "analog_channel",
                          g_setting.source.analog_channel, SETTING_INI);
-                rtc6715.set_ch(g_setting.source.analog_channel - 1);
-                if (send_msp) msp_channel_update();
+                channel_changed = true;
             }
         }
+
+        if (g_source_info.source != SOURCE_AV_MODULE) {
+            // app_switch_to_analog(0) reads g_setting.source.analog_channel
+            // and tunes to it.
+            app_switch_to_analog(0);
+            app_state_push(APP_STATE_VIDEO);
+            g_source_info.source = SOURCE_AV_MODULE;
+            dvr_select_audio_source(g_setting.record.audio_source);
+            dvr_enable_line_out(true);
+        } else if (channel_changed) {
+            rtc6715.set_ch(g_setting.source.analog_channel - 1);
+        }
+        if (send_msp) msp_channel_update();
     } else {
         dvr_cmd(DVR_STOP);
         // No signal: stay on current source, but tune to the entry's

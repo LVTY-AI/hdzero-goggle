@@ -12,9 +12,12 @@
 #include "core/common.hh"
 #include "core/dvr.h"
 #include "core/osd.h"
+#include "core/scan_core.h"
+#include "core/settings.h"
 #include "driver/beep.h"
 #include "driver/hardware.h"
 #include "driver/it66121.h"
+#include "driver/rtc6715.h"
 #include "driver/screen.h"
 #include "lang/language.h"
 #include "ui/page_common.h"
@@ -48,10 +51,10 @@ enum {
     ROW_BOXPRO_ANALOG,
     ROW_BOXPRO_HDMI,
     ROW_BOXPRO_AV,
+    ROW_BOXPRO_AUTO_DETECT,
     ROW_BOXPRO_HDZ_BAND,
     ROW_BOXPRO_HDZ_WIDTH,
     ROW_BOXPRO_ANALOG_RATIO,
-    ROW_BOXPRO_AUTO_DETECT,
     ROW_BOXPRO_TEST_PATTERN,
     ROW_BOXPRO_BACK,
     ROW_BOXPRO_COUNT
@@ -117,7 +120,9 @@ static lv_obj_t *label[6] = {NULL};
 static uint8_t oled_tst_mode = 0; // 0=Normal, 1=CB, 2=Grid, 3=All Black, 4=All White, 5=Boot logo
 static bool in_sourcepage = false;
 static btn_group_t btn_group0, btn_group1, btn_group2, btn_group3;
-static btn_group_t btn_group_auto_detect;
+#if defined(HDZBOXPRO)
+static lv_obj_t *auto_detect_label = NULL;
+#endif
 
 static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     char buf[128];
@@ -154,6 +159,11 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "AV %s", _lang("In"));
     label[3] = create_label_item(cont, buf, 1, ROW_AV, 3);
 
+#if defined(HDZBOXPRO)
+    auto_detect_label = create_label_item(cont, _lang("Auto Detect"),
+                                          1, ROW_AUTO_DETECT, 3);
+#endif
+
     create_btn_group_item(&btn_group1, cont, 2, _lang("HDZero Band"), _lang("Raceband"), _lang("Lowband"), "", "", ROW_HDZ_BAND);
     btn_group_set_sel(&btn_group1, g_setting.source.hdzero_band);
 
@@ -170,14 +180,6 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     create_btn_group_item(&btn_group3, cont, 2, _lang("Analog Ratio"), _lang("4:3"), _lang("16:9"), "", "", ROW_ANALOG_RATIO);
     btn_group_set_sel(&btn_group3, g_setting.source.analog_ratio);
-
-#if defined(HDZBOXPRO)
-    create_btn_group_item(&btn_group_auto_detect, cont, 2,
-                          _lang("Auto Protocol Detect"),
-                          _lang("On"), _lang("Off"), "", "", ROW_AUTO_DETECT);
-    btn_group_set_sel(&btn_group_auto_detect,
-                      g_setting.source.auto_protocol_detect ? 0 : 1);
-#endif
 
     if (g_setting.storage.selftest) {
         label[4] = create_label_item(cont, "Display Pattern: Normal", 1, ROW_TEST_PATTERN, 3);
@@ -246,6 +248,14 @@ void source_status_timer() {
     snprintf(buf, sizeof(buf), "AV %s: %s", _lang("In"), state2string(g_source_info.av_in_status));
     lv_label_set_text(label[3], buf);
 
+#if defined(HDZBOXPRO)
+    if (auto_detect_label) {
+        snprintf(buf, sizeof(buf), "%s: %s", _lang("Auto Detect"),
+                 g_setting.source.auto_protocol_detect ? _lang("On") : _lang("Off"));
+        lv_label_set_text(auto_detect_label, buf);
+    }
+#endif
+
     if (g_setting.storage.selftest && label[3]) {
         uint8_t oled_tm = oled_tst_mode & 0x0F;
         char *pattern_label[6] = {"Normal", "Color Bar", "Grid", "All Black", "All White", "Boot logo"};
@@ -255,7 +265,21 @@ void source_status_timer() {
     }
 }
 
+#if defined(HDZBOXPRO)
+// Picking a specific source explicitly disables auto-detect; without this,
+// the next dial click in video would silently switch protocols again.
+static void disable_auto_protocol_detect(void) {
+    if (g_setting.source.auto_protocol_detect) {
+        g_setting.source.auto_protocol_detect = false;
+        settings_put_bool("source", "auto_protocol_detect", false);
+    }
+}
+#endif
+
 static void page_source_select_hdzero() {
+#if defined(HDZBOXPRO)
+    disable_auto_protocol_detect();
+#endif
     progress_bar.start = 1;
     app_switch_to_hdzero(true);
     app_state_push(APP_STATE_VIDEO);
@@ -265,11 +289,17 @@ static void page_source_select_hdzero() {
 }
 
 static void page_source_select_hdmi() {
+#if defined(HDZBOXPRO)
+    disable_auto_protocol_detect();
+#endif
     if (g_source_info.hdmi_in_status)
         app_switch_to_hdmi_in();
 }
 
 static void page_source_select_av_in() {
+#if defined(HDZBOXPRO)
+    disable_auto_protocol_detect();
+#endif
     app_switch_to_analog(1);
     app_state_push(APP_STATE_VIDEO);
     g_source_info.source = SOURCE_AV_IN;
@@ -278,12 +308,55 @@ static void page_source_select_av_in() {
 }
 
 static void page_source_select_analog() {
+#if defined(HDZBOXPRO)
+    disable_auto_protocol_detect();
+#endif
     app_switch_to_analog(0);
     app_state_push(APP_STATE_VIDEO);
     g_source_info.source = SOURCE_AV_MODULE;
     dvr_select_audio_source(g_setting.record.audio_source);
     dvr_enable_line_out(true);
 }
+
+#if defined(HDZBOXPRO)
+// Probes the user's current channel on both protocols and enters video on
+// whichever has signal. Defaults to HDZ if neither responds. After this
+// runs, auto_protocol_detect is on, so the next dial click in video will
+// probe both protocols at the next freq-table entry.
+static void page_source_select_auto_detect() {
+    g_setting.source.auto_protocol_detect = true;
+    settings_put_bool("source", "auto_protocol_detect", true);
+
+    scan_freq_entry_t cur;
+    cur.freq_mhz = 0; // unused by scan_probe_both
+    cur.hdz_band = (int8_t)g_setting.source.hdzero_band;
+    cur.hdz_channel = (int8_t)((g_setting.scan.channel - 1) & 0x7F);
+    cur.analog_channel = (int8_t)((g_setting.source.analog_channel - 1) & 0x7F);
+
+    // Power both radios for the probe; scan_probe_both does sequential
+    // probes and respects already-powered state.
+    HDZero_open(g_setting.source.hdzero_bw);
+    rtc6715.init(1, 0);
+    scan_core_notify_analog_powered_on();
+
+    scan_result_t r = scan_probe_both(&cur);
+
+    if (r.protocol == PROTOCOL_ANALOG) {
+        app_switch_to_analog(0);
+        app_state_push(APP_STATE_VIDEO);
+        g_source_info.source = SOURCE_AV_MODULE;
+    } else {
+        // PROTOCOL_HDZ or PROTOCOL_NONE: default to HDZ. HDZero_open
+        // already ran; app_switch_to_hdzero(true) tunes to current channel.
+        progress_bar.start = 1;
+        app_switch_to_hdzero(true);
+        app_state_push(APP_STATE_VIDEO);
+        g_source_info.source = SOURCE_HDZERO;
+    }
+    dvr_select_audio_source(g_setting.record.audio_source);
+    dvr_enable_line_out(true);
+}
+#endif
 
 void source_toggle() {
     beep_dur(BEEP_SHORT);
@@ -372,11 +445,7 @@ static void page_source_on_click(uint8_t key, int sel) {
         break;
 #if defined(HDZBOXPRO)
     case ROW_AUTO_DETECT:
-        btn_group_toggle_sel(&btn_group_auto_detect);
-        g_setting.source.auto_protocol_detect =
-            (btn_group_get_sel(&btn_group_auto_detect) == 0);
-        settings_put_bool("source", "auto_protocol_detect",
-                          g_setting.source.auto_protocol_detect);
+        page_source_select_auto_detect();
         break;
 #endif
     case ROW_TEST_PATTERN:
