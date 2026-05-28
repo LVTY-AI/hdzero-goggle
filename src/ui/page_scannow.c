@@ -97,9 +97,23 @@ static scan_page_state_t page_state = SCAN_PAGE_IDLE;
 static lv_obj_t *mode_btns[3];     // 0=HDZero, 1=Analog, 2=Auto/Both
 
 static void update_mode_btn_focus(void) {
+    // Theme button background defaults are very light on this skin and the
+    // label text ends up invisible. Style each button explicitly: dark grey
+    // background for unfocused, green for focused, white text always.
     for (int i = 0; i < 3; i++) {
         if (!mode_btns[i]) continue;
-        if (i == (int)scan_mode) {
+        bool is_focused = (i == (int)scan_mode);
+        lv_obj_set_style_bg_color(mode_btns[i],
+                                  is_focused ? lv_color_make(0, 0xA0, 0)
+                                             : lv_color_make(0x40, 0x40, 0x40),
+                                  LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(mode_btns[i], LV_OPA_100, LV_PART_MAIN);
+        lv_obj_set_style_border_width(mode_btns[i],
+                                      is_focused ? 2 : 0, LV_PART_MAIN);
+        lv_obj_set_style_border_color(mode_btns[i],
+                                      lv_color_make(0xFF, 0xFF, 0xFF),
+                                      LV_PART_MAIN);
+        if (is_focused) {
             lv_obj_add_state(mode_btns[i], LV_STATE_FOCUSED);
         } else {
             lv_obj_clear_state(mode_btns[i], LV_STATE_FOCUSED);
@@ -242,22 +256,28 @@ static void apply_auto_detect_for_mode(scan_mode_t mode) {
 }
 
 static void set_results_widget_visibility(void) {
-    // HDZero mode uses the 8/12-cell grid; Analog and Auto modes use auto_list.
-    bool use_grid = (scan_mode == SCAN_MODE_HDZERO);
+    // While the page is IDLE (user picking a mode), hide both the HDZ grid
+    // and the auto_list. Otherwise (RESULTS), show whichever matches the
+    // current mode: grid for HDZero, list for Analog/Auto.
+    bool show_grid = (page_state == SCAN_PAGE_RESULTS) && (scan_mode == SCAN_MODE_HDZERO);
+    bool show_list = (page_state == SCAN_PAGE_RESULTS) && !show_grid;
+
     if (auto_list) {
-        if (use_grid) {
-            lv_obj_add_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
-            page_scannow_set_channel_label(); // restores grid cells
-        } else {
+        if (show_list) {
             lv_obj_clear_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
-            for (int i = 0; i < BASE_CH_NUM; i++) {
-                lv_obj_add_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
-            }
+        } else {
+            lv_obj_add_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
         }
-    } else if (use_grid) {
-        page_scannow_set_channel_label();
+    }
+
+    if (show_grid) {
+        page_scannow_set_channel_label(); // restores grid cells
+    } else {
+        for (int i = 0; i < BASE_CH_NUM; i++) {
+            if (channel_tb[i].img0)  lv_obj_add_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
+            if (channel_tb[i].label) lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
+            if (channel_tb[i].img1)  lv_obj_add_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
+        }
     }
 }
 #endif
@@ -291,6 +311,9 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
             lv_obj_set_pos(mode_btns[i], 30 + i * 240, 6);
             lv_obj_t *lbl = lv_label_create(mode_btns[i]);
             lv_label_set_text(lbl, mode_names[i]);
+            lv_obj_set_style_text_color(lbl,
+                                        lv_color_make(0xFF, 0xFF, 0xFF), 0);
+            lv_obj_set_style_text_font(lbl, UI_SCANNOW_NOTE_FONT, 0);
             lv_obj_center(lbl);
         }
 

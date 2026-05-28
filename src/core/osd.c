@@ -367,6 +367,7 @@ void osd_analog_rssi_show(bool bShow) {
 //  = 0x80 | Channel
 //  = 0x00 | Channel Show Time
 uint8_t channel_osd_mode;
+uint8_t channel_osd_preview_proto = 0;
 
 char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // channel=[1:18]
 {
@@ -416,7 +417,28 @@ void osd_channel_show(bool bShow) {
     if (channel_osd_mode & 0x80) {
         ch = channel_osd_mode & 0x7F;
         color = lv_color_make(0xFF, 0x20, 0x20);
-        snprintf(buf, sizeof(buf), "  To %s?  ", channel2str(g_source_info.source == SOURCE_HDZERO, g_setting.source.hdzero_band, ch));
+        // For auto-detect previews, channel_osd_preview_proto overrides the
+        // source-based namespace so cross-protocol entries still render text.
+        // Tag the preview with /HDZ or /ANA so the user can tell which
+        // protocol they're about to switch to.
+        bool preview_is_hdz;
+        if (channel_osd_preview_proto == 1) {
+            preview_is_hdz = true;
+        } else if (channel_osd_preview_proto == 2) {
+            preview_is_hdz = false;
+        } else {
+            preview_is_hdz = (g_source_info.source == SOURCE_HDZERO);
+        }
+        if (channel_osd_preview_proto != 0) {
+            snprintf(buf, sizeof(buf), "  To %s/%s?  ",
+                     channel2str(preview_is_hdz,
+                                 g_setting.source.hdzero_band, ch),
+                     preview_is_hdz ? "HDZ" : "ANA");
+        } else {
+            snprintf(buf, sizeof(buf), "  To %s?  ",
+                     channel2str(preview_is_hdz,
+                                 g_setting.source.hdzero_band, ch));
+        }
         lv_obj_set_style_bg_opa(g_osd_hdzero.channel[is_fhd], LV_OPA_100, 0);
     } else {
         if (g_source_info.source == SOURCE_HDZERO) {

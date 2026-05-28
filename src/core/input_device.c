@@ -75,6 +75,7 @@ void exit_tune_channel() {
     tune_state = 0;
     tune_timer = 0;
     channel_osd_mode = 0;
+    channel_osd_preview_proto = 0;
 #if defined(HDZBOXPRO)
     auto_detect_freq_idx = -1;
 #endif
@@ -228,6 +229,7 @@ void tune_channel(uint8_t action) {
             scan_result_t r = scan_probe_both(entry);
             apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS);
             channel_osd_mode = CHANNEL_SHOWTIME;
+            channel_osd_preview_proto = 0; // back to normal "CH:" display
             tune_state = 1;
             tune_timer = 0;
             return;
@@ -235,17 +237,29 @@ void tune_channel(uint8_t action) {
             return;
         }
 
-        // For UP/DOWN: set OSD preview to the current entry's "primary" channel.
+        // For UP/DOWN: render a preview that's always meaningful, even when
+        // the entry's protocol differs from the current source. Prefer the
+        // current source's namespace if the entry has it; otherwise fall
+        // back to whichever protocol the entry does have. channel_osd_mode
+        // carries the channel index; channel_osd_preview_proto tells the OSD
+        // which namespace (HDZ vs analog) to format with.
         const scan_freq_entry_t *entry = &scan_freq_table[auto_detect_freq_idx];
-        // Only show OSD preview if the entry has a channel that matches the
-        // currently-active source's namespace. Mismatch (e.g. analog-only entry
-        // while still on HDZ) would format an out-of-range index.
-        if (g_source_info.source == SOURCE_HDZERO && entry->hdz_channel >= 0) {
+        bool prefer_hdz = (g_source_info.source == SOURCE_HDZERO);
+        if (prefer_hdz && entry->hdz_channel >= 0) {
             channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
-        } else if (g_source_info.source == SOURCE_AV_MODULE && entry->analog_channel >= 0) {
+            channel_osd_preview_proto = 1;
+        } else if (!prefer_hdz && entry->analog_channel >= 0) {
             channel_osd_mode = 0x80 | ((uint8_t)entry->analog_channel + 1);
+            channel_osd_preview_proto = 2;
+        } else if (entry->hdz_channel >= 0) {
+            channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
+            channel_osd_preview_proto = 1;
+        } else if (entry->analog_channel >= 0) {
+            channel_osd_mode = 0x80 | ((uint8_t)entry->analog_channel + 1);
+            channel_osd_preview_proto = 2;
         } else {
-            channel_osd_mode = 0;  // mismatched protocol; no safe preview text
+            channel_osd_mode = 0;
+            channel_osd_preview_proto = 0;
         }
         tune_timer = TUNER_TIMER_LEN;
         tune_state = 2;
@@ -337,6 +351,7 @@ void tune_channel(uint8_t action) {
     }
 
     channel_osd_mode = 0x80 | channel;
+    channel_osd_preview_proto = 0; // normal single-protocol dial — no /HDZ-/ANA tag
     tune_timer = TUNER_TIMER_LEN;
 }
 

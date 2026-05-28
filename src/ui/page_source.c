@@ -248,14 +248,6 @@ void source_status_timer() {
     snprintf(buf, sizeof(buf), "AV %s: %s", _lang("In"), state2string(g_source_info.av_in_status));
     lv_label_set_text(label[3], buf);
 
-#if defined(HDZBOXPRO)
-    if (auto_detect_label) {
-        snprintf(buf, sizeof(buf), "%s: %s", _lang("Auto Detect"),
-                 g_setting.source.auto_protocol_detect ? _lang("On") : _lang("Off"));
-        lv_label_set_text(auto_detect_label, buf);
-    }
-#endif
-
     if (g_setting.storage.selftest && label[3]) {
         uint8_t oled_tm = oled_tst_mode & 0x0F;
         char *pattern_label[6] = {"Normal", "Color Bar", "Grid", "All Black", "All White", "Boot logo"};
@@ -327,6 +319,12 @@ static void page_source_select_auto_detect() {
     g_setting.source.auto_protocol_detect = true;
     settings_put_bool("source", "auto_protocol_detect", true);
 
+    // Show the loading bar immediately so the user gets the same feedback
+    // they'd see when picking HDZero directly. Flush the LV timer so the bar
+    // is actually rendered before we enter the blocking probe.
+    progress_bar.start = 1;
+    lv_timer_handler();
+
     scan_freq_entry_t cur;
     cur.freq_mhz = 0; // unused by scan_probe_both
     cur.hdz_band = (int8_t)g_setting.source.hdzero_band;
@@ -348,7 +346,6 @@ static void page_source_select_auto_detect() {
     } else {
         // PROTOCOL_HDZ or PROTOCOL_NONE: default to HDZ. HDZero_open
         // already ran; app_switch_to_hdzero(true) tunes to current channel.
-        progress_bar.start = 1;
         app_switch_to_hdzero(true);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_HDZERO;

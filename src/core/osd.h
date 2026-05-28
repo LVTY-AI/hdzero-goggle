@@ -87,6 +87,12 @@ typedef struct {
 } osd_font_t;
 
 extern uint8_t channel_osd_mode;
+// Override for the channel preview namespace (only consulted when
+// channel_osd_mode has the 0x80 "preview" bit set). 0 = use current source;
+// 1 = force HDZ naming; 2 = force analog naming. Used by the BoxPro
+// auto-detect dial to show readable "To R5/ANA?" previews even when the
+// previewed entry's protocol differs from the active source.
+extern uint8_t channel_osd_preview_proto;
 
 int osd_init(void);
 int osd_clear(void);
