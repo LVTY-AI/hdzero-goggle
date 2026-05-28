@@ -27,6 +27,10 @@ typedef struct {
     void (*on_roller)(uint8_t key);
     void (*on_click)(uint8_t key, int sel);
     void (*on_right_button)(bool is_short);
+    // Optional intercept for the back gesture (long-press Enter while on a
+    // submenu page). Return true to absorb the event and stay on the page;
+    // return false (or leave NULL) to fall through to submenu_exit.
+    bool (*on_back)(void);
 
     int32_t post_bootup_run_priority;
     void (*post_bootup_run_function)(void (*complete_callback)());
@@ -49,6 +53,10 @@ void menu_nav(uint8_t key);
 
 void submenu_enter();
 void submenu_exit();
+// Same as submenu_exit, but first gives the current page's on_back hook a
+// chance to absorb the event (used by Scan Now to switch RESULTS->IDLE
+// instead of leaving the page entirely).
+bool submenu_back();
 void submenu_roller(uint8_t key);
 void submenu_roller_no_selection_change(uint8_t key);
 void submenu_click(void);

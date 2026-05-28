@@ -6,7 +6,10 @@
 #include <unistd.h>
 
 #include <log/log.h>
+#include <minIni.h>
 
+#include "core/app_state.h"
+#include "core/dvr.h"
 #include "core/settings.h"
 #include "driver/dm5680.h"
 #include "driver/dm6302.h"
@@ -142,9 +145,10 @@ int scan_freq_table_find_by_mhz(uint16_t mhz) {
 }
 
 // Tunable: fraction of (calib_max - calib_min) above calib_min that counts as
-// "signal present". 0.20 is a starting value, may need adjustment after
-// hardware testing.
-#define ANALOG_SIGNAL_THRESH_FRAC_NUM 20
+// "signal present". Lowered from 20% to 10% so the auto-detect crossover
+// triggers on mid-strength analog signals (typical setups produce RSSI well
+// short of the calibrated max).
+#define ANALOG_SIGNAL_THRESH_FRAC_NUM 10
 #define ANALOG_SIGNAL_THRESH_FRAC_DEN 100
 
 // Fallback threshold in mV when calibration is missing/corrupt.
@@ -276,20 +280,136 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
     return r;
 }
 
-void scan_core_idle_tick(void) {
-    if (!g_setting.source.auto_protocol_detect) return;
-    if (last_probe_ts.tv_sec == 0) return;  // no probes yet, nothing to do
-    if (!probe_idle_expired(IDLE_TIMEOUT_SECS)) return;
+// Watchdog state. Counts in 100ms scan_core_idle_tick ticks. Resets to 0
+// whenever the current source is reporting a valid signal, so a brief signal
+// hiccup never triggers a crossover.
+//   CROSSOVER_NO_SIGNAL_THRESH ticks of no signal arms the watchdog.
+//   CROSSOVER_PROBE_PERIOD ticks between successive cross-protocol probes.
+#define CROSSOVER_NO_SIGNAL_THRESH 30  // ~3s before crossover probes start
+#define CROSSOVER_PROBE_PERIOD     20  // ~2s between probes once armed
+static int no_signal_ticks = 0;
+static int crossover_period_ticks = 0;
 
-    // Power down whichever radio is NOT currently sourcing video.
+static int find_freq_idx_for_current_source(void) {
     if (g_source_info.source == SOURCE_HDZERO) {
-        rtc6715.init(0, 0);
-        analog_powered_down = true;
+        uint8_t ch  = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
+        int8_t band = (int8_t)g_setting.source.hdzero_band;
+        for (size_t i = 0; i < scan_freq_table_len; i++) {
+            if (scan_freq_table[i].hdz_band == band &&
+                scan_freq_table[i].hdz_channel == (int8_t)ch) {
+                return (int)i;
+            }
+        }
+    } else if (g_source_info.source == SOURCE_AV_MODULE) {
+        int8_t ch = (int8_t)((g_setting.source.analog_channel - 1) & 0x7F);
+        for (size_t i = 0; i < scan_freq_table_len; i++) {
+            if (scan_freq_table[i].analog_channel == ch) {
+                return (int)i;
+            }
+        }
     }
-    // HDZ stays on continuously: there's no safe mid-video close hook.
+    return -1;
+}
 
-    // Reset timestamp so we don't repeat the power-down on subsequent ticks.
-    last_probe_ts.tv_sec = 0;
+// Probe the OTHER protocol at the same frequency the user is currently
+// watching, and switch the source if it has signal. Heavy (probe ~250ms,
+// switch up to ~1.4s with internal sleeps), but only runs once every
+// CROSSOVER_PROBE_PERIOD ticks while the current source is dark.
+static void try_crossover_probe(void) {
+    int idx = find_freq_idx_for_current_source();
+    if (idx < 0) return;
+    const scan_freq_entry_t *entry = &scan_freq_table[idx];
+
+    if (g_source_info.source == SOURCE_HDZERO) {
+        if (entry->analog_channel < 0) return;
+        uint16_t rssi_mv = 0;
+        bool valid = false;
+        scan_probe_analog((uint8_t)entry->analog_channel, &rssi_mv, &valid);
+        if (!valid) return;
+
+        LOGI("auto-detect crossover: HDZ->analog (analog_ch=%u rssi=%u mv)",
+             (uint8_t)entry->analog_channel + 1, rssi_mv);
+        g_setting.source.analog_channel = (uint8_t)entry->analog_channel + 1;
+        ini_putl("source", "analog_channel",
+                 g_setting.source.analog_channel, SETTING_INI);
+        dvr_cmd(DVR_STOP);
+        app_switch_to_analog(0);
+        app_state_push(APP_STATE_VIDEO);
+        g_source_info.source = SOURCE_AV_MODULE;
+        dvr_select_audio_source(g_setting.record.audio_source);
+        dvr_enable_line_out(true);
+    } else if (g_source_info.source == SOURCE_AV_MODULE) {
+        if (entry->hdz_channel < 0 || entry->hdz_band < 0) return;
+        uint8_t gain = 0;
+        bool valid = false;
+        scan_probe_hdzero((uint8_t)entry->hdz_band,
+                          (uint8_t)entry->hdz_channel, &gain, &valid);
+        if (!valid) return;
+
+        LOGI("auto-detect crossover: analog->HDZ (hdz_ch=%u gain=%u)",
+             (uint8_t)entry->hdz_channel + 1, gain);
+        g_setting.scan.channel = (uint8_t)entry->hdz_channel + 1;
+        ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
+        dvr_cmd(DVR_STOP);
+        app_switch_to_hdzero(true);
+        app_state_push(APP_STATE_VIDEO);
+        g_source_info.source = SOURCE_HDZERO;
+        dvr_select_audio_source(g_setting.record.audio_source);
+        dvr_enable_line_out(true);
+    }
+}
+
+void scan_core_idle_tick(void) {
+    if (!g_setting.source.auto_protocol_detect) {
+        no_signal_ticks = 0;
+        crossover_period_ticks = 0;
+        return;
+    }
+
+    // Original idle-power-management: after IDLE_TIMEOUT_SECS without a
+    // manual probe, power down the radio not in use.
+    if (last_probe_ts.tv_sec != 0 && probe_idle_expired(IDLE_TIMEOUT_SECS)) {
+        if (g_source_info.source == SOURCE_HDZERO) {
+            rtc6715.init(0, 0);
+            analog_powered_down = true;
+        }
+        last_probe_ts.tv_sec = 0;
+    }
+
+    // Crossover watchdog runs only while a video source is active. In menus,
+    // playback, sleep, etc. there's nothing to fall over from.
+    if (g_app_state != APP_STATE_VIDEO) {
+        no_signal_ticks = 0;
+        crossover_period_ticks = 0;
+        return;
+    }
+
+    bool have_signal;
+    if (g_source_info.source == SOURCE_HDZERO) {
+        have_signal = (rx_status[0].rx_valid | rx_status[1].rx_valid) != 0;
+    } else if (g_source_info.source == SOURCE_AV_MODULE) {
+        have_signal = g_source_info.av_bay_status;
+    } else {
+        // HDMI / AV In / other sources: no auto-detect crossover.
+        no_signal_ticks = 0;
+        crossover_period_ticks = 0;
+        return;
+    }
+
+    if (have_signal) {
+        no_signal_ticks = 0;
+        crossover_period_ticks = 0;
+        return;
+    }
+
+    no_signal_ticks++;
+    if (no_signal_ticks < CROSSOVER_NO_SIGNAL_THRESH) return;
+
+    crossover_period_ticks++;
+    if (crossover_period_ticks < CROSSOVER_PROBE_PERIOD) return;
+    crossover_period_ticks = 0;
+
+    try_crossover_probe();
 }
 
 void scan_core_self_check(void) {

@@ -470,10 +470,12 @@ static void btn_press(void) // long press left key
         pb_key(DIAL_KEY_PRESS);
     } else if (g_app_state == APP_STATE_SLEEP) {
         wake_up();
-    } else { // Sub-menu  -> Main menu
-        submenu_exit();
-        app_state_push(APP_STATE_MAINMENU);
-        main_menu_show(true);
+    } else { // Sub-menu -> back. Page may absorb (e.g. scan_now RESULTS->IDLE);
+             // otherwise fall through to Main menu.
+        if (!submenu_back()) {
+            app_state_push(APP_STATE_MAINMENU);
+            main_menu_show(true);
+        }
     }
     pthread_mutex_unlock(&lvgl_mutex);
 }

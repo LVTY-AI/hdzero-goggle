@@ -165,6 +165,16 @@ void submenu_roller_no_selection_change(uint8_t key) {
     set_select_item(&pp->p_arr, pp->p_arr.cur);
 }
 
+bool submenu_back() {
+    page_pack_t *pp = find_pp(lv_menu_get_cur_main_page(menu));
+    if (pp && pp->on_back && pp->on_back()) {
+        // Page absorbed the back gesture; stay on the page.
+        return true;
+    }
+    submenu_exit();
+    return false;
+}
+
 void submenu_exit() {
     LOGI("submenu_exit");
     app_state_push(APP_STATE_MAINMENU);

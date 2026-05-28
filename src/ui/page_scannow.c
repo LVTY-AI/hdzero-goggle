@@ -255,6 +255,27 @@ static void apply_auto_detect_for_mode(scan_mode_t mode) {
     }
 }
 
+// Style a freshly-added auto_list row. The theme default would render the
+// row's bg and label as near-white, hiding the text entirely. is_focused
+// gives the selected row a distinct background so the dial cursor is visible.
+static void style_auto_list_row(lv_obj_t *btn, bool is_focused) {
+    if (!btn) return;
+    lv_obj_set_style_bg_color(btn,
+                              is_focused ? lv_color_make(0, 0xA0, 0)
+                                         : lv_color_make(0x30, 0x30, 0x30),
+                              LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_100, LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(btn, 8, LV_PART_MAIN);
+    lv_obj_set_style_radius(btn, 0, LV_PART_MAIN);
+    // lv_list_add_btn wraps the label in the first child; reach in to color it.
+    lv_obj_t *lbl = lv_obj_get_child(btn, 0);
+    if (lbl) {
+        lv_obj_set_style_text_color(lbl, lv_color_make(0xFF, 0xFF, 0xFF), 0);
+        lv_obj_set_style_text_font(lbl, UI_SCANNOW_NOTE_FONT, 0);
+    }
+}
+
 static void set_results_widget_visibility(void) {
     // While the page is IDLE (user picking a mode), hide both the HDZ grid
     // and the auto_list. Otherwise (RESULTS), show whichever matches the
@@ -271,7 +292,16 @@ static void set_results_widget_visibility(void) {
     }
 
     if (show_grid) {
-        page_scannow_set_channel_label(); // restores grid cells
+        // Un-hide every grid cell first; page_scannow_set_channel_label
+        // assumes cells 0..7 (R-band/L-band) are always visible and only
+        // toggles cells 8..11 (E1/F1/F2/F4) based on band. Without this,
+        // IDLE-state hiding leaves R1..R8 invisible after the scan finishes.
+        for (int i = 0; i < BASE_CH_NUM; i++) {
+            if (channel_tb[i].img0)  lv_obj_clear_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
+            if (channel_tb[i].label) lv_obj_clear_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
+            if (channel_tb[i].img1)  lv_obj_clear_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
+        }
+        page_scannow_set_channel_label();
     } else {
         for (int i = 0; i < BASE_CH_NUM; i++) {
             if (channel_tb[i].img0)  lv_obj_add_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
@@ -410,6 +440,13 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     auto_list = lv_list_create(cont2);
     lv_obj_set_pos(auto_list, 0, 0);
     lv_obj_set_size(auto_list, lv_pct(100), lv_pct(100));
+    // Theme default has near-white list bg + near-white label text, so
+    // populated rows render invisibly. Force dark background.
+    lv_obj_set_style_bg_color(auto_list, lv_color_make(0x20, 0x20, 0x20),
+                              LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(auto_list, LV_OPA_100, LV_PART_MAIN);
+    lv_obj_set_style_border_width(auto_list, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(auto_list, 4, LV_PART_MAIN);
     lv_obj_add_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
     set_results_widget_visibility();
 #endif
@@ -541,7 +578,10 @@ static int8_t scan_now_analog(void) {
                  channel2str_tagged(PROTOCOL_ANALOG,
                                     (uint8_t)res->analog_channel + 1),
                  res->strength);
-        if (auto_list) lv_list_add_btn(auto_list, NULL, row);
+        if (auto_list) {
+            lv_obj_t *btn = lv_list_add_btn(auto_list, NULL, row);
+            style_auto_list_row(btn, i == 0);
+        }
     }
 
     auto_select_index = 0;
@@ -606,7 +646,10 @@ static int8_t scan_now_auto(void) {
         snprintf(row, sizeof(row), "%s   %3u%%",
                  channel2str_tagged((int)res->protocol, ch_idx),
                  res->strength);
-        if (auto_list) lv_list_add_btn(auto_list, NULL, row);
+        if (auto_list) {
+            lv_obj_t *btn = lv_list_add_btn(auto_list, NULL, row);
+            style_auto_list_row(btn, i == 0);
+        }
     }
 
     auto_select_index = 0;
@@ -704,6 +747,29 @@ static void page_scannow_enter() {
 #endif
 }
 
+#if defined(HDZBOXPRO)
+// Intercepts the long-press-Enter back gesture. When the page is showing
+// scan RESULTS, return to the IDLE mode-picker instead of leaving the page,
+// so the user can re-scan in a different mode without re-navigating the menu.
+static bool page_scannow_on_back(void) {
+    if (page_state == SCAN_PAGE_RESULTS) {
+        // Tear down analog RX the same way exit would, so a subsequent IDLE
+        // scan power-on cycle starts from a clean state.
+        if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
+            rtc6715.init(0, 0);
+        }
+        page_state = SCAN_PAGE_IDLE;
+        set_results_widget_visibility();
+        update_mode_btn_focus();
+        lv_label_set_text(label, _lang("Scan Ready"));
+        lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
+        auto_scaned_cnt = 0;
+        return true; // absorbed
+    }
+    return false; // IDLE -> fall through to normal back-to-main-menu
+}
+#endif
+
 static void page_scannow_exit() {
 #if defined(HDZBOXPRO)
     if (page_state == SCAN_PAGE_RESULTS &&
@@ -746,11 +812,13 @@ static void page_scannow_on_roller(uint8_t key) {
         if (new_index != auto_select_index) {
             if (auto_focused_btn) {
                 lv_obj_clear_state(auto_focused_btn, LV_STATE_FOCUSED);
+                style_auto_list_row(auto_focused_btn, false);
             }
             auto_select_index = new_index;
             auto_focused_btn = lv_obj_get_child(auto_list, auto_select_index);
             if (auto_focused_btn) {
                 lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
+                style_auto_list_row(auto_focused_btn, true);
                 lv_obj_scroll_to_view(auto_focused_btn, LV_ANIM_ON);
             }
         }
@@ -823,4 +891,7 @@ page_pack_t pp_scannow = {
     .on_roller = page_scannow_on_roller,
     .on_click = page_scannow_on_click,
     .on_right_button = NULL,
+#if defined(HDZBOXPRO)
+    .on_back = page_scannow_on_back,
+#endif
 };
