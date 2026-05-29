@@ -14,6 +14,7 @@
 #include "core/settings.h"
 #include "driver/dm5680.h"
 #include "driver/dm6302.h"
+#include "driver/hardware.h"
 #include "driver/rtc6715.h"
 #include "ui/page_common.h"
 
@@ -350,15 +351,29 @@ static void try_crossover_probe(void) {
         pthread_mutex_unlock(&lvgl_mutex);
     } else if (g_source_info.source == SOURCE_AV_MODULE) {
         if (entry->hdz_channel < 0 || entry->hdz_band < 0) return;
+
+        // Source_AV() closed the HDZ baseband (DM5680_SetBB(0)), so a probe
+        // would read a dead receiver. Re-open it, let it settle, probe, and
+        // close it again if there's nothing there. This only runs while the
+        // analog screen is already dark (the watchdog requires no signal),
+        // so cycling the HDZ baseband can't disturb a good analog image.
+        HDZero_open(g_setting.source.hdzero_bw);
+        usleep(200000); // baseband lock time before reading the valid flag
         uint8_t gain = 0;
         bool valid = false;
         scan_probe_hdzero((uint8_t)entry->hdz_band,
                           (uint8_t)entry->hdz_channel, &gain, &valid);
-        if (!valid) return;
+        if (!valid) {
+            HDZero_Close();
+            return;
+        }
 
-        LOGI("auto-detect crossover: analog->HDZ (hdz_ch=%u gain=%u)",
-             (uint8_t)entry->hdz_channel + 1, gain);
+        LOGI("auto-detect crossover: analog->HDZ (band=%d ch=%u gain=%u)",
+             entry->hdz_band, (uint8_t)entry->hdz_channel + 1, gain);
         pthread_mutex_lock(&lvgl_mutex);
+        g_setting.source.hdzero_band = (uint8_t)entry->hdz_band;
+        ini_putl("source", "hdzero_band",
+                 g_setting.source.hdzero_band, SETTING_INI);
         g_setting.scan.channel = (uint8_t)entry->hdz_channel + 1;
         ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
         dvr_cmd(DVR_STOP);

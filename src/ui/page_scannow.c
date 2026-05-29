@@ -126,6 +126,7 @@ static void update_mode_btn_focus(void) {
 typedef struct {
     uint16_t freq_mhz;
     scan_protocol_t protocol;
+    int8_t   hdz_band;    // 0=Race, 1=Low, -1=n/a (analog row)
     int8_t   hdz_channel;
     int8_t   analog_channel;
     uint8_t  strength;
@@ -277,11 +278,10 @@ static void style_auto_list_row(lv_obj_t *btn, bool is_focused) {
 }
 
 static void set_results_widget_visibility(void) {
-    // While the page is IDLE (user picking a mode), hide both the HDZ grid
-    // and the auto_list. Otherwise (RESULTS), show whichever matches the
-    // current mode: grid for HDZero, list for Analog/Auto.
-    bool show_grid = (page_state == SCAN_PAGE_RESULTS) && (scan_mode == SCAN_MODE_HDZERO);
-    bool show_list = (page_state == SCAN_PAGE_RESULTS) && !show_grid;
+    // All three modes (HDZero, Analog, Auto/Both) now render into auto_list,
+    // so the legacy signal-bar grid stays hidden. Show the list only in the
+    // RESULTS state; IDLE shows just the mode picker.
+    bool show_list = (page_state == SCAN_PAGE_RESULTS);
 
     if (auto_list) {
         if (show_list) {
@@ -291,23 +291,11 @@ static void set_results_widget_visibility(void) {
         }
     }
 
-    if (show_grid) {
-        // Un-hide every grid cell first; page_scannow_set_channel_label
-        // assumes cells 0..7 (R-band/L-band) are always visible and only
-        // toggles cells 8..11 (E1/F1/F2/F4) based on band. Without this,
-        // IDLE-state hiding leaves R1..R8 invisible after the scan finishes.
-        for (int i = 0; i < BASE_CH_NUM; i++) {
-            if (channel_tb[i].img0)  lv_obj_clear_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
-            if (channel_tb[i].label) lv_obj_clear_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
-            if (channel_tb[i].img1)  lv_obj_clear_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
-        }
-        page_scannow_set_channel_label();
-    } else {
-        for (int i = 0; i < BASE_CH_NUM; i++) {
-            if (channel_tb[i].img0)  lv_obj_add_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
-            if (channel_tb[i].label) lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
-            if (channel_tb[i].img1)  lv_obj_add_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
-        }
+    // Grid cells are unused on BoxPro now; keep them hidden always.
+    for (int i = 0; i < BASE_CH_NUM; i++) {
+        if (channel_tb[i].img0)  lv_obj_add_flag(channel_tb[i].img0,  LV_OBJ_FLAG_HIDDEN);
+        if (channel_tb[i].label) lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
+        if (channel_tb[i].img1)  lv_obj_add_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
     }
 }
 #endif
@@ -524,7 +512,13 @@ static int8_t scan_now_hdzero(void) {
 }
 
 #if defined(HDZBOXPRO)
-static int compare_results_desc(const void *a, const void *b); // forward decl
+static int compare_results_desc(const void *a, const void *b) {
+    const auto_result_t *ra = a;
+    const auto_result_t *rb = b;
+    if (rb->strength != ra->strength)
+        return (int)rb->strength - (int)ra->strength;
+    return (int)ra->freq_mhz - (int)rb->freq_mhz;
+}
 
 static uint8_t analog_rssi_to_strength(uint16_t rssi_mv) {
     uint16_t cmin = g_setting.analog_rssi.calib_min;
@@ -534,9 +528,43 @@ static uint8_t analog_rssi_to_strength(uint16_t rssi_mv) {
     return (uint8_t)(((uint32_t)(rssi_mv - cmin) * 100u) / (cmax - cmin));
 }
 
-// Scan all 48 analog channels and populate auto_results (sorted by strength).
-// Results are rendered in auto_list — same widget Auto mode uses, just with
-// analog-only entries.
+// DM6302 gain table is 0..60; normalize to 0..100 to match the analog scale.
+static uint8_t hdz_gain_to_strength(uint8_t gain) {
+    return gain >= 60 ? 100 : (uint8_t)((uint32_t)gain * 100u / 60u);
+}
+
+// Render the (already sorted) auto_results into auto_list. Naming is
+// band-aware: HDZ rows use their own entry band, not the global setting, so a
+// Lowband row reads "L3/HDZ" even while the live band is Raceband. Focuses
+// row 0.
+static void render_auto_results_list(void) {
+    auto_focused_btn = NULL;
+    if (!auto_list) return;
+    lv_obj_clean(auto_list);
+
+    for (size_t i = 0; i < auto_result_count; i++) {
+        const auto_result_t *res = &auto_results[i];
+        char name[16];
+        if (res->protocol == PROTOCOL_HDZ) {
+            uint8_t lb = (res->hdz_band == 1) ? 1 : 0;
+            snprintf(name, sizeof(name), "%s/HDZ",
+                     channel2str(1, lb, (uint8_t)res->hdz_channel + 1));
+        } else {
+            snprintf(name, sizeof(name), "%s/ANA",
+                     channel2str(0, 0, (uint8_t)res->analog_channel + 1));
+        }
+        char row[64];
+        snprintf(row, sizeof(row), "%s   %3u%%", name, res->strength);
+        lv_obj_t *btn = lv_list_add_btn(auto_list, NULL, row);
+        style_auto_list_row(btn, i == 0);
+    }
+
+    auto_select_index = 0;
+    auto_focused_btn = lv_obj_get_child(auto_list, 0);
+    if (auto_focused_btn) lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
+}
+
+// Scan all 48 analog channels into auto_results (sorted by strength).
 static int8_t scan_now_analog(void) {
     char buf[128];
     uint16_t rssi_mv;
@@ -558,6 +586,7 @@ static int8_t scan_now_analog(void) {
             auto_result_t *out = &auto_results[auto_result_count++];
             out->freq_mhz       = scan_analog_idx_to_mhz[i];
             out->protocol       = PROTOCOL_ANALOG;
+            out->hdz_band       = -1;
             out->hdz_channel    = -1;
             out->analog_channel = (int8_t)i;
             out->strength       = analog_rssi_to_strength(rssi_mv);
@@ -568,38 +597,57 @@ static int8_t scan_now_analog(void) {
 
     qsort(auto_results, auto_result_count, sizeof(auto_result_t),
           compare_results_desc);
-
-    auto_focused_btn = NULL;
-    if (auto_list) lv_obj_clean(auto_list);
-    for (size_t i = 0; i < auto_result_count; i++) {
-        char row[64];
-        const auto_result_t *res = &auto_results[i];
-        snprintf(row, sizeof(row), "%s   %3u%%",
-                 channel2str_tagged(PROTOCOL_ANALOG,
-                                    (uint8_t)res->analog_channel + 1),
-                 res->strength);
-        if (auto_list) {
-            lv_obj_t *btn = lv_list_add_btn(auto_list, NULL, row);
-            style_auto_list_row(btn, i == 0);
-        }
-    }
-
-    auto_select_index = 0;
-    auto_focused_btn = lv_obj_get_child(auto_list, 0);
-    if (auto_focused_btn) lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
+    render_auto_results_list();
 
     lv_label_set_text(label, _lang("Scanning done"));
     lv_bar_set_range(progressbar, 0, 14);
-
     return auto_result_count ? (int8_t)auto_result_count : -1;
 }
 
-static int compare_results_desc(const void *a, const void *b) {
-    const auto_result_t *ra = a;
-    const auto_result_t *rb = b;
-    if (rb->strength != ra->strength)
-        return (int)rb->strength - (int)ra->strength;
-    return (int)ra->freq_mhz - (int)rb->freq_mhz;
+// Scan every HDZ channel across BOTH bands (Race R1-R8/E1/F1/F2/F4 + Low
+// L1-L8 = 20) by walking the freq table's HDZ entries. Replaces the legacy
+// fixed band-toggle grid; results render in the shared list.
+static int8_t scan_now_hdzero_list(void) {
+    char buf[128];
+    uint8_t gain;
+    bool valid;
+    auto_result_count = 0;
+
+    snprintf(buf, sizeof(buf), "%s...", _lang("Scanning"));
+    lv_label_set_text(label, buf);
+    lv_bar_set_range(progressbar, 0, (int32_t)scan_freq_table_len);
+    lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
+    lv_timer_handler();
+
+    HDZero_open(g_setting.source.hdzero_bw);
+
+    for (size_t i = 0; i < scan_freq_table_len; i++) {
+        const scan_freq_entry_t *e = &scan_freq_table[i];
+        if (e->hdz_channel >= 0 && e->hdz_band >= 0 &&
+            auto_result_count < AUTO_RESULT_MAX) {
+            scan_probe_hdzero((uint8_t)e->hdz_band, (uint8_t)e->hdz_channel,
+                              &gain, &valid);
+            if (valid) {
+                auto_result_t *out = &auto_results[auto_result_count++];
+                out->freq_mhz       = e->freq_mhz;
+                out->protocol       = PROTOCOL_HDZ;
+                out->hdz_band       = e->hdz_band;
+                out->hdz_channel    = e->hdz_channel;
+                out->analog_channel = -1;
+                out->strength       = hdz_gain_to_strength(gain);
+            }
+        }
+        lv_bar_set_value(progressbar, (int32_t)(i + 1), LV_ANIM_OFF);
+        lv_timer_handler();
+    }
+
+    qsort(auto_results, auto_result_count, sizeof(auto_result_t),
+          compare_results_desc);
+    render_auto_results_list();
+
+    lv_label_set_text(label, _lang("Scanning done"));
+    lv_bar_set_range(progressbar, 0, 14);
+    return auto_result_count ? (int8_t)auto_result_count : -1;
 }
 
 static int8_t scan_now_auto(void) {
@@ -623,6 +671,7 @@ static int8_t scan_now_auto(void) {
             auto_result_t *out = &auto_results[auto_result_count++];
             out->freq_mhz       = scan_freq_table[i].freq_mhz;
             out->protocol       = r.protocol;
+            out->hdz_band       = scan_freq_table[i].hdz_band;
             out->hdz_channel    = scan_freq_table[i].hdz_channel;
             out->analog_channel = scan_freq_table[i].analog_channel;
             out->strength       = r.strength;
@@ -633,41 +682,16 @@ static int8_t scan_now_auto(void) {
 
     qsort(auto_results, auto_result_count, sizeof(auto_result_t),
           compare_results_desc);
+    render_auto_results_list();
 
-    // Render results into the list widget.
-    auto_focused_btn = NULL;
-    if (auto_list) lv_obj_clean(auto_list);
-    for (size_t i = 0; i < auto_result_count; i++) {
-        char row[64];
-        const auto_result_t *res = &auto_results[i];
-        uint8_t ch_idx = (res->protocol == PROTOCOL_HDZ)
-                            ? (uint8_t)res->hdz_channel + 1
-                            : (uint8_t)res->analog_channel + 1;
-        snprintf(row, sizeof(row), "%s   %3u%%",
-                 channel2str_tagged((int)res->protocol, ch_idx),
-                 res->strength);
-        if (auto_list) {
-            lv_obj_t *btn = lv_list_add_btn(auto_list, NULL, row);
-            style_auto_list_row(btn, i == 0);
-        }
-    }
-
-    auto_select_index = 0;
-    auto_focused_btn = lv_obj_get_child(auto_list, 0);
-    if (auto_focused_btn) {
-        lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
-    }
     lv_label_set_text(label, _lang("Scanning done"));
-
-    // Restore progress bar range to the default used by HDZ/Analog modes.
     lv_bar_set_range(progressbar, 0, 14);
-
     return auto_result_count ? (int8_t)auto_result_count : -1;
 }
 
 static int8_t scan_now_dispatch(void) {
     switch (scan_mode) {
-    case SCAN_MODE_HDZERO: return scan_now_hdzero();
+    case SCAN_MODE_HDZERO: return scan_now_hdzero_list();
     case SCAN_MODE_ANALOG: return scan_now_analog();
     case SCAN_MODE_AUTO:   return scan_now_auto();
     }
@@ -800,8 +824,9 @@ static void page_scannow_on_roller(uint8_t key) {
         }
         return;
     }
-    // RESULTS state.
-    if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
+    // RESULTS state — every mode (HDZero, Analog, Auto/Both) navigates the
+    // shared results list.
+    {
         if (auto_result_count == 0) return;
         int new_index = auto_select_index;
         if (key == DIAL_KEY_UP && auto_select_index + 1 < (int)auto_result_count) {
@@ -848,13 +873,21 @@ static void page_scannow_on_click(uint8_t key, int sel) {
         start_scan_in_current_mode();
         return;
     }
-    // RESULTS state: click selects a scan result and enters video.
+    // RESULTS state: click selects a scan result and enters video. All three
+    // modes now feed the same auto_results list.
     apply_auto_detect_for_mode(scan_mode);
-    if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
+    {
         if (auto_result_count == 0) return;
         const auto_result_t *res = &auto_results[auto_select_index];
         app_state_push(APP_STATE_VIDEO);
         if (res->protocol == PROTOCOL_HDZ) {
+            // Commit the result's band so app_switch_to_hdzero tunes the
+            // correct Race/Low frequency, not whatever band was last set.
+            if (res->hdz_band >= 0) {
+                g_setting.source.hdzero_band = (uint8_t)res->hdz_band;
+                ini_putl("source", "hdzero_band",
+                         g_setting.source.hdzero_band, SETTING_INI);
+            }
             g_setting.scan.channel = (uint8_t)res->hdz_channel + 1;
             ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
             app_switch_to_hdzero(true);
@@ -870,7 +903,6 @@ static void page_scannow_on_click(uint8_t key, int sel) {
         dvr_enable_line_out(true);
         return;
     }
-    // HDZero mode RESULTS — fall through to existing HDZ select.
 #endif
     app_state_push(APP_STATE_VIDEO);
     app_switch_to_hdzero(false);

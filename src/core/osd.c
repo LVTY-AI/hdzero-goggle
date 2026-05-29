@@ -368,6 +368,7 @@ void osd_analog_rssi_show(bool bShow) {
 //  = 0x00 | Channel Show Time
 uint8_t channel_osd_mode;
 uint8_t channel_osd_preview_proto = 0;
+uint8_t channel_osd_preview_band = 0xFF;
 
 char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // channel=[1:18]
 {
@@ -385,7 +386,13 @@ char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // cha
         "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"};
 
     if (is_hdzero) {
-        if ((channel > 0) && (channel <= HDZERO_CHANNEL_NUM))
+        // Bound by the requested band, not the global setting: Lowband has 8
+        // named channels (L1-L8), Raceband has BASE_CH_NUM (R1-R8,E1,F1,F2,F4).
+        // Using the passed is_lowband lets cross-band previews (BoxPro dial)
+        // format correctly even when the live band differs. For callers that
+        // pass the current band this is identical to the old HDZERO_CHANNEL_NUM.
+        uint8_t maxch = is_lowband ? 8 : BASE_CH_NUM;
+        if ((channel > 0) && (channel <= maxch))
             return hdzero_channel_name[is_lowband][channel - 1];
         else
             return hdzero_channel_name[is_lowband][0];
@@ -429,15 +436,16 @@ void osd_channel_show(bool bShow) {
         } else {
             preview_is_hdz = (g_source_info.source == SOURCE_HDZERO);
         }
+        uint8_t preview_band = (channel_osd_preview_band == 0xFF)
+                                   ? g_setting.source.hdzero_band
+                                   : channel_osd_preview_band;
         if (channel_osd_preview_proto != 0) {
             snprintf(buf, sizeof(buf), "  To %s/%s?  ",
-                     channel2str(preview_is_hdz,
-                                 g_setting.source.hdzero_band, ch),
+                     channel2str(preview_is_hdz, preview_band, ch),
                      preview_is_hdz ? "HDZ" : "ANA");
         } else {
             snprintf(buf, sizeof(buf), "  To %s?  ",
-                     channel2str(preview_is_hdz,
-                                 g_setting.source.hdzero_band, ch));
+                     channel2str(preview_is_hdz, preview_band, ch));
         }
         lv_obj_set_style_bg_opa(g_osd_hdzero.channel[is_fhd], LV_OPA_100, 0);
     } else {

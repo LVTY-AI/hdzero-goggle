@@ -93,6 +93,12 @@ extern uint8_t channel_osd_mode;
 // auto-detect dial to show readable "To R5/ANA?" previews even when the
 // previewed entry's protocol differs from the active source.
 extern uint8_t channel_osd_preview_proto;
+// Override for the HDZ band used when formatting a channel preview (only
+// consulted when previewing an HDZ channel). 0xFF = use g_setting.source
+// .hdzero_band; 0 = force Raceband naming; 1 = force Lowband naming. Lets the
+// BoxPro dial preview the correct R*/L* name when walking across both bands
+// before the band is committed.
+extern uint8_t channel_osd_preview_band;
 
 int osd_init(void);
 int osd_clear(void);

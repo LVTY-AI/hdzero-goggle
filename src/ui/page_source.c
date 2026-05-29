@@ -52,7 +52,10 @@ enum {
     ROW_BOXPRO_HDMI,
     ROW_BOXPRO_AV,
     ROW_BOXPRO_AUTO_DETECT,
-    ROW_BOXPRO_HDZ_BAND,
+    // No HDZ Band row: Race/Low is no longer a user toggle on BoxPro. The
+    // band is derived automatically from the channel you tune (scan result,
+    // Auto Detect dial, or crossover), so Lowband is just part of the flat
+    // channel set.
     ROW_BOXPRO_HDZ_WIDTH,
     ROW_BOXPRO_ANALOG_RATIO,
     ROW_BOXPRO_TEST_PATTERN,
@@ -91,7 +94,6 @@ enum {
 #define ROW_ANALOG       ROW_BOXPRO_ANALOG
 #define ROW_HDMI         ROW_BOXPRO_HDMI
 #define ROW_AV           ROW_BOXPRO_AV
-#define ROW_HDZ_BAND     ROW_BOXPRO_HDZ_BAND
 #define ROW_HDZ_WIDTH    ROW_BOXPRO_HDZ_WIDTH
 #define ROW_ANALOG_RATIO ROW_BOXPRO_ANALOG_RATIO
 #define ROW_AUTO_DETECT  ROW_BOXPRO_AUTO_DETECT
@@ -164,8 +166,12 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
                                           1, ROW_AUTO_DETECT, 3);
 #endif
 
+#if !defined(HDZBOXPRO)
+    // BoxPro drops the Race/Low band toggle (band auto-follows the tuned
+    // channel); other targets keep it.
     create_btn_group_item(&btn_group1, cont, 2, _lang("HDZero Band"), _lang("Raceband"), _lang("Lowband"), "", "", ROW_HDZ_BAND);
     btn_group_set_sel(&btn_group1, g_setting.source.hdzero_band);
+#endif
 
     create_btn_group_item(&btn_group2, cont, 2, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), "", "", ROW_HDZ_WIDTH);
     btn_group_set_sel(&btn_group2, g_setting.source.hdzero_bw);
@@ -451,12 +457,14 @@ static void page_source_on_click(uint8_t key, int sel) {
     case ROW_AV:
         page_source_select_av_in();
         break;
+#if !defined(HDZBOXPRO)
     case ROW_HDZ_BAND:
         btn_group_toggle_sel(&btn_group1);
         g_setting.source.hdzero_band = btn_group_get_sel(&btn_group1);
         page_scannow_set_channel_label();
         ini_putl("source", "hdzero_band", g_setting.source.hdzero_band, SETTING_INI);
         break;
+#endif
     case ROW_HDZ_WIDTH:
         btn_group_toggle_sel(&btn_group2);
         g_setting.source.hdzero_bw = btn_group_get_sel(&btn_group2);
