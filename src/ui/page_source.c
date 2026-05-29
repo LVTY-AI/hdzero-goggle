@@ -325,27 +325,67 @@ static void page_source_select_auto_detect() {
     progress_bar.start = 1;
     lv_timer_handler();
 
-    scan_freq_entry_t cur;
-    cur.freq_mhz = 0; // unused by scan_probe_both
-    cur.hdz_band = (int8_t)g_setting.source.hdzero_band;
-    cur.hdz_channel = (int8_t)((g_setting.scan.channel - 1) & 0x7F);
-    cur.analog_channel = (int8_t)((g_setting.source.analog_channel - 1) & 0x7F);
-
     // Power both radios for the probe; scan_probe_both does sequential
     // probes and respects already-powered state.
     HDZero_open(g_setting.source.hdzero_bw);
     rtc6715.init(1, 0);
     scan_core_notify_analog_powered_on();
 
-    scan_result_t r = scan_probe_both(&cur);
+    // Find the freq-table entry matching the active source's current channel.
+    // The previous version probed analog at g_setting.source.analog_channel
+    // — an unrelated stored value — so an analog VTX at the user's HDZ
+    // frequency was never detected because the probe was tuned elsewhere.
+    int8_t band = (int8_t)g_setting.source.hdzero_band;
+    int8_t hdz_ch = (int8_t)((g_setting.scan.channel - 1) & 0x7F);
+    int8_t analog_ch = (int8_t)((int)g_setting.source.analog_channel - 1);
+    const scan_freq_entry_t *entry = NULL;
+    bool source_is_analog = (g_source_info.source == SOURCE_AV_MODULE);
+    for (size_t i = 0; i < scan_freq_table_len; i++) {
+        if (source_is_analog) {
+            if (scan_freq_table[i].analog_channel == analog_ch) {
+                entry = &scan_freq_table[i];
+                break;
+            }
+        } else {
+            if (scan_freq_table[i].hdz_band == band &&
+                scan_freq_table[i].hdz_channel == hdz_ch) {
+                entry = &scan_freq_table[i];
+                break;
+            }
+        }
+    }
+
+    scan_result_t r = { PROTOCOL_NONE, 0, 0, 0 };
+    if (entry) r = scan_probe_both(entry);
 
     if (r.protocol == PROTOCOL_ANALOG) {
+        // If we crossed protocols, persist the analog channel that's at the
+        // current frequency so the analog source switches to it directly.
+        if (entry && entry->analog_channel >= 0) {
+            uint8_t new_ch = (uint8_t)entry->analog_channel + 1;
+            if (g_setting.source.analog_channel != new_ch) {
+                g_setting.source.analog_channel = new_ch;
+                ini_putl("source", "analog_channel",
+                         g_setting.source.analog_channel, SETTING_INI);
+            }
+        }
         app_switch_to_analog(0);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_AV_MODULE;
     } else {
         // PROTOCOL_HDZ or PROTOCOL_NONE: default to HDZ. HDZero_open
         // already ran; app_switch_to_hdzero(true) tunes to current channel.
+        // If we crossed protocols, persist the HDZ channel matching the
+        // active analog frequency.
+        if (r.protocol == PROTOCOL_HDZ && entry &&
+            entry->hdz_channel >= 0 && source_is_analog) {
+            uint8_t new_ch = (uint8_t)entry->hdz_channel + 1;
+            if (g_setting.scan.channel != new_ch) {
+                g_setting.scan.channel = new_ch;
+                ini_putl("scan", "channel",
+                         g_setting.scan.channel, SETTING_INI);
+            }
+        }
         app_switch_to_hdzero(true);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_HDZERO;

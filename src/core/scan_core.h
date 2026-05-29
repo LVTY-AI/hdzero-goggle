@@ -56,6 +56,11 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry);
 void scan_core_self_check(void);
 void scan_core_idle_tick(void);
 void scan_core_notify_analog_powered_on(void);
+// Call after any non-scan_core code path powers off RTC6715 (e.g.
+// app_switch_to_hdzero) so the next scan_probe_analog re-inits before
+// tuning. Without this, scan_core's internal flag stays stale and the next
+// probe reads garbage RSSI from the powered-off GPADC.
+void scan_core_notify_analog_powered_off(void);
 
 #endif // HDZBOXPRO
 

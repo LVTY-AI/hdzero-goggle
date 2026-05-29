@@ -9,6 +9,7 @@
 #include "core/input_device.h"
 #include "core/msp_displayport.h"
 #include "core/osd.h"
+#include "core/scan_core.h"
 #include "driver/dm5680.h"
 #include "driver/dm6302.h"
 #include "driver/hardware.h"
@@ -62,6 +63,9 @@ void app_switch_to_menu() {
         IT66121_init();
 
     rtc6715.init(0, 0);
+#if defined(HDZBOXPRO)
+    scan_core_notify_analog_powered_off();
+#endif
     system_script(REC_STOP_LIVE);
 }
 
@@ -93,9 +97,15 @@ void app_switch_to_analog(bool is_av_in) {
 
     if (is_av_in) {
         rtc6715.init(0, 0);
+#if defined(HDZBOXPRO)
+        scan_core_notify_analog_powered_off();
+#endif
     } else {
         rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
         rtc6715.set_ch(g_setting.source.analog_channel - 1);
+#if defined(HDZBOXPRO)
+        scan_core_notify_analog_powered_on();
+#endif
     }
 
     g_setting.autoscan.last_source = is_av_in ? SETTING_AUTOSCAN_SOURCE_AV_IN : SETTING_AUTOSCAN_SOURCE_AV_MODULE;
@@ -114,6 +124,9 @@ void app_switch_to_hdmi_in() {
     system_exec("aww 0x0300b084 0x0001555");
 #endif
     rtc6715.init(0, 0);
+#if defined(HDZBOXPRO)
+    scan_core_notify_analog_powered_off();
+#endif
 
     Source_HDMI_in();
     IT66121_close();
@@ -154,6 +167,9 @@ void app_switch_to_hdzero(bool is_default) {
 #endif
 
     rtc6715.init(0, 0);
+#if defined(HDZBOXPRO)
+    scan_core_notify_analog_powered_off();
+#endif
 
     if (is_default) {
         ch = g_setting.scan.channel - 1;

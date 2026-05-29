@@ -9,6 +9,7 @@
 #include <minIni.h>
 
 #include "core/app_state.h"
+#include "core/common.hh"
 #include "core/dvr.h"
 #include "core/settings.h"
 #include "driver/dm5680.h"
@@ -36,6 +37,10 @@ static void mark_probe_activity(void) {
 void scan_core_notify_analog_powered_on(void) {
     analog_powered_down = false;
     mark_probe_activity();
+}
+
+void scan_core_notify_analog_powered_off(void) {
+    analog_powered_down = true;
 }
 
 static bool probe_idle_expired(int idle_secs) {
@@ -329,6 +334,10 @@ static void try_crossover_probe(void) {
 
         LOGI("auto-detect crossover: HDZ->analog (analog_ch=%u rssi=%u mv)",
              (uint8_t)entry->analog_channel + 1, rssi_mv);
+        // We're on thread_peripheral here; app_switch_to_analog touches LVGL
+        // (osd_show, lvgl_switch_to_720p, lv_timer_handler), so grab the
+        // mutex like the input thread does for the same operation.
+        pthread_mutex_lock(&lvgl_mutex);
         g_setting.source.analog_channel = (uint8_t)entry->analog_channel + 1;
         ini_putl("source", "analog_channel",
                  g_setting.source.analog_channel, SETTING_INI);
@@ -338,6 +347,7 @@ static void try_crossover_probe(void) {
         g_source_info.source = SOURCE_AV_MODULE;
         dvr_select_audio_source(g_setting.record.audio_source);
         dvr_enable_line_out(true);
+        pthread_mutex_unlock(&lvgl_mutex);
     } else if (g_source_info.source == SOURCE_AV_MODULE) {
         if (entry->hdz_channel < 0 || entry->hdz_band < 0) return;
         uint8_t gain = 0;
@@ -348,6 +358,7 @@ static void try_crossover_probe(void) {
 
         LOGI("auto-detect crossover: analog->HDZ (hdz_ch=%u gain=%u)",
              (uint8_t)entry->hdz_channel + 1, gain);
+        pthread_mutex_lock(&lvgl_mutex);
         g_setting.scan.channel = (uint8_t)entry->hdz_channel + 1;
         ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
         dvr_cmd(DVR_STOP);
@@ -356,6 +367,7 @@ static void try_crossover_probe(void) {
         g_source_info.source = SOURCE_HDZERO;
         dvr_select_audio_source(g_setting.record.audio_source);
         dvr_enable_line_out(true);
+        pthread_mutex_unlock(&lvgl_mutex);
     }
 }
 

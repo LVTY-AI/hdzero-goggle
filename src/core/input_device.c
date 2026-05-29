@@ -226,7 +226,30 @@ void tune_channel(uint8_t action) {
                        % (int)scan_freq_table_len;
         } else if (action == DIAL_KEY_CLICK || action == DIAL_KEY_PRESS) {
             const scan_freq_entry_t *entry = &scan_freq_table[auto_detect_freq_idx];
-            scan_result_t r = scan_probe_both(entry);
+            scan_result_t r;
+            r.protocol  = PROTOCOL_NONE;
+            r.strength  = 0;
+            r.hdz_gain  = 0;
+            r.analog_mv = 0;
+            // For single-protocol entries, honor the click as intent: switch
+            // to that protocol without requiring a probe. (Probes can return
+            // invalid for transient reasons — stale chip state, RSSI just
+            // below threshold, DM5680 vldflg race — and previously the user's
+            // click was silently ignored when that happened.)
+            if (entry->hdz_channel >= 0 && entry->analog_channel < 0) {
+                r.protocol = PROTOCOL_HDZ;
+            } else if (entry->analog_channel >= 0 && entry->hdz_channel < 0) {
+                r.protocol = PROTOCOL_ANALOG;
+            } else {
+                // Mixed entry: probe both, take the stronger; if neither is
+                // valid, stay on current source so we tune to the matching
+                // channel without an unnecessary cross-protocol switch.
+                r = scan_probe_both(entry);
+                if (r.protocol == PROTOCOL_NONE) {
+                    r.protocol = (g_source_info.source == SOURCE_AV_MODULE)
+                                     ? PROTOCOL_ANALOG : PROTOCOL_HDZ;
+                }
+            }
             apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS);
             channel_osd_mode = CHANNEL_SHOWTIME;
             channel_osd_preview_proto = 0; // back to normal "CH:" display
