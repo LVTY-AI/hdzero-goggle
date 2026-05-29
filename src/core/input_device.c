@@ -180,7 +180,10 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
             dvr_select_audio_source(g_setting.record.audio_source);
             dvr_enable_line_out(true);
         } else if (channel_changed) {
-            // Already on HDZ: lightweight retune only.
+            // Already on HDZ: lightweight retune. In Both mode the locked
+            // bandwidth may differ from what's open, so re-open the baseband
+            // first (no-op when the bandwidth is unchanged).
+            HDZero_open(hdzero_effective_bw());
             hdzero_switch_channel(g_setting.scan.channel - 1);
         }
         if (send_msp) msp_channel_update();
@@ -270,23 +273,38 @@ void tune_channel(uint8_t action) {
             r.strength  = 0;
             r.hdz_gain  = 0;
             r.analog_mv = 0;
-            // For single-protocol entries, honor the click as intent: switch
-            // to that protocol without requiring a probe. (Probes can return
-            // invalid for transient reasons — stale chip state, RSSI just
-            // below threshold, DM5680 vldflg race — and previously the user's
-            // click was silently ignored when that happened.)
-            if (entry->hdz_channel >= 0 && entry->analog_channel < 0) {
-                r.protocol = PROTOCOL_HDZ;
-            } else if (entry->analog_channel >= 0 && entry->hdz_channel < 0) {
-                r.protocol = PROTOCOL_ANALOG;
-            } else {
-                // Mixed entry: probe both, take the stronger; if neither is
-                // valid, stay on current source so we tune to the matching
-                // channel without an unnecessary cross-protocol switch.
-                r = scan_probe_both(entry);
+            r.hdz_bw    = 0;
+            if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
+                // Both: sweep bandwidths to determine protocol AND which
+                // bandwidth locks, so the live view opens at the right one.
+                uint8_t locked_bw = g_hdz_detected_bw;
+                r = scan_probe_both_sweep(entry, &locked_bw);
                 if (r.protocol == PROTOCOL_NONE) {
-                    r.protocol = (g_source_info.source == SOURCE_AV_MODULE)
-                                     ? PROTOCOL_ANALOG : PROTOCOL_HDZ;
+                    // Honor single-protocol intent even if nothing locked.
+                    if (entry->hdz_channel >= 0 && entry->analog_channel < 0)
+                        r.protocol = PROTOCOL_HDZ;
+                    else if (entry->analog_channel >= 0 && entry->hdz_channel < 0)
+                        r.protocol = PROTOCOL_ANALOG;
+                    else
+                        r.protocol = (g_source_info.source == SOURCE_AV_MODULE)
+                                         ? PROTOCOL_ANALOG : PROTOCOL_HDZ;
+                }
+                if (r.protocol == PROTOCOL_HDZ)
+                    g_hdz_detected_bw = locked_bw;
+            } else {
+                // Single bandwidth — fast path, no sweep. For single-protocol
+                // entries, honor the click as intent: switch without requiring
+                // a probe (probes can return invalid for transient reasons).
+                if (entry->hdz_channel >= 0 && entry->analog_channel < 0) {
+                    r.protocol = PROTOCOL_HDZ;
+                } else if (entry->analog_channel >= 0 && entry->hdz_channel < 0) {
+                    r.protocol = PROTOCOL_ANALOG;
+                } else {
+                    r = scan_probe_both(entry);
+                    if (r.protocol == PROTOCOL_NONE) {
+                        r.protocol = (g_source_info.source == SOURCE_AV_MODULE)
+                                         ? PROTOCOL_ANALOG : PROTOCOL_HDZ;
+                    }
                 }
             }
             apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS);

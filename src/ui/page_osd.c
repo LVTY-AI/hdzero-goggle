@@ -108,7 +108,7 @@ void page_osd_update_ui_elements() {
 static void open_element_pos_preview() {
     if (SOURCE_HDZERO == g_source_info.source) {
         progress_bar.start = 1;
-        HDZero_open(g_setting.source.hdzero_bw);
+        HDZero_open(hdzero_effective_bw());
         app_switch_to_hdzero(true);
     } else if (SOURCE_HDMI_IN == g_source_info.source) {
         app_switch_to_hdmi_in();

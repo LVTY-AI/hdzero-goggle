@@ -30,6 +30,7 @@ typedef struct {
     uint8_t  strength;   // normalized 0..100
     uint8_t  hdz_gain;   // raw, valid when protocol == PROTOCOL_HDZ
     uint16_t analog_mv;  // raw, valid when protocol == PROTOCOL_ANALOG
+    uint8_t  hdz_bw;     // bandwidth that locked, valid when protocol == PROTOCOL_HDZ
 } scan_result_t;
 
 extern const scan_freq_entry_t scan_freq_table[];
@@ -52,6 +53,16 @@ bool scan_probe_analog(uint8_t channel_idx,
                        uint16_t *rssi_mv_out, bool *valid_out);
 
 scan_result_t scan_probe_both(const scan_freq_entry_t *entry);
+
+// Fills out[] with the bandwidth(s) to sweep based on source.hdzero_bw:
+// {wide,narrow} when Both, else the single configured bandwidth. Returns count.
+int scan_hdz_bw_list(uint8_t out[2]);
+
+// Single-channel probe of both protocols that also honors the Wide/Narrow/Both
+// bandwidth setting: for HDZ it opens+settles the baseband at each selected
+// bandwidth and reports the one that locked in *out_bw (0/1). HDZ wins ties.
+// Leaves the HDZ baseband open at the last bandwidth tried.
+scan_result_t scan_probe_both_sweep(const scan_freq_entry_t *entry, uint8_t *out_bw);
 
 void scan_core_self_check(void);
 void scan_core_idle_tick(void);

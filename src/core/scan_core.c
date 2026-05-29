@@ -286,6 +286,68 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
     return r;
 }
 
+int scan_hdz_bw_list(uint8_t out[2]) {
+    if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
+        out[0] = SETTING_SOURCES_HDZERO_BW_WIDE;
+        out[1] = SETTING_SOURCES_HDZERO_BW_NARROW;
+        return 2;
+    }
+    out[0] = (uint8_t)g_setting.source.hdzero_bw;
+    return 1;
+}
+
+scan_result_t scan_probe_both_sweep(const scan_freq_entry_t *entry, uint8_t *out_bw) {
+    mark_probe_activity();
+    scan_result_t r = { PROTOCOL_NONE, 0, 0, 0, 0 };
+    uint8_t locked_bw = SETTING_SOURCES_HDZERO_BW_WIDE;
+
+    // Analog is bandwidth-independent; probe it once.
+    bool analog_valid = false;
+    uint16_t analog_mv = 0;
+    if (entry->analog_channel >= 0) {
+        scan_probe_analog((uint8_t)entry->analog_channel,
+                          &analog_mv, &analog_valid);
+    }
+
+    // HDZ: try each selected bandwidth; the strongest lock wins. Each
+    // HDZero_open (re)configures the baseband, so settle before reading.
+    bool hdz_valid = false;
+    uint8_t hdz_gain = 0;
+    if (entry->hdz_band >= 0 && entry->hdz_channel >= 0) {
+        uint8_t bws[2];
+        int n = scan_hdz_bw_list(bws);
+        for (int i = 0; i < n; i++) {
+            HDZero_open(bws[i]);
+            usleep(200000); // baseband (re)lock time
+            uint8_t g = 0;
+            bool v = false;
+            scan_probe_hdzero((uint8_t)entry->hdz_band,
+                              (uint8_t)entry->hdz_channel, &g, &v);
+            if (v && (!hdz_valid || g > hdz_gain)) {
+                hdz_valid = true;
+                hdz_gain = g;
+                locked_bw = bws[i];
+            }
+            if (v && n == 1)
+                break;
+        }
+    }
+
+    if (hdz_valid) {
+        r.protocol = PROTOCOL_HDZ;
+        r.hdz_gain = hdz_gain;
+        r.strength = hdz_strength_norm(hdz_gain);
+        r.hdz_bw   = locked_bw;
+    } else if (analog_valid) {
+        r.protocol  = PROTOCOL_ANALOG;
+        r.analog_mv = analog_mv;
+        r.strength  = analog_strength_norm(analog_mv);
+    }
+    if (out_bw)
+        *out_bw = locked_bw;
+    return r;
+}
+
 // Watchdog state. Counts in 100ms scan_core_idle_tick ticks. Resets to 0
 // whenever the current source is reporting a valid signal, so a brief signal
 // hiccup never triggers a crossover.
@@ -353,24 +415,22 @@ static void try_crossover_probe(void) {
         if (entry->hdz_channel < 0 || entry->hdz_band < 0) return;
 
         // Source_AV() closed the HDZ baseband (DM5680_SetBB(0)), so a probe
-        // would read a dead receiver. Re-open it, let it settle, probe, and
-        // close it again if there's nothing there. This only runs while the
-        // analog screen is already dark (the watchdog requires no signal),
-        // so cycling the HDZ baseband can't disturb a good analog image.
-        HDZero_open(g_setting.source.hdzero_bw);
-        usleep(200000); // baseband lock time before reading the valid flag
-        uint8_t gain = 0;
-        bool valid = false;
-        scan_probe_hdzero((uint8_t)entry->hdz_band,
-                          (uint8_t)entry->hdz_channel, &gain, &valid);
-        if (!valid) {
+        // would read a dead receiver. scan_probe_both_sweep re-opens it,
+        // settles, and (in Both mode) tries both bandwidths, reporting which
+        // locked. This only runs while the analog screen is already dark (the
+        // watchdog requires no signal), so cycling the HDZ baseband can't
+        // disturb a good analog image. Close it again on a miss.
+        uint8_t locked_bw = SETTING_SOURCES_HDZERO_BW_WIDE;
+        scan_result_t r = scan_probe_both_sweep(entry, &locked_bw);
+        if (r.protocol != PROTOCOL_HDZ) {
             HDZero_Close();
             return;
         }
 
-        LOGI("auto-detect crossover: analog->HDZ (band=%d ch=%u gain=%u)",
-             entry->hdz_band, (uint8_t)entry->hdz_channel + 1, gain);
+        LOGI("auto-detect crossover: analog->HDZ (band=%d ch=%u bw=%u)",
+             entry->hdz_band, (uint8_t)entry->hdz_channel + 1, locked_bw);
         pthread_mutex_lock(&lvgl_mutex);
+        g_hdz_detected_bw = locked_bw; // live open uses the bw that locked
         g_setting.source.hdzero_band = (uint8_t)entry->hdz_band;
         ini_putl("source", "hdzero_band",
                  g_setting.source.hdzero_band, SETTING_INI);

@@ -20,6 +20,14 @@
 
 setting_t g_setting;
 
+uint8_t g_hdz_detected_bw = SETTING_SOURCES_HDZERO_BW_WIDE;
+
+uint8_t hdzero_effective_bw(void) {
+    if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH)
+        return g_hdz_detected_bw;
+    return (uint8_t)g_setting.source.hdzero_bw;
+}
+
 const setting_t g_setting_defaults = {
     .scan = {
         .channel = 1,

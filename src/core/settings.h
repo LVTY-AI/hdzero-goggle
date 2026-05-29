@@ -254,7 +254,8 @@ typedef enum {
 } setting_sources_hdzero_band_t;
 typedef enum {
     SETTING_SOURCES_HDZERO_BW_WIDE = 0,
-    SETTING_SOURCES_HDZERO_BW_NARROW = 1
+    SETTING_SOURCES_HDZERO_BW_NARROW = 1,
+    SETTING_SOURCES_HDZERO_BW_BOTH = 2 // BoxPro: scan/auto-detect sweep both
 } setting_sources_hdzero_bw_t;
 
 typedef struct {
@@ -315,6 +316,16 @@ typedef struct {
 
 extern setting_t g_setting;
 extern const setting_t g_setting_defaults;
+
+// Runtime (non-persisted) record of the HDZ bandwidth that last locked a
+// signal. Only consulted when source.hdzero_bw == BOTH, to choose a concrete
+// bandwidth for live video. Defaults to Wide.
+extern uint8_t g_hdz_detected_bw;
+
+// Resolve source.hdzero_bw to a concrete bandwidth (0=Wide, 1=Narrow) for
+// opening the live HDZ pipeline. "Both" is a scan/detect-only setting and must
+// never reach the hardware, so it resolves to g_hdz_detected_bw.
+uint8_t hdzero_effective_bw(void);
 
 void settings_reset(void);
 void settings_init(void);

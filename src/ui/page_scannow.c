@@ -129,6 +129,7 @@ typedef struct {
     int8_t   hdz_band;    // 0=Race, 1=Low, -1=n/a (analog row)
     int8_t   hdz_channel;
     int8_t   analog_channel;
+    int8_t   hdz_bw;      // 0=Wide, 1=Narrow, -1=n/a (analog row)
     uint8_t  strength;
 } auto_result_t;
 
@@ -533,6 +534,60 @@ static uint8_t hdz_gain_to_strength(uint8_t gain) {
     return gain >= 60 ? 100 : (uint8_t)((uint32_t)gain * 100u / 60u);
 }
 
+// Results are keyed by frequency so a channel found in two bandwidth passes
+// (or as both protocols at one freq) collapses to a single row. HDZ always
+// wins a frequency over analog; within a protocol the stronger reading wins.
+static int find_result_idx_by_freq(uint16_t freq) {
+    for (size_t i = 0; i < auto_result_count; i++)
+        if (auto_results[i].freq_mhz == freq)
+            return (int)i;
+    return -1;
+}
+
+static void upsert_hdz(const scan_freq_entry_t *e, uint8_t bw, uint8_t strength) {
+    int idx = find_result_idx_by_freq(e->freq_mhz);
+    if (idx >= 0) {
+        auto_result_t *x = &auto_results[idx];
+        if (x->protocol == PROTOCOL_HDZ && x->strength >= strength)
+            return; // keep the stronger HDZ reading
+    } else {
+        if (auto_result_count >= AUTO_RESULT_MAX)
+            return;
+        idx = (int)auto_result_count++;
+    }
+    auto_result_t *o = &auto_results[idx];
+    o->freq_mhz       = e->freq_mhz;
+    o->protocol       = PROTOCOL_HDZ;
+    o->hdz_band       = e->hdz_band;
+    o->hdz_channel    = e->hdz_channel;
+    o->analog_channel = -1;
+    o->hdz_bw         = (int8_t)bw;
+    o->strength       = strength;
+}
+
+static void upsert_analog(uint16_t freq, int8_t analog_ch, uint8_t strength) {
+    int idx = find_result_idx_by_freq(freq);
+    if (idx >= 0) {
+        auto_result_t *x = &auto_results[idx];
+        if (x->protocol == PROTOCOL_HDZ)
+            return; // HDZ wins this frequency; never downgrade to analog
+        if (x->strength >= strength)
+            return;
+    } else {
+        if (auto_result_count >= AUTO_RESULT_MAX)
+            return;
+        idx = (int)auto_result_count++;
+    }
+    auto_result_t *o = &auto_results[idx];
+    o->freq_mhz       = freq;
+    o->protocol       = PROTOCOL_ANALOG;
+    o->hdz_band       = -1;
+    o->hdz_channel    = -1;
+    o->analog_channel = analog_ch;
+    o->hdz_bw         = -1;
+    o->strength       = strength;
+}
+
 // Render the (already sorted) auto_results into auto_list. Naming is
 // band-aware: HDZ rows use their own entry band, not the global setting, so a
 // Lowband row reads "L3/HDZ" even while the live band is Raceband. Focuses
@@ -544,11 +599,18 @@ static void render_auto_results_list(void) {
 
     for (size_t i = 0; i < auto_result_count; i++) {
         const auto_result_t *res = &auto_results[i];
-        char name[16];
+        char name[20];
         if (res->protocol == PROTOCOL_HDZ) {
             uint8_t lb = (res->hdz_band == 1) ? 1 : 0;
-            snprintf(name, sizeof(name), "%s/HDZ",
-                     channel2str(1, lb, (uint8_t)res->hdz_channel + 1));
+            if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
+                // Both mode: tag which bandwidth this channel was found at.
+                snprintf(name, sizeof(name), "%s/HDZ %c",
+                         channel2str(1, lb, (uint8_t)res->hdz_channel + 1),
+                         (res->hdz_bw == 1) ? 'N' : 'W');
+            } else {
+                snprintf(name, sizeof(name), "%s/HDZ",
+                         channel2str(1, lb, (uint8_t)res->hdz_channel + 1));
+            }
         } else {
             snprintf(name, sizeof(name), "%s/ANA",
                      channel2str(0, 0, (uint8_t)res->analog_channel + 1));
@@ -589,6 +651,7 @@ static int8_t scan_now_analog(void) {
             out->hdz_band       = -1;
             out->hdz_channel    = -1;
             out->analog_channel = (int8_t)i;
+            out->hdz_bw         = -1;
             out->strength       = analog_rssi_to_strength(rssi_mv);
         }
         lv_bar_set_value(progressbar, i + 1, LV_ANIM_OFF);
@@ -613,32 +676,30 @@ static int8_t scan_now_hdzero_list(void) {
     bool valid;
     auto_result_count = 0;
 
+    uint8_t bws[2];
+    int nbw = scan_hdz_bw_list(bws); // 1, or 2 when BW=Both
+
     snprintf(buf, sizeof(buf), "%s...", _lang("Scanning"));
     lv_label_set_text(label, buf);
-    lv_bar_set_range(progressbar, 0, (int32_t)scan_freq_table_len);
+    lv_bar_set_range(progressbar, 0, (int32_t)scan_freq_table_len * nbw);
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
     lv_timer_handler();
 
-    HDZero_open(g_setting.source.hdzero_bw);
-
-    for (size_t i = 0; i < scan_freq_table_len; i++) {
-        const scan_freq_entry_t *e = &scan_freq_table[i];
-        if (e->hdz_channel >= 0 && e->hdz_band >= 0 &&
-            auto_result_count < AUTO_RESULT_MAX) {
-            scan_probe_hdzero((uint8_t)e->hdz_band, (uint8_t)e->hdz_channel,
-                              &gain, &valid);
-            if (valid) {
-                auto_result_t *out = &auto_results[auto_result_count++];
-                out->freq_mhz       = e->freq_mhz;
-                out->protocol       = PROTOCOL_HDZ;
-                out->hdz_band       = e->hdz_band;
-                out->hdz_channel    = e->hdz_channel;
-                out->analog_channel = -1;
-                out->strength       = hdz_gain_to_strength(gain);
+    int32_t prog = 0;
+    for (int b = 0; b < nbw; b++) {
+        HDZero_open(bws[b]);
+        usleep(200000); // let the baseband settle once per bandwidth pass
+        for (size_t i = 0; i < scan_freq_table_len; i++) {
+            const scan_freq_entry_t *e = &scan_freq_table[i];
+            if (e->hdz_channel >= 0 && e->hdz_band >= 0) {
+                scan_probe_hdzero((uint8_t)e->hdz_band, (uint8_t)e->hdz_channel,
+                                  &gain, &valid);
+                if (valid)
+                    upsert_hdz(e, bws[b], hdz_gain_to_strength(gain));
             }
+            lv_bar_set_value(progressbar, ++prog, LV_ANIM_OFF);
+            lv_timer_handler();
         }
-        lv_bar_set_value(progressbar, (int32_t)(i + 1), LV_ANIM_OFF);
-        lv_timer_handler();
     }
 
     qsort(auto_results, auto_result_count, sizeof(auto_result_t),
@@ -652,32 +713,55 @@ static int8_t scan_now_hdzero_list(void) {
 
 static int8_t scan_now_auto(void) {
     char buf[128];
+    uint16_t rssi_mv;
+    uint8_t gain;
+    bool valid;
     auto_result_count = 0;
 
-    // Power on both radios for the scan.
+    uint8_t bws[2];
+    int nbw = scan_hdz_bw_list(bws); // 1, or 2 when BW=Both
+
     rtc6715.init(1, 0);
     scan_core_notify_analog_powered_on();
-    HDZero_open(g_setting.source.hdzero_bw);
 
     snprintf(buf, sizeof(buf), "%s...", _lang("Scanning"));
     lv_label_set_text(label, buf);
-    lv_bar_set_range(progressbar, 0, (int32_t)scan_freq_table_len);
+    // One analog pass + nbw HDZ passes over the table.
+    lv_bar_set_range(progressbar, 0, (int32_t)scan_freq_table_len * (nbw + 1));
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
     lv_timer_handler();
 
+    int32_t prog = 0;
+
+    // Analog pass — bandwidth-independent.
     for (size_t i = 0; i < scan_freq_table_len; i++) {
-        scan_result_t r = scan_probe_both(&scan_freq_table[i]);
-        if (r.protocol != PROTOCOL_NONE && auto_result_count < AUTO_RESULT_MAX) {
-            auto_result_t *out = &auto_results[auto_result_count++];
-            out->freq_mhz       = scan_freq_table[i].freq_mhz;
-            out->protocol       = r.protocol;
-            out->hdz_band       = scan_freq_table[i].hdz_band;
-            out->hdz_channel    = scan_freq_table[i].hdz_channel;
-            out->analog_channel = scan_freq_table[i].analog_channel;
-            out->strength       = r.strength;
+        const scan_freq_entry_t *e = &scan_freq_table[i];
+        if (e->analog_channel >= 0) {
+            scan_probe_analog((uint8_t)e->analog_channel, &rssi_mv, &valid);
+            if (valid)
+                upsert_analog(e->freq_mhz, e->analog_channel,
+                              analog_rssi_to_strength(rssi_mv));
         }
-        lv_bar_set_value(progressbar, (int32_t)(i + 1), LV_ANIM_OFF);
+        lv_bar_set_value(progressbar, ++prog, LV_ANIM_OFF);
         lv_timer_handler();
+    }
+
+    // HDZ pass(es) — one per selected bandwidth. upsert_hdz gives HDZ priority
+    // over analog at the same frequency.
+    for (int b = 0; b < nbw; b++) {
+        HDZero_open(bws[b]);
+        usleep(200000); // settle once per bandwidth pass
+        for (size_t i = 0; i < scan_freq_table_len; i++) {
+            const scan_freq_entry_t *e = &scan_freq_table[i];
+            if (e->hdz_channel >= 0 && e->hdz_band >= 0) {
+                scan_probe_hdzero((uint8_t)e->hdz_band, (uint8_t)e->hdz_channel,
+                                  &gain, &valid);
+                if (valid)
+                    upsert_hdz(e, bws[b], hdz_gain_to_strength(gain));
+            }
+            lv_bar_set_value(progressbar, ++prog, LV_ANIM_OFF);
+            lv_timer_handler();
+        }
     }
 
     qsort(auto_results, auto_result_count, sizeof(auto_result_t),
@@ -888,6 +972,10 @@ static void page_scannow_on_click(uint8_t key, int sel) {
                 ini_putl("source", "hdzero_band",
                          g_setting.source.hdzero_band, SETTING_INI);
             }
+            // Remember the bandwidth this result locked at so the live open
+            // (hdzero_effective_bw) uses it when BW=Both.
+            if (res->hdz_bw >= 0)
+                g_hdz_detected_bw = (uint8_t)res->hdz_bw;
             g_setting.scan.channel = (uint8_t)res->hdz_channel + 1;
             ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
             app_switch_to_hdzero(true);

@@ -173,7 +173,13 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     btn_group_set_sel(&btn_group1, g_setting.source.hdzero_band);
 #endif
 
+#if defined(HDZBOXPRO)
+    // BoxPro adds a third "Both" option: Scan and Auto Detect sweep both
+    // bandwidths (slower) so a VTX is found regardless of its bandwidth.
+    create_btn_group_item(&btn_group2, cont, 3, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), _lang("Both"), "", ROW_HDZ_WIDTH);
+#else
     create_btn_group_item(&btn_group2, cont, 2, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), "", "", ROW_HDZ_WIDTH);
+#endif
     btn_group_set_sel(&btn_group2, g_setting.source.hdzero_bw);
 
 #if defined(HDZGOGGLE)
@@ -331,9 +337,10 @@ static void page_source_select_auto_detect() {
     progress_bar.start = 1;
     lv_timer_handler();
 
-    // Power both radios for the probe; scan_probe_both does sequential
-    // probes and respects already-powered state.
-    HDZero_open(g_setting.source.hdzero_bw);
+    // Power both radios for the probe. Use the resolved bandwidth (never the
+    // "Both" sentinel); scan_probe_both_sweep below re-opens per bandwidth
+    // when Both is selected.
+    HDZero_open(hdzero_effective_bw());
     rtc6715.init(1, 0);
     scan_core_notify_analog_powered_on();
 
@@ -361,8 +368,11 @@ static void page_source_select_auto_detect() {
         }
     }
 
-    scan_result_t r = { PROTOCOL_NONE, 0, 0, 0 };
-    if (entry) r = scan_probe_both(entry);
+    scan_result_t r = { PROTOCOL_NONE, 0, 0, 0, 0 };
+    uint8_t locked_bw = g_hdz_detected_bw;
+    if (entry) r = scan_probe_both_sweep(entry, &locked_bw);
+    if (r.protocol == PROTOCOL_HDZ)
+        g_hdz_detected_bw = locked_bw; // live open uses the bw that locked
 
     if (r.protocol == PROTOCOL_ANALOG) {
         // If we crossed protocols, persist the analog channel that's at the
@@ -469,6 +479,13 @@ static void page_source_on_click(uint8_t key, int sel) {
         btn_group_toggle_sel(&btn_group2);
         g_setting.source.hdzero_bw = btn_group_get_sel(&btn_group2);
         ini_putl("source", "hdzero_bw", g_setting.source.hdzero_bw, SETTING_INI);
+#if defined(HDZBOXPRO)
+        // Selecting "Both" makes the live bandwidth resolve via
+        // g_hdz_detected_bw; seed it from whatever is currently open so a live
+        // re-open (e.g. an OSD change) doesn't flip the picture's bandwidth.
+        if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH)
+            g_hdz_detected_bw = g_hw_stat.hdz_bw ? 1 : 0;
+#endif
         break;
 #if defined(HDZGOGGLE)
     case ROW_ANALOG_VIDEO:
