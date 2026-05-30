@@ -176,7 +176,7 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
 #if defined(HDZBOXPRO)
     // BoxPro adds a third "Both" option: Scan and Auto Detect sweep both
     // bandwidths (slower) so a VTX is found regardless of its bandwidth.
-    create_btn_group_item(&btn_group2, cont, 3, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), _lang("Both"), "", ROW_HDZ_WIDTH);
+    create_btn_group_item(&btn_group2, cont, 3, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), _lang("Auto/Both"), "", ROW_HDZ_WIDTH);
 #else
     create_btn_group_item(&btn_group2, cont, 2, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), "", "", ROW_HDZ_WIDTH);
 #endif

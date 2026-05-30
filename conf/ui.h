@@ -235,7 +235,7 @@ static inline int UI_STATUS_BAR_LABEL_WIDTH() {
 #define UI_POWER_ROWS                     40, 40, 40, 40, 40, 40, 40, 40, 40, LV_GRID_TEMPLATE_LAST
 #define UI_RECORD_COLS                    106, 132, 132, 106, 80, 80, LV_GRID_TEMPLATE_LAST
 #define UI_RECORD_ROWS                    40, 40, 40, 40, 40, 40, 40, 40, 40, 40, LV_GRID_TEMPLATE_LAST
-#define UI_SOURCE_COLS                    106, 106, 130, 106, 106, 106, LV_GRID_TEMPLATE_LAST
+#define UI_SOURCE_COLS                    106, 106, 106, 106, 106, 106, LV_GRID_TEMPLATE_LAST
 #define UI_SOURCE_ROWS                    40, 40, 40, 40, 40, 40, 40, 40, 40, 40, LV_GRID_TEMPLATE_LAST
 #define UI_STORAGE_COLS                   106, 106, 106, 106, 106, 106, LV_GRID_TEMPLATE_LAST
 #define UI_STORAGE_ROWS                   40, 40, 40, 40, 40, 40, 40, 26, LV_GRID_TEMPLATE_LAST

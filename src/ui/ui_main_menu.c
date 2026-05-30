@@ -440,8 +440,12 @@ void progress_bar_update() {
     }
 
     if (state == 1) {
+        // HDZero "Auto/Both" bandwidth makes the HDZ source take ~2x as long
+        // to come up (it sweeps Wide + Narrow), so fill the bar at half speed
+        // to better track the actual load time. (BOTH only occurs on BoxPro.)
+        uint8_t step = (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) ? 2 : 4;
         if (progress_bar.val < 100)
-            progress_bar.val += 4;
+            progress_bar.val += step;
         lv_bar_set_value(progress_bar.bar, progress_bar.val, LV_ANIM_OFF);
         lv_timer_handler();
     }
