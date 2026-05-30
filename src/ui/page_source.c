@@ -285,6 +285,23 @@ static void page_source_select_hdzero() {
     disable_auto_protocol_detect();
 #endif
     progress_bar.start = 1;
+#if defined(HDZBOXPRO)
+    // BW=Auto/Both: sweep both bandwidths at the current channel so a direct
+    // HDZero pick locks regardless of the VTX bandwidth, instead of trusting
+    // the last-detected value. HDZ-only — this stays single-protocol (auto
+    // detect was just disabled above). app_switch_to_hdzero then opens at the
+    // bandwidth we found via hdzero_effective_bw().
+    if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
+        lv_timer_handler(); // paint the loading bar before the blocking sweep
+        uint8_t locked_bw = g_hdz_detected_bw;
+        bool found = scan_probe_hdzero_sweep(
+            (uint8_t)g_setting.source.hdzero_band,
+            (uint8_t)((g_setting.scan.channel - 1) & 0x7F),
+            NULL, &locked_bw);
+        if (found)
+            g_hdz_detected_bw = locked_bw;
+    }
+#endif
     app_switch_to_hdzero(true);
     app_state_push(APP_STATE_VIDEO);
     g_source_info.source = SOURCE_HDZERO;

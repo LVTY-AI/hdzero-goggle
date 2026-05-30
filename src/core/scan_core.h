@@ -58,6 +58,14 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry);
 // {wide,narrow} when Both, else the single configured bandwidth. Returns count.
 int scan_hdz_bw_list(uint8_t out[2]);
 
+// HDZ-only bandwidth sweep at one channel: opens+settles the baseband at each
+// selected bandwidth (1 when Wide/Narrow, 2 when Both) and reports the one that
+// locked with the strongest gain. Returns true if any locked; *out_bw gets the
+// winning bandwidth (or the first tried if none). Leaves the baseband open at
+// the last bandwidth tried.
+bool scan_probe_hdzero_sweep(uint8_t band, uint8_t channel,
+                             uint8_t *out_gain, uint8_t *out_bw);
+
 // Single-channel probe of both protocols that also honors the Wide/Narrow/Both
 // bandwidth setting: for HDZ it opens+settles the baseband at each selected
 // bandwidth and reports the one that locked in *out_bw (0/1). HDZ wins ties.

@@ -296,6 +296,30 @@ int scan_hdz_bw_list(uint8_t out[2]) {
     return 1;
 }
 
+bool scan_probe_hdzero_sweep(uint8_t band, uint8_t channel,
+                             uint8_t *out_gain, uint8_t *out_bw) {
+    uint8_t bws[2];
+    int n = scan_hdz_bw_list(bws);
+    bool found = false;
+    uint8_t best_gain = 0;
+    uint8_t locked_bw = bws[0];
+    for (int i = 0; i < n; i++) {
+        HDZero_open(bws[i]);
+        usleep(200000); // baseband (re)lock time after each bandwidth change
+        uint8_t g = 0;
+        bool v = false;
+        scan_probe_hdzero(band, channel, &g, &v);
+        if (v && (!found || g > best_gain)) {
+            found = true;
+            best_gain = g;
+            locked_bw = bws[i];
+        }
+    }
+    if (out_gain) *out_gain = best_gain;
+    if (out_bw)   *out_bw = locked_bw;
+    return found;
+}
+
 scan_result_t scan_probe_both_sweep(const scan_freq_entry_t *entry, uint8_t *out_bw) {
     mark_probe_activity();
     scan_result_t r = { PROTOCOL_NONE, 0, 0, 0, 0 };
@@ -309,28 +333,13 @@ scan_result_t scan_probe_both_sweep(const scan_freq_entry_t *entry, uint8_t *out
                           &analog_mv, &analog_valid);
     }
 
-    // HDZ: try each selected bandwidth; the strongest lock wins. Each
-    // HDZero_open (re)configures the baseband, so settle before reading.
+    // HDZ: sweep the selected bandwidth(s); the strongest lock wins.
     bool hdz_valid = false;
     uint8_t hdz_gain = 0;
     if (entry->hdz_band >= 0 && entry->hdz_channel >= 0) {
-        uint8_t bws[2];
-        int n = scan_hdz_bw_list(bws);
-        for (int i = 0; i < n; i++) {
-            HDZero_open(bws[i]);
-            usleep(200000); // baseband (re)lock time
-            uint8_t g = 0;
-            bool v = false;
-            scan_probe_hdzero((uint8_t)entry->hdz_band,
-                              (uint8_t)entry->hdz_channel, &g, &v);
-            if (v && (!hdz_valid || g > hdz_gain)) {
-                hdz_valid = true;
-                hdz_gain = g;
-                locked_bw = bws[i];
-            }
-            if (v && n == 1)
-                break;
-        }
+        hdz_valid = scan_probe_hdzero_sweep((uint8_t)entry->hdz_band,
+                                            (uint8_t)entry->hdz_channel,
+                                            &hdz_gain, &locked_bw);
     }
 
     if (hdz_valid) {
