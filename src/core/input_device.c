@@ -69,6 +69,7 @@ static int btn_value = 0;
 // action: 1 = tune up, 2 = tune down, 3 = confirm
 #if defined(HDZBOXPRO)
 static int auto_detect_freq_idx = -1;
+#endif
 
 // Flat HDZ channel space: the band/channel split is purely a UI grouping over
 // a contiguous 20-channel hardware space (DM6302 indexes lowband as ch+12).
@@ -93,7 +94,6 @@ static int hdz_band_ch_to_flat(uint8_t band, uint8_t ch1) {
     if (ch0 < 0) ch0 = 0;
     return (band == 1) ? (BASE_CH_NUM + ch0) : ch0;
 }
-#endif
 
 void exit_tune_channel() {
     tune_state = 0;
@@ -363,28 +363,18 @@ void tune_channel(uint8_t action) {
             tune_timer = TUNER_TIMER_LEN;
             tune_state = 2;
 
-#if defined HDZGOGGLE
-            channel = g_setting.scan.channel;
-#elif defined(HDZBOXPRO)
             if (g_source_info.source == SOURCE_HDZERO) {
                 // Walk a flat 20-channel space across both bands (no toggle).
                 channel = (uint8_t)(hdz_band_ch_to_flat(
                               g_setting.source.hdzero_band,
                               g_setting.scan.channel) + 1);
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
             } else if (g_source_info.source == SOURCE_AV_MODULE) {
                 channel = g_setting.source.analog_channel;
-            } else {
-                return;
-            }
-#elif defined(HDZGOGGLE2)
-            if (g_source_info.source == SOURCE_HDZERO) {
-                channel = g_setting.scan.channel;
-            } else if (g_source_info.source == SOURCE_AV_MODULE) {
-                channel = g_setting.source.analog_channel;
-            } else {
-                return;
-            }
 #endif
+            } else {
+                return;
+            }
         }
     }
 
@@ -393,11 +383,7 @@ void tune_channel(uint8_t action) {
 
     uint8_t channel_num;
     if (g_source_info.source == SOURCE_HDZERO)
-#if defined(HDZBOXPRO)
         channel_num = HDZ_FLAT_COUNT;
-#else
-        channel_num = HDZERO_CHANNEL_NUM;
-#endif
     else if (g_source_info.source == SOURCE_AV_MODULE)
         channel_num = ANALOG_CHANNEL_NUM;
     else
@@ -421,7 +407,6 @@ void tune_channel(uint8_t action) {
     case DIAL_KEY_PRESS: // confirm to tune with VTX freq send
     case DIAL_KEY_CLICK: // confirm to tune
         if (g_source_info.source == SOURCE_HDZERO) {
-#if defined(HDZBOXPRO)
             // channel is a flat 0..19 index (+1); map back to band+channel.
             uint8_t nband, nch1;
             hdz_flat_to_band_ch((int)channel - 1, &nband, &nch1);
@@ -437,17 +422,6 @@ void tune_channel(uint8_t action) {
                     msp_channel_update();
                 }
             }
-#else
-            if (g_setting.scan.channel != channel) {
-                g_setting.scan.channel = channel;
-                ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
-                dvr_cmd(DVR_STOP);
-                hdzero_switch_channel(g_setting.scan.channel - 1);
-                if (action == DIAL_KEY_PRESS) {
-                    msp_channel_update();
-                }
-            }
-#endif
         } else if (g_source_info.source == SOURCE_AV_MODULE) {
             if (g_setting.source.analog_channel != channel) {
                 g_setting.source.analog_channel = channel;
@@ -471,7 +445,6 @@ void tune_channel(uint8_t action) {
         break;
     }
 
-#if defined(HDZBOXPRO)
     if (g_source_info.source == SOURCE_HDZERO) {
         // channel is a flat index (+1); preview the matching band's R*/L* name.
         uint8_t pband, pch1;
@@ -484,10 +457,6 @@ void tune_channel(uint8_t action) {
         channel_osd_preview_proto = 0;
         channel_osd_preview_band = 0xFF;
     }
-#else
-    channel_osd_mode = 0x80 | channel;
-    channel_osd_preview_proto = 0; // normal single-protocol dial — no /HDZ-/ANA tag
-#endif
     tune_timer = TUNER_TIMER_LEN;
 }
 
