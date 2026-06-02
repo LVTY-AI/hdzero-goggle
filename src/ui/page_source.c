@@ -34,7 +34,6 @@ enum {
     ROW_GOGGLE_ANALOG,
     ROW_GOGGLE_HDMI,
     ROW_GOGGLE_AV,
-    ROW_GOGGLE_HDZ_BAND,
     ROW_GOGGLE_HDZ_WIDTH,
     ROW_GOGGLE_ANALOG_VIDEO,
     ROW_GOGGLE_ANALOG_RATIO,
@@ -68,7 +67,6 @@ enum {
     ROW_GOGGLE2_ANALOG,
     ROW_GOGGLE2_HDMI,
     ROW_GOGGLE2_AV,
-    ROW_GOGGLE2_HDZ_BAND,
     ROW_GOGGLE2_HDZ_WIDTH,
     ROW_GOGGLE2_ANALOG_MODULE,
     ROW_GOGGLE2_ANALOG_RATIO,
@@ -82,7 +80,6 @@ enum {
 #define ROW_ANALOG       ROW_GOGGLE_ANALOG
 #define ROW_HDMI         ROW_GOGGLE_HDMI
 #define ROW_AV           ROW_GOGGLE_AV
-#define ROW_HDZ_BAND     ROW_GOGGLE_HDZ_BAND
 #define ROW_HDZ_WIDTH    ROW_GOGGLE_HDZ_WIDTH
 #define ROW_ANALOG_VIDEO ROW_GOGGLE_ANALOG_VIDEO
 #define ROW_ANALOG_RATIO ROW_GOGGLE_ANALOG_RATIO
@@ -105,7 +102,6 @@ enum {
 #define ROW_ANALOG        ROW_GOGGLE2_ANALOG
 #define ROW_HDMI          ROW_GOGGLE2_HDMI
 #define ROW_AV            ROW_GOGGLE2_AV
-#define ROW_HDZ_BAND      ROW_GOGGLE2_HDZ_BAND
 #define ROW_HDZ_WIDTH     ROW_GOGGLE2_HDZ_WIDTH
 #define ROW_ANALOG_MODULE ROW_GOGGLE2_ANALOG_MODULE
 #define ROW_ANALOG_RATIO  ROW_GOGGLE2_ANALOG_RATIO
@@ -121,7 +117,7 @@ static lv_coord_t row_dsc[] = {UI_SOURCE_ROWS};
 static lv_obj_t *label[6] = {NULL};
 static uint8_t oled_tst_mode = 0; // 0=Normal, 1=CB, 2=Grid, 3=All Black, 4=All White, 5=Boot logo
 static bool in_sourcepage = false;
-static btn_group_t btn_group0, btn_group1, btn_group2, btn_group3;
+static btn_group_t btn_group0, btn_group2, btn_group3;
 #if defined(HDZBOXPRO)
 static lv_obj_t *auto_detect_label = NULL;
 #endif
@@ -164,13 +160,6 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
 #if defined(HDZBOXPRO)
     auto_detect_label = create_label_item(cont, _lang("Auto Detect"),
                                           1, ROW_AUTO_DETECT, 3);
-#endif
-
-#if !defined(HDZBOXPRO)
-    // BoxPro drops the Race/Low band toggle (band auto-follows the tuned
-    // channel); other targets keep it.
-    create_btn_group_item(&btn_group1, cont, 2, _lang("HDZero Band"), _lang("Raceband"), _lang("Lowband"), "", "", ROW_HDZ_BAND);
-    btn_group_set_sel(&btn_group1, g_setting.source.hdzero_band);
 #endif
 
 #if defined(HDZBOXPRO)
@@ -484,14 +473,6 @@ static void page_source_on_click(uint8_t key, int sel) {
     case ROW_AV:
         page_source_select_av_in();
         break;
-#if !defined(HDZBOXPRO)
-    case ROW_HDZ_BAND:
-        btn_group_toggle_sel(&btn_group1);
-        g_setting.source.hdzero_band = btn_group_get_sel(&btn_group1);
-        page_scannow_set_channel_label();
-        ini_putl("source", "hdzero_band", g_setting.source.hdzero_band, SETTING_INI);
-        break;
-#endif
     case ROW_HDZ_WIDTH:
         btn_group_toggle_sel(&btn_group2);
         g_setting.source.hdzero_bw = btn_group_get_sel(&btn_group2);
