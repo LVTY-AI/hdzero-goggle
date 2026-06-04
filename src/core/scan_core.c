@@ -518,6 +518,56 @@ void scan_core_idle_tick(void) {
 }
 #endif
 
+// HDZ bandwidth re-acquire watchdog (all targets). When viewing the HDZero
+// source with BW=Auto and the signal has been lost for ~1.5s (e.g. the VTX
+// bandwidth changed Wide<->Narrow), re-sweep both bandwidths at the current
+// channel and reopen at whichever locks -- the picture returns without
+// re-selecting the source. HDZ-only (no analog), so it runs on every target,
+// and it is independent of auto_protocol_detect (that setting drives the
+// separate protocol crossover in scan_core_idle_tick).
+#define HDZ_BW_REACQUIRE_DARK_THRESH 15 // ~1.5s of no signal before sweeping
+#define HDZ_BW_REACQUIRE_PERIOD      15 // ~1.5s between re-sweeps while dark
+void scan_core_hdz_bw_tick(void) {
+    static int dark_ticks = 0;
+    static int period_ticks = 0;
+
+    if (g_app_state != APP_STATE_VIDEO ||
+        g_source_info.source != SOURCE_HDZERO ||
+        g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH) {
+        dark_ticks = 0;
+        period_ticks = 0;
+        return;
+    }
+
+    if ((rx_status[0].rx_valid | rx_status[1].rx_valid) != 0) {
+        dark_ticks = 0;
+        period_ticks = 0;
+        return;
+    }
+
+    dark_ticks++;
+    if (dark_ticks < HDZ_BW_REACQUIRE_DARK_THRESH) return;
+
+    period_ticks++;
+    if (period_ticks < HDZ_BW_REACQUIRE_PERIOD) return;
+    period_ticks = 0;
+
+    uint8_t band = (uint8_t)g_setting.source.hdzero_band;
+    uint8_t ch   = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
+    uint8_t locked_bw = g_hdz_detected_bw;
+    if (scan_probe_hdzero_sweep(band, ch, NULL, &locked_bw)) {
+        g_hdz_detected_bw = locked_bw;
+        // The sweep leaves the baseband on the last bandwidth tried, which may
+        // not be the winning one; reopen at the lock and re-tune so the picture
+        // comes back.
+        HDZero_open(hdzero_effective_bw());
+        DM6302_SetChannel(band, ch);
+        DM5680_clear_vldflg();
+        DM5680_req_vldflg();
+        LOGI("HDZ BW reacquire: bw=%u band=%u ch=%u", locked_bw, band, ch);
+    }
+}
+
 void scan_core_self_check(void) {
     for (size_t i = 1; i < scan_freq_table_len; i++) {
         if (scan_freq_table[i].freq_mhz <= scan_freq_table[i-1].freq_mhz) {

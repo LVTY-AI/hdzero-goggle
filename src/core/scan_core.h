@@ -68,6 +68,13 @@ int scan_hdz_bw_list(uint8_t out[2]);
 bool scan_probe_hdzero_sweep(uint8_t band, uint8_t channel,
                              uint8_t *out_gain, uint8_t *out_bw);
 
+// HDZ bandwidth re-acquire watchdog: call periodically (all targets). When
+// viewing the HDZero source with BW=Auto and the signal drops (e.g. the VTX
+// bandwidth changed Wide<->Narrow), re-sweeps Wide+Narrow at the current
+// channel and reopens at whichever locks, so the picture returns without
+// re-selecting the source. No-op unless those conditions hold.
+void scan_core_hdz_bw_tick(void);
+
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Single-channel probe of both protocols that also honors the Wide/Narrow/Both
 // bandwidth setting: for HDZ it opens+settles the baseband at each selected

@@ -239,6 +239,9 @@ static void *thread_peripheral(void *ptr) {
             check_source_signal(record_vtmg_change);
             record_vtmg_change = 0;
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
+            scan_core_hdz_bw_tick();
+#endif
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
             scan_core_idle_tick();
 #endif
