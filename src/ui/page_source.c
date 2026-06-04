@@ -164,9 +164,9 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
                                           1, ROW_AUTO_DETECT, 3);
 #endif
 
-    // Auto/Both: Scan and Auto Detect sweep both bandwidths (slower) so a VTX
-    // is found regardless of its bandwidth.
-    create_btn_group_item(&btn_group2, cont, 3, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), _lang("Auto/Both"), "", ROW_HDZ_WIDTH);
+    // Auto: Scan, Auto Detect, and the live receiver sweep both bandwidths
+    // (slower) so a VTX is found/held regardless of its bandwidth.
+    create_btn_group_item(&btn_group2, cont, 3, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), _lang("Auto"), "", ROW_HDZ_WIDTH);
     btn_group_set_sel(&btn_group2, g_setting.source.hdzero_bw);
 
 #if defined(HDZGOGGLE2)
