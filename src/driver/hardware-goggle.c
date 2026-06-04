@@ -24,7 +24,6 @@
 #include "i2c.h"
 #include "it66021.h"
 #include "it66121.h"
-#include "minIni.h"
 #include "msp_displayport.h"
 #include "screen.h"
 #include "tp2825.h"
@@ -909,18 +908,20 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
 
         if (det && det_cnt == AV_DET_SWITCH_CNT) {
             g_hw_stat.av_pal_w = g_hw_stat.av_pal_w ? 0 : 1;
-            g_hw_stat.av_pal[g_hw_stat.is_av_in] = g_hw_stat.av_pal_w;
-            g_hw_stat.av_valid[g_hw_stat.is_av_in] = 0;
 
-            // Semi-auto: a live re-time tears 720p50/PAL on G1, so don't touch
-            // the pipeline here. Persist the detected format and ask
-            // thread_peripheral to re-run the full menu-entry path
-            // (app_switch_to_analog) -- the only sequence that brings analog up
-            // cleanly on this hardware (a manual menu re-entry clears it too).
-            g_setting.source.analog_format = g_hw_stat.av_pal_w;
-            ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
-            g_hw_stat.av_reinit_req = 1;
-            ret = 1;
+            TP2825_Switch_Mode(g_hw_stat.av_pal_w);
+
+            if (g_hw_stat.av_pal[g_hw_stat.is_av_in])
+                I2C_Write(ADDR_FPGA, 0x80, 0x10);
+            else
+                I2C_Write(ADDR_FPGA, 0x80, 0x00);
+
+            if (g_hw_stat.av_pal_w == g_hw_stat.av_pal[g_hw_stat.is_av_in])
+                I2C_Write(ADDR_FPGA, 0x89, 0x01);
+            else
+                I2C_Write(ADDR_FPGA, 0x89, 0x00);
+
+            g_hw_stat.av_valid[g_hw_stat.is_av_in] = 0;
 
             LOGI("AV_in_detect -- switch: av_pal = %d,  rdat = %02x\n", g_hw_stat.av_pal_w, rdat);
         } else {
