@@ -985,6 +985,11 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
                 break;
             }
 
+            int clamp_idx = g_hw_stat.av_valid[g_hw_stat.is_av_in];
+            if (clamp_idx == 1) {
+                clamp_idx = vh_lock ? 2 : 1;
+            }
+            TP2825_Set_Clamp(clamp_idx);
         }
     }
 
