@@ -231,14 +231,6 @@ static void *thread_peripheral(void *ptr) {
             g_source_info.av_in_status = g_hw_stat.av_valid[1];
             g_source_info.av_bay_status = g_hw_stat.av_valid[0];
 
-            // A live NTSC/PAL switch needs the full Source_AV() bring-up; a
-            // partial in-loop reconfig tears 720p50/PAL. AV_in_detect sets this
-            // under hardware_mutex, so re-init here, after it has returned.
-            if (g_hw_stat.av_reinit_req && g_hw_stat.source_mode == SOURCE_MODE_AV) {
-                g_hw_stat.av_reinit_req = 0;
-                Source_AV(g_hw_stat.is_av_in);
-            }
-
             // detect HDMI in
             record_vtmg_change |= HDMI_in_detect();
             g_source_info.hdmi_in_status = g_hw_stat.hdmiin_valid;
