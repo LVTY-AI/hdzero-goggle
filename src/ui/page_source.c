@@ -269,21 +269,12 @@ static void page_source_select_hdzero() {
     disable_auto_protocol_detect();
 #endif
     progress_bar.start = 1;
-    // BW=Auto/Both: sweep both bandwidths at the current channel so a direct
-    // HDZero pick locks regardless of the VTX bandwidth, instead of trusting
-    // the last-detected value. Stays single-protocol (HDZ-only).
-    // app_switch_to_hdzero then opens at the bandwidth we found via
-    // hdzero_effective_bw().
-    if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
-        lv_timer_handler(); // paint the loading bar before the blocking sweep
-        uint8_t locked_bw = g_hdz_detected_bw;
-        bool found = scan_probe_hdzero_sweep(
-            (uint8_t)g_setting.source.hdzero_band,
-            (uint8_t)((g_setting.scan.channel - 1) & 0x7F),
-            NULL, &locked_bw);
-        if (found)
-            g_hdz_detected_bw = locked_bw;
-    }
+    // BW=Auto opens at the last-detected bandwidth -- as fast as Wide/Narrow,
+    // no entry sweep. If the VTX is actually on the other bandwidth, the live
+    // re-acquire watchdog (scan_core_hdz_bw_tick) corrects it within a couple
+    // seconds, blanking the screen while it searches. (The old entry sweep ran
+    // two full HDZero_open re-inits up front, ~2-3x slower, for no benefit now
+    // that the watchdog handles detection.)
     app_switch_to_hdzero(true);
     app_state_push(APP_STATE_VIDEO);
     g_source_info.source = SOURCE_HDZERO;
