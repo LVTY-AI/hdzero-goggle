@@ -239,8 +239,12 @@ static int8_t set_accel_gyro_config(struct bmi2_dev *bmi2_dev)
          * There are two modes
          *  0 -> Ultra low power mode(Default)
          *  1 -> High performance mode
+         * High performance lowers the gyro noise floor; that noise integrates
+         * into head-tracker yaw (pan) drift during motion, which the stationary
+         * bias tracker cannot correct. IMU power delta is negligible vs the
+         * goggle's display/RF/SoC draw.
          */
-        config[GYRO].cfg.gyr.noise_perf = BMI2_POWER_OPT_MODE;
+        config[GYRO].cfg.gyr.noise_perf = BMI2_PERF_OPT_MODE;
 
         /* Enable/Disable the filter performance mode where averaging of samples
          * will be done based on above set bandwidth and ODR.
