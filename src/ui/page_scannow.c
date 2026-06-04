@@ -78,12 +78,21 @@ static lv_coord_t col_dsc1[] = {UI_SCANNOW_SCANNER_COLS};
 static lv_coord_t row_dsc1[] = {UI_SCANNOW_SCANNER_ROWS};
 static lv_coord_t col_dsc2[] = {UI_SCANNOW_SIGNAL_COLS};
 static lv_coord_t row_dsc2[] = {UI_SCANNOW_SIGNAL_ROWS};
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
 typedef enum {
     SCAN_MODE_HDZERO = 0,
     SCAN_MODE_ANALOG = 1,
     SCAN_MODE_AUTO   = 2,
 } scan_mode_t;
+
+// Modes offered by the picker. BoxPro has the built-in analog receiver, so it
+// gets HDZero / Analog / Auto/Both. G1/G2 are HDZ-only in this sub-project, so
+// the picker shows just HDZero (G2's analog scan is a later addition).
+#if defined(HDZBOXPRO)
+#define SCAN_MODE_COUNT 3
+#else
+#define SCAN_MODE_COUNT 1
+#endif
 
 // Two-state UI: page lands in IDLE (user picks Mode), click runs a scan and
 // transitions to RESULTS. Right button returns to the menu (existing exit).
@@ -100,7 +109,7 @@ static void update_mode_btn_focus(void) {
     // Theme button background defaults are very light on this skin and the
     // label text ends up invisible. Style each button explicitly: dark grey
     // background for unfocused, green for focused, white text always.
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < SCAN_MODE_COUNT; i++) {
         if (!mode_btns[i]) continue;
         bool is_focused = (i == (int)scan_mode);
         lv_obj_set_style_bg_color(mode_btns[i],
@@ -245,7 +254,8 @@ void page_scannow_set_channel_label(void) {
     }
 }
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Set auto_protocol_detect based on the user's mode pick: ON only when they
 // chose Auto/Both, OFF when they picked a single-protocol mode (HDZero or
 // Analog). Called when the user clicks a scan result.
@@ -256,6 +266,7 @@ static void apply_auto_detect_for_mode(scan_mode_t mode) {
         settings_put_bool("source", "auto_protocol_detect", want);
     }
 }
+#endif
 
 // Style a freshly-added auto_list row. The theme default would render the
 // row's bg and label as near-white, hiding the text entirely. is_focused
@@ -310,10 +321,10 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_add_style(page, &style_scan, LV_PART_MAIN);
     lv_obj_set_style_pad_top(page, UI_SCANNOW_PAGE_PAD, 0);
 
-#if defined(HDZBOXPRO)
-    // Mode selector at the very top of the page: three buttons in a row.
-    // Sits in its own absolute-positioned container so it isn't constrained
-    // by cont1's grid template (which only has 3 narrow columns).
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
+    // Mode selector at the very top of the page: SCAN_MODE_COUNT buttons in a
+    // row (3 on BoxPro, just HDZero on G1/G2). Sits in its own absolute-
+    // positioned container so it isn't constrained by cont1's grid template.
     {
         lv_obj_t *cont_mode = lv_obj_create(page);
         lv_obj_set_size(cont_mode, 780, 56);
@@ -324,7 +335,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_set_style_pad_all(cont_mode, 0, 0);
 
         static const char *mode_names[3] = {"HDZero", "Analog", "Auto/Both"};
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < SCAN_MODE_COUNT; i++) {
             mode_btns[i] = lv_btn_create(cont_mode);
             lv_obj_set_size(mode_btns[i], 220, 44);
             lv_obj_set_pos(mode_btns[i], 30 + i * 240, 6);
@@ -337,7 +348,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         }
 
         scan_mode = (scan_mode_t)g_setting.source.scan_mode_initial;
-        if (scan_mode > SCAN_MODE_AUTO) scan_mode = SCAN_MODE_HDZERO;
+        if ((int)scan_mode >= SCAN_MODE_COUNT) scan_mode = SCAN_MODE_HDZERO;
         update_mode_btn_focus();
     }
 #endif
@@ -384,10 +395,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "%s",
              _lang("Dial to pick mode, press Enter to scan"));
 #else
-    snprintf(buf, sizeof(buf), "%s\n %s\n %s",
-             _lang("When scanning is complete, use the"),
-             _lang("dial to select a channel and press"),
-             _lang("the Enter button to choose"));
+    snprintf(buf, sizeof(buf), "%s", _lang("Press Enter to scan"));
 #endif
     lv_label_set_text(label2, buf);
     lv_obj_set_style_text_font(label2, UI_SCANNOW_NOTE_FONT, 0);
@@ -422,10 +430,10 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     }
     page_scannow_set_channel_label();
 
-#if defined(HDZBOXPRO)
-    // Results list for Analog and Auto modes. Hidden by default. Created in
-    // cont2 with absolute positioning so it covers the full container
-    // regardless of the grid template used by the channel cells.
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
+    // Scrollable results list. Hidden by default. Created in cont2 with absolute
+    // positioning so it covers the full container regardless of the grid
+    // template used by the (now hidden) legacy channel cells.
     auto_list = lv_list_create(cont2);
     lv_obj_set_pos(auto_list, 0, 0);
     lv_obj_set_size(auto_list, lv_pct(100), lv_pct(100));
@@ -512,7 +520,7 @@ static int8_t scan_now_hdzero(void) {
         return valid_index;
 }
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
 static int compare_results_desc(const void *a, const void *b) {
     const auto_result_t *ra = a;
     const auto_result_t *rb = b;
@@ -521,6 +529,7 @@ static int compare_results_desc(const void *a, const void *b) {
     return (int)ra->freq_mhz - (int)rb->freq_mhz;
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 static uint8_t analog_rssi_to_strength(uint16_t rssi_mv) {
     uint16_t cmin = g_setting.analog_rssi.calib_min;
     uint16_t cmax = g_setting.analog_rssi.calib_max;
@@ -528,6 +537,7 @@ static uint8_t analog_rssi_to_strength(uint16_t rssi_mv) {
     if (rssi_mv >= cmax) return 100;
     return (uint8_t)(((uint32_t)(rssi_mv - cmin) * 100u) / (cmax - cmin));
 }
+#endif
 
 // DM6302 gain table is 0..60; normalize to 0..100 to match the analog scale.
 static uint8_t hdz_gain_to_strength(uint8_t gain) {
@@ -565,6 +575,7 @@ static void upsert_hdz(const scan_freq_entry_t *e, uint8_t bw, uint8_t strength)
     o->strength       = strength;
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 static void upsert_analog(uint16_t freq, int8_t analog_ch, uint8_t strength) {
     int idx = find_result_idx_by_freq(freq);
     if (idx >= 0) {
@@ -587,6 +598,7 @@ static void upsert_analog(uint16_t freq, int8_t analog_ch, uint8_t strength) {
     o->hdz_bw         = -1;
     o->strength       = strength;
 }
+#endif
 
 // Render the (already sorted) auto_results into auto_list. Naming is
 // band-aware: HDZ rows use their own entry band, not the global setting, so a
@@ -626,6 +638,7 @@ static void render_auto_results_list(void) {
     if (auto_focused_btn) lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Scan all 48 analog channels into auto_results (sorted by strength).
 static int8_t scan_now_analog(void) {
     char buf[128];
@@ -666,6 +679,7 @@ static int8_t scan_now_analog(void) {
     lv_bar_set_range(progressbar, 0, 14);
     return auto_result_count ? (int8_t)auto_result_count : -1;
 }
+#endif
 
 // Scan every HDZ channel across BOTH bands (Race R1-R8/E1/F1/F2/F4 + Low
 // L1-L8 = 20) by walking the freq table's HDZ entries. Replaces the legacy
@@ -711,6 +725,7 @@ static int8_t scan_now_hdzero_list(void) {
     return auto_result_count ? (int8_t)auto_result_count : -1;
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 static int8_t scan_now_auto(void) {
     char buf[128];
     uint16_t rssi_mv;
@@ -772,12 +787,17 @@ static int8_t scan_now_auto(void) {
     lv_bar_set_range(progressbar, 0, 14);
     return auto_result_count ? (int8_t)auto_result_count : -1;
 }
+#endif
 
 static int8_t scan_now_dispatch(void) {
-    switch (scan_mode) {
+    // Cast to int: on G1/G2 only the HDZERO case is compiled, and an enum
+    // switch missing the other values would trip -Wswitch.
+    switch ((int)scan_mode) {
     case SCAN_MODE_HDZERO: return scan_now_hdzero_list();
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     case SCAN_MODE_ANALOG: return scan_now_analog();
     case SCAN_MODE_AUTO:   return scan_now_auto();
+#endif
     }
     return -1;
 }
@@ -793,16 +813,11 @@ int scan_reinit(void) {
 
 int scan(void) {
     g_scanning = true;
-#if defined(HDZBOXPRO)
     // SOURCE_HDZERO is set only for the HDZ mode path; Analog/Auto manage source on click.
     if (scan_mode == SCAN_MODE_HDZERO) {
         g_source_info.source = SOURCE_HDZERO;
     }
     int8_t ret = scan_now_dispatch();
-#else
-    g_source_info.source = SOURCE_HDZERO;
-    int8_t ret = scan_now_hdzero();
-#endif
     g_scanning = false;
     return ret;
 }
@@ -818,7 +833,7 @@ void autoscan_exit(void) {
     }
 }
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
 // Run a scan in the current scan_mode and transition the page into RESULTS
 // state. Called from the click handler after the user picks a mode.
 static void start_scan_in_current_mode(void) {
@@ -830,7 +845,6 @@ static void start_scan_in_current_mode(void) {
 #endif
 
 static void page_scannow_enter() {
-#if defined(HDZBOXPRO)
     // Land in IDLE — user picks a mode with the dial, click runs the scan.
     page_state = SCAN_PAGE_IDLE;
     set_results_widget_visibility();
@@ -838,24 +852,9 @@ static void page_scannow_enter() {
     lv_label_set_text(label, _lang("Scan Ready"));
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
     auto_scaned_cnt = 0;
-#else
-    auto_scaned_cnt = scan();
-    LOGI("scan return :%d", auto_scaned_cnt);
-
-    if (auto_scaned_cnt == 1) {
-        if (!g_autoscan_exit)
-            g_autoscan_exit = true;
-
-        app_state_push(APP_STATE_VIDEO);
-        app_switch_to_hdzero(false);
-    }
-
-    if (auto_scaned_cnt == -1)
-        submenu_exit();
-#endif
 }
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
 // Intercepts the long-press-Enter back gesture. When the page is showing
 // scan RESULTS, return to the IDLE mode-picker instead of leaving the page,
 // so the user can re-scan in a different mode without re-navigating the menu.
@@ -879,7 +878,7 @@ static bool page_scannow_on_back(void) {
 #endif
 
 static void page_scannow_exit() {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
     if (page_state == SCAN_PAGE_RESULTS &&
         (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO)) {
         rtc6715.init(0, 0); // power down analog RX on exit
@@ -893,11 +892,11 @@ static void page_scannow_exit() {
 }
 
 static void page_scannow_on_roller(uint8_t key) {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
     if (page_state == SCAN_PAGE_IDLE) {
-        // Cycle through the 3 mode buttons.
+        // Cycle through the mode buttons.
         int new_mode = (int)scan_mode;
-        if (key == DIAL_KEY_UP && new_mode + 1 < 3) {
+        if (key == DIAL_KEY_UP && new_mode + 1 < SCAN_MODE_COUNT) {
             new_mode++;
         } else if (key == DIAL_KEY_DOWN && new_mode > 0) {
             new_mode--;
@@ -948,7 +947,7 @@ static void page_scannow_on_roller(uint8_t key) {
 }
 
 static void page_scannow_on_click(uint8_t key, int sel) {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
     if (page_state == SCAN_PAGE_IDLE) {
         // Click on a mode button: persist selection and trigger the scan.
         g_setting.source.scan_mode_initial = (uint8_t)scan_mode;
@@ -959,7 +958,9 @@ static void page_scannow_on_click(uint8_t key, int sel) {
     }
     // RESULTS state: click selects a scan result and enters video. All three
     // modes now feed the same auto_results list.
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     apply_auto_detect_for_mode(scan_mode);
+#endif
     {
         if (auto_result_count == 0) return;
         const auto_result_t *res = &auto_results[auto_select_index];
@@ -1011,7 +1012,7 @@ page_pack_t pp_scannow = {
     .on_roller = page_scannow_on_roller,
     .on_click = page_scannow_on_click,
     .on_right_button = NULL,
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
     .on_back = page_scannow_on_back,
 #endif
 };
