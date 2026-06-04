@@ -440,10 +440,11 @@ void progress_bar_update() {
     }
 
     if (state == 1) {
-        // HDZero "Auto/Both" bandwidth makes the HDZ source take ~2x as long
-        // to come up (it sweeps Wide + Narrow), so fill the bar at half speed
-        // to better track the actual load time.
-        uint8_t step = (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) ? 2 : 4;
+        // HDZero "Auto" bandwidth sweeps Wide + Narrow and then waits for the
+        // baseband to lock, so the source takes much longer to come up. Fill
+        // the bar at quarter speed so it doesn't finish well before the picture
+        // appears (open-loop estimate; tune if it still over/undershoots).
+        uint8_t step = (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) ? 1 : 4;
         if (progress_bar.val < 100)
             progress_bar.val += step;
         lv_bar_set_value(progress_bar.bar, progress_bar.val, LV_ANIM_OFF);
