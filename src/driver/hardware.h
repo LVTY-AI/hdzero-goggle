@@ -85,7 +85,6 @@ void hw_stat_init();
 void hw_screen_on(int bON);
 void HDZero_open(int bw);
 void HDZero_Close();
-void Display_VO_SWITCH(uint8_t sel); // 0 = UI (black) plane; 1 = video plane
 
 void Source_HDMI_in();
 void Source_AV(bool is_av_in);

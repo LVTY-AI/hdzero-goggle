@@ -520,73 +520,63 @@ void scan_core_idle_tick(void) {
 
 // HDZ bandwidth re-acquire watchdog (all targets). When viewing the HDZero
 // source with BW=Auto and the signal has been lost for ~1.5s (e.g. the VTX
-// bandwidth changed Wide<->Narrow), re-sweep both bandwidths at the current
-// channel and reopen at whichever locks -- the picture returns without
+// bandwidth changed Wide<->Narrow), sweep both bandwidths once at the current
+// channel and settle on whichever locks -- the picture returns without
 // re-selecting the source. HDZ-only (no analog), so it runs on every target,
 // and it is independent of auto_protocol_detect (that setting drives the
 // separate protocol crossover in scan_core_idle_tick).
+//
+// It sweeps ONCE per dark spell, not continuously. Each sweep cycles the
+// baseband (HDZero_open resets DM5680 + the RF), which briefly flashes the live
+// plane; doing it every tick flashed the screen green non-stop. Between/after
+// sweeps the video plane shows plain black (baseband on, no lock) -- the normal
+// "no signal" look -- so there is nothing to hide.
 #define HDZ_BW_REACQUIRE_DARK_THRESH 15 // ~1.5s of no signal before sweeping
-#define HDZ_BW_REACQUIRE_PERIOD      15 // ~1.5s between re-sweeps while dark
 void scan_core_hdz_bw_tick(void) {
     static int dark_ticks = 0;
-    static int period_ticks = 0;
-    static bool blanked = false; // showing the UI (black) plane to hide a search
+    static bool swept = false; // already swept this dark spell
 
     if (g_app_state != APP_STATE_VIDEO ||
         g_source_info.source != SOURCE_HDZERO ||
         g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH) {
-        // Context changed (left video, switched source, or Auto turned off);
-        // whoever changed it owns the display now -- just drop our state.
-        blanked = false;
         dark_ticks = 0;
-        period_ticks = 0;
+        swept = false;
         return;
     }
 
     if ((rx_status[0].rx_valid | rx_status[1].rx_valid) != 0) {
-        // Locked. If we were hiding a search behind the UI plane, reveal the
-        // picture now.
-        if (blanked) {
-            Display_VO_SWITCH(1);
-            blanked = false;
-        }
+        // Have signal: clear state so the next loss triggers a fresh sweep.
         dark_ticks = 0;
-        period_ticks = 0;
+        swept = false;
+        return;
+    }
+
+    // Dark. Sweep once, then settle (stay black) until the signal returns.
+    // Re-selecting the source or dialing forces a fresh search if needed.
+    if (swept) {
+        dark_ticks = 0;
         return;
     }
 
     dark_ticks++;
-    if (dark_ticks < HDZ_BW_REACQUIRE_DARK_THRESH) return;
-
-    period_ticks++;
-    if (period_ticks < HDZ_BW_REACQUIRE_PERIOD) return;
-    period_ticks = 0;
-
-    // About to cycle the baseband: HDZero_open() toggles DM5680_SetBB, which
-    // flashes the live video plane green. Hide it behind the UI plane first so
-    // the screen stays steady black until a bandwidth actually locks. rx_valid
-    // still updates while blanked -- it reflects the baseband, not the display
-    // path (M0) we switch away from here.
-    if (!blanked) {
-        Display_VO_SWITCH(0);
-        blanked = true;
-    }
+    if (dark_ticks < HDZ_BW_REACQUIRE_DARK_THRESH) return; // debounce the loss
+    swept = true;
 
     uint8_t band = (uint8_t)g_setting.source.hdzero_band;
     uint8_t ch   = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
     uint8_t locked_bw = g_hdz_detected_bw;
-    if (scan_probe_hdzero_sweep(band, ch, NULL, &locked_bw)) {
+    bool found = scan_probe_hdzero_sweep(band, ch, NULL, &locked_bw);
+    if (found)
         g_hdz_detected_bw = locked_bw;
-        // The sweep leaves the baseband on the last bandwidth tried, which may
-        // not be the winning one; reopen at the lock and re-tune. Stay blanked
-        // until rx_valid confirms next tick, then reveal -- avoids showing a
-        // half-locked frame.
-        HDZero_open(hdzero_effective_bw());
-        DM6302_SetChannel(band, ch);
-        DM5680_clear_vldflg();
-        DM5680_req_vldflg();
-        LOGI("HDZ BW reacquire: bw=%u band=%u ch=%u", locked_bw, band, ch);
-    }
+    // Settle on the chosen bandwidth (the one that locked, or the original if
+    // nothing did -- the sweep leaves the baseband on the last bw it tried) and
+    // re-tune so the picture comes back.
+    HDZero_open(hdzero_effective_bw());
+    DM6302_SetChannel(band, ch);
+    DM5680_clear_vldflg();
+    DM5680_req_vldflg();
+    LOGI("HDZ BW reacquire sweep: found=%d bw=%u band=%u ch=%u",
+         found, hdzero_effective_bw(), band, ch);
 }
 
 void scan_core_self_check(void) {
