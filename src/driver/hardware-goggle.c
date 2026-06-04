@@ -819,8 +819,11 @@ void AV_Mode_Switch_fpga(int is_pal) {
     I2C_Write(ADDR_FPGA, 0x06, 0x0F);
     system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
 
-    // BoxPro restores pclk after the dispw VDPO re-time. Test that without
-    // also reapplying G1's vclk phase, which G2/BoxPro do not do here.
+    // The dispw VDPO re-time above resets the AV-in clock phase; restore it
+    // (BoxPro does the same in its AV_Mode_Switch_fpga). Without this, a live
+    // NTSC/PAL switch leaves the pipeline mis-timed and tears -- worst on
+    // 720p50/PAL.
+    vclk_phase_set(VIDEO_SOURCE_AV_IN, 0);
     pclk_phase_set(VIDEO_SOURCE_AV_IN);
 }
 
