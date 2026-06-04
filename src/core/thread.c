@@ -231,6 +231,17 @@ static void *thread_peripheral(void *ptr) {
             g_source_info.av_in_status = g_hw_stat.av_valid[1];
             g_source_info.av_bay_status = g_hw_stat.av_valid[0];
 
+            // Semi-auto NTSC/PAL: AV_in_detect only flags a format change (a
+            // live re-time tears on G1). Re-run the full menu-entry path, which
+            // brings analog up cleanly. app_switch_to_analog touches LVGL, so
+            // hold lvgl_mutex like the scan_core crossover does.
+            if (g_hw_stat.av_reinit_req && g_hw_stat.source_mode == SOURCE_MODE_AV) {
+                g_hw_stat.av_reinit_req = 0;
+                pthread_mutex_lock(&lvgl_mutex);
+                app_switch_to_analog(g_hw_stat.is_av_in);
+                pthread_mutex_unlock(&lvgl_mutex);
+            }
+
             // detect HDMI in
             record_vtmg_change |= HDMI_in_detect();
             g_source_info.hdmi_in_status = g_hw_stat.hdmiin_valid;

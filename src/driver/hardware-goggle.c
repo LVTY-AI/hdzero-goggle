@@ -818,13 +818,6 @@ void AV_Mode_Switch_fpga(int is_pal) {
     }
     I2C_Write(ADDR_FPGA, 0x06, 0x0F);
     system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
-
-    // The dispw VDPO re-time above resets the AV-in clock phase; restore it
-    // (BoxPro does the same in its AV_Mode_Switch_fpga). Without this, a live
-    // NTSC/PAL switch leaves the pipeline mis-timed and tears -- worst on
-    // 720p50/PAL.
-    vclk_phase_set(VIDEO_SOURCE_AV_IN, 0);
-    pclk_phase_set(VIDEO_SOURCE_AV_IN);
 }
 
 void AV_Mode_Switch(int is_pal) {
@@ -919,25 +912,15 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
             g_hw_stat.av_pal[g_hw_stat.is_av_in] = g_hw_stat.av_pal_w;
             g_hw_stat.av_valid[g_hw_stat.is_av_in] = 0;
 
-            // Lightweight live switch, like G2/BoxPro: change the decoder mode
-            // (it keeps its lock -- no full re-init) and re-time the V536
-            // output. AV_Mode_Switch_fpga() now also restores the clock phase
-            // that the dispw re-time disturbs, which is what kept 720p50/PAL
-            // from settling.
-            TP2825_Switch_Mode(g_hw_stat.av_pal_w);
-            AV_Mode_Switch(g_hw_stat.av_pal_w);
-
-            if (g_hw_stat.av_pal[g_hw_stat.is_av_in])
-                I2C_Write(ADDR_FPGA, 0x80, 0x10);
-            else
-                I2C_Write(ADDR_FPGA, 0x80, 0x00);
-
-            ret = 1;
-
-            // Persist so the format is remembered across boots (like BoxPro)
-            // and seeds av_pal_w via Source_AV() on the next entry.
+            // Semi-auto: a live re-time tears 720p50/PAL on G1, so don't touch
+            // the pipeline here. Persist the detected format and ask
+            // thread_peripheral to re-run the full menu-entry path
+            // (app_switch_to_analog) -- the only sequence that brings analog up
+            // cleanly on this hardware (a manual menu re-entry clears it too).
             g_setting.source.analog_format = g_hw_stat.av_pal_w;
             ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
+            g_hw_stat.av_reinit_req = 1;
+            ret = 1;
 
             LOGI("AV_in_detect -- switch: av_pal = %d,  rdat = %02x\n", g_hw_stat.av_pal_w, rdat);
         } else {
