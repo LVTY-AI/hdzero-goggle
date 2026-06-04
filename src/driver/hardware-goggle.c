@@ -833,7 +833,6 @@ void AV_Mode_Switch(int is_pal) {
     if (g_hw_stat.vdpo_tmg != tmg) {
         screen.display(0);
         AV_Mode_Switch_fpga(is_pal);
-        screen.vtmg(1);
         screen.display(1);
     }
 }
