@@ -910,6 +910,13 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
         if (det && det_cnt == AV_DET_SWITCH_CNT) {
             g_hw_stat.av_pal_w = g_hw_stat.av_pal_w ? 0 : 1;
 
+            // Keep the per-input detected format in sync with the live mode.
+            // The FPGA pipeline/enable bits (0x80/0x89 below) and DVR recording
+            // timing read av_pal[], which is otherwise frozen from the last
+            // UI-mode scan -- so after a live switch it would leave the FPGA
+            // pipeline timed for the old format and tear the picture.
+            g_hw_stat.av_pal[g_hw_stat.is_av_in] = g_hw_stat.av_pal_w;
+
             TP2825_Switch_Mode(g_hw_stat.av_pal_w);
             AV_Mode_Switch(g_hw_stat.av_pal_w);
 
