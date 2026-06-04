@@ -859,7 +859,6 @@ void Source_AV(bool is_av_in) {
 
     HDZero_Close();
     screen.vtmg(1);
-    I2C_Write(ADDR_FPGA, 0xa7, 0x11);
 
     if (g_setting.source.analog_ratio == SETTING_SOURCES_ANALOG_RATIO_4_3)
         I2C_Write(ADDR_FPGA, 0x8f, 0x80); // bit[7]: 0=16:9, 1=original
