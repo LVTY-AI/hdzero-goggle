@@ -417,6 +417,16 @@ void tune_channel(uint8_t action) {
                 g_setting.scan.channel = nch1;
                 ini_putl("scan", "channel", nch1, SETTING_INI);
                 dvr_cmd(DVR_STOP);
+                if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
+                    // Auto/Both: detect which bandwidth the new channel's VTX
+                    // uses by sweeping Wide+Narrow, then open at the one that
+                    // locked — so a channel hop lands on the right bandwidth
+                    // without a manual toggle. (~2x slower; only when Both.)
+                    uint8_t locked_bw = g_hdz_detected_bw;
+                    if (scan_probe_hdzero_sweep(nband, nch1 - 1, NULL, &locked_bw))
+                        g_hdz_detected_bw = locked_bw;
+                    HDZero_open(hdzero_effective_bw());
+                }
                 hdzero_switch_channel(nch1 - 1);
                 if (action == DIAL_KEY_PRESS) {
                     msp_channel_update();
