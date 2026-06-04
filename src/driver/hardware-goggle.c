@@ -942,10 +942,9 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
             LOGI("AV_in_detect -- switch: av_pal = %d,  rdat = %02x\n", g_hw_stat.av_pal_w, rdat);
         } else {
             int vloss, h_lock, vh_lock;
-            vloss = ((rdat & 0x80) == 0x80);
-            h_lock = ((rdat & 0x60) == 0x60);
-            vh_lock = ((rdat & 0x68) == 0x68);
-            vloss |= ((rdat & 0x6a) == 0);
+            vloss = (rdat & 0x80) ? 1 : 0;
+            h_lock = ((rdat & 0x28) == 0x28) ? 1 : 0;
+            vh_lock = ((rdat & 0x68) == 0x68) ? 1 : 0;
 
             // LOGI("rdat=%x, state=%d, dcnt2=%d", rdat,g_hw_stat.av_valid[g_hw_stat.is_av_in],det2_cnt);
 
