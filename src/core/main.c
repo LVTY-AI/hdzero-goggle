@@ -5,6 +5,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <log/log.h>
@@ -122,8 +123,9 @@ void start_running(void) {
         }
     }
 
-    if (g_setting.elrs.enable)
-        enable_esp32();
+    // ELRS backpack is brought up later, once the goggle has finished booting
+    // (see deferred enable in main()). Enabling it here would land mid HDZero
+    // bring-up and wedge the ESP.
 }
 
 static void device_init(void) {
@@ -223,6 +225,14 @@ int main(int argc, char *argv[]) {
 
     // 10. Execute main loop
     g_init_done = 1;
+
+    // Defer ELRS backpack power-on until boot has settled. Enabling the ESP
+    // backpack during the busy HDZero bring-up wedges it; a clean post-init
+    // power-on matches the reliable manual "toggle Backpack off/on" recovery.
+    // (The analog path settles before this point, so it is unaffected.)
+    time_t elrs_enable_at = time(NULL) + 3;
+    bool elrs_backpack_started = false;
+
     for (;;) {
         pthread_mutex_lock(&lvgl_mutex);
         main_menu_update();
@@ -235,6 +245,13 @@ int main(int argc, char *argv[]) {
         lv_timer_handler();
         source_status_timer();
         pthread_mutex_unlock(&lvgl_mutex);
+
+        if (!elrs_backpack_started && time(NULL) >= elrs_enable_at) {
+            elrs_backpack_started = true;
+            if (g_setting.elrs.enable)
+                enable_esp32();
+        }
+
         usleep(5000);
         gif_cnt++;
     }

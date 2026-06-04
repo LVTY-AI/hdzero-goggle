@@ -29,13 +29,15 @@
 
 enum {
 
-    ROW_GOGGLE_ANALOG_MODULE = -1,
+    ROW_GOGGLE_ANALOG_MODULE = -2,
+    // NTSC/PAL is auto-detected by AV_in_detect() (no manual toggle, like
+    // BoxPro), so ANALOG_VIDEO is a negative sentinel, not a real row.
+    ROW_GOGGLE_ANALOG_VIDEO = -1,
     ROW_GOGGLE_HDZERO = 0,
     ROW_GOGGLE_ANALOG,
     ROW_GOGGLE_HDMI,
     ROW_GOGGLE_AV,
     ROW_GOGGLE_HDZ_WIDTH,
-    ROW_GOGGLE_ANALOG_VIDEO,
     ROW_GOGGLE_ANALOG_RATIO,
     ROW_GOGGLE_TEST_PATTERN,
     ROW_GOGGLE_BACK,
@@ -167,10 +169,7 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     create_btn_group_item(&btn_group2, cont, 3, _lang("HDZero BW"), _lang("Wide"), _lang("Narrow"), _lang("Auto/Both"), "", ROW_HDZ_WIDTH);
     btn_group_set_sel(&btn_group2, g_setting.source.hdzero_bw);
 
-#if defined(HDZGOGGLE)
-    create_btn_group_item(&btn_group0, cont, 2, _lang("Analog Video"), "NTSC", "PAL", "", "", ROW_ANALOG_VIDEO);
-    btn_group_set_sel(&btn_group0, g_setting.source.analog_format);
-#elif defined(HDZGOGGLE2)
+#if defined(HDZGOGGLE2)
     create_btn_group_item(&btn_group0, cont, 2, _lang("Analog Module"), _lang("Built-in"), _lang("Expansion"), "", "", ROW_ANALOG_MODULE);
     btn_group_set_sel(&btn_group0, g_setting.source.analog_module);
 #endif
@@ -477,13 +476,7 @@ static void page_source_on_click(uint8_t key, int sel) {
         if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH)
             g_hdz_detected_bw = g_hw_stat.hdz_bw ? 1 : 0;
         break;
-#if defined(HDZGOGGLE)
-    case ROW_ANALOG_VIDEO:
-        btn_group_toggle_sel(&btn_group0);
-        g_setting.source.analog_format = btn_group_get_sel(&btn_group0);
-        ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
-        break;
-#elif defined(HDZGOGGLE2)
+#if defined(HDZGOGGLE2)
     case ROW_ANALOG_MODULE:
         btn_group_toggle_sel(&btn_group0);
         g_setting.source.analog_module = btn_group_get_sel(&btn_group0);
