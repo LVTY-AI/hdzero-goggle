@@ -896,7 +896,7 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
             det_last = det;
         } else {
             g_hw_stat.av_valid[g_hw_stat.is_av_in] = det;
-            g_hw_stat.av_pal[g_hw_stat.is_av_in] = (rdat & 0x01) ? 0 : 1;
+            g_hw_stat.av_pal[g_hw_stat.is_av_in] = ((rdat & 0xAC) == 0x2c) ? 1 : 0;
 
             g_hw_stat.is_av_in = 1 - g_hw_stat.is_av_in;
             TP2825_Switch_CH(g_hw_stat.is_av_in);
@@ -905,7 +905,7 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
 
         det_cnt = det2_cnt = 0;
     } else if (g_hw_stat.source_mode == SOURCE_MODE_AV) { // detect in AV_in/Module_bay mode
-        det = ((rdat & 0xC9) == (g_hw_stat.av_pal_w ? 0x48 : 0x49)) ? 1 : 0;
+        det = ((rdat & 0xAE) == (g_hw_stat.av_pal_w ? 0x28 : 0x2C)) ? 1 : 0;
 
         if (det_last != det) {
             det_last = det;
@@ -942,10 +942,9 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
             LOGI("AV_in_detect -- switch: av_pal = %d,  rdat = %02x\n", g_hw_stat.av_pal_w, rdat);
         } else {
             int vloss, h_lock, vh_lock;
-            vloss = ((rdat & 0x80) == 0x80);
-            h_lock = ((rdat & 0x60) == 0x60);
-            vh_lock = ((rdat & 0x68) == 0x68);
-            vloss |= ((rdat & 0x6a) == 0);
+            vloss = (rdat & 0x80) ? 1 : 0;
+            h_lock = ((rdat & 0x28) == 0x28) ? 1 : 0;
+            vh_lock = ((rdat & 0x68) == 0x68) ? 1 : 0;
 
             // LOGI("rdat=%x, state=%d, dcnt2=%d", rdat,g_hw_stat.av_valid[g_hw_stat.is_av_in],det2_cnt);
 
