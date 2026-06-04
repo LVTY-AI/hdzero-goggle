@@ -1,6 +1,6 @@
 #include "core/scan_core.h"
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
 
 #include <time.h>
 #include <unistd.h>
@@ -23,14 +23,17 @@
 // Tearing on struct timespec is benign — at worst the idle check fires one
 // tick early/late.  No mutex needed for this level of precision.
 static struct timespec last_probe_ts = {0};
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Set by scan_core_idle_tick when analog is powered down; cleared by
 // scan_probe_analog so the next probe re-inits the chip before tuning.
 static volatile bool analog_powered_down = false;
+#endif
 
 static void mark_probe_activity(void) {
     clock_gettime(CLOCK_MONOTONIC, &last_probe_ts);
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Called when a caller has just powered RTC6715 on themselves (e.g. the
 // manual band scanner in page_scannow.c) so that scan_probe_analog does
 // not redundantly re-init when its first call sees a stale "powered down"
@@ -51,6 +54,7 @@ static bool probe_idle_expired(int idle_secs) {
 }
 
 #define IDLE_TIMEOUT_SECS 5
+#endif
 
 // Unified table: one row per distinct 5.8GHz frequency, deduplicated across
 // HDZero and analog protocols. Sorted strictly ascending by freq_mhz.
@@ -150,6 +154,7 @@ int scan_freq_table_find_by_mhz(uint16_t mhz) {
     return -1;
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Tunable: fraction of (calib_max - calib_min) above calib_min that counts as
 // "signal present". Lowered from 20% to 10% so the auto-detect crossover
 // triggers on mid-strength analog signals (typical setups produce RSSI well
@@ -176,6 +181,7 @@ static uint16_t analog_signal_threshold_mv(void) {
                               * ANALOG_SIGNAL_THRESH_FRAC_NUM)
                              / ANALOG_SIGNAL_THRESH_FRAC_DEN);
 }
+#endif
 
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out) {
@@ -203,6 +209,7 @@ bool scan_probe_hdzero(uint8_t band, uint8_t channel,
     return valid;
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 bool scan_probe_analog(uint8_t channel_idx,
                        uint16_t *rssi_mv_out, bool *valid_out) {
     mark_probe_activity();
@@ -285,6 +292,7 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
          entry->freq_mhz, r.protocol, r.strength);
     return r;
 }
+#endif
 
 int scan_hdz_bw_list(uint8_t out[2]) {
     if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
@@ -320,6 +328,7 @@ bool scan_probe_hdzero_sweep(uint8_t band, uint8_t channel,
     return found;
 }
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 scan_result_t scan_probe_both_sweep(const scan_freq_entry_t *entry, uint8_t *out_bw) {
     mark_probe_activity();
     scan_result_t r = { PROTOCOL_NONE, 0, 0, 0, 0 };
@@ -507,6 +516,7 @@ void scan_core_idle_tick(void) {
 
     try_crossover_probe();
 }
+#endif
 
 void scan_core_self_check(void) {
     for (size_t i = 1; i < scan_freq_table_len; i++) {

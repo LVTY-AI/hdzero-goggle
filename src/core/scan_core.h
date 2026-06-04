@@ -8,7 +8,7 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
 
 typedef enum {
     PROTOCOL_NONE   = 0,
@@ -49,10 +49,12 @@ int scan_freq_table_find_by_mhz(uint16_t mhz);
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out);
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 bool scan_probe_analog(uint8_t channel_idx,
                        uint16_t *rssi_mv_out, bool *valid_out);
 
 scan_result_t scan_probe_both(const scan_freq_entry_t *entry);
+#endif
 
 // Fills out[] with the bandwidth(s) to sweep based on source.hdzero_bw:
 // {wide,narrow} when Both, else the single configured bandwidth. Returns count.
@@ -66,13 +68,16 @@ int scan_hdz_bw_list(uint8_t out[2]);
 bool scan_probe_hdzero_sweep(uint8_t band, uint8_t channel,
                              uint8_t *out_gain, uint8_t *out_bw);
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Single-channel probe of both protocols that also honors the Wide/Narrow/Both
 // bandwidth setting: for HDZ it opens+settles the baseband at each selected
 // bandwidth and reports the one that locked in *out_bw (0/1). HDZ wins ties.
 // Leaves the HDZ baseband open at the last bandwidth tried.
 scan_result_t scan_probe_both_sweep(const scan_freq_entry_t *entry, uint8_t *out_bw);
+#endif
 
 void scan_core_self_check(void);
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 void scan_core_idle_tick(void);
 void scan_core_notify_analog_powered_on(void);
 // Call after any non-scan_core code path powers off RTC6715 (e.g.
@@ -80,6 +85,7 @@ void scan_core_notify_analog_powered_on(void);
 // tuning. Without this, scan_core's internal flag stays stale and the next
 // probe reads garbage RSSI from the powered-off GPADC.
 void scan_core_notify_analog_powered_off(void);
+#endif
 
 #endif // HDZBOXPRO
 
