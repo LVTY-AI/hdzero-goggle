@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <math.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -43,6 +44,22 @@ static bool is_moving = true;
 
 static volatile bool calibrating = false;
 static int calibration_count = 0;
+
+// Runtime gyro-bias tracking. The one-shot calibration stores an integer-LSB
+// offset (gyr_offset); at +-2000 dps that floor leaves up to ~1.8 deg/min of
+// residual yaw bias, which the 6-axis fusion cannot correct (no heading
+// reference) and which integrates into pan drift. gyr_bias_dyn is a float,
+// sensor-frame correction that is continuously re-estimated while the goggles
+// are held still, nulling that residual. Frozen while moving so real head
+// motion is never absorbed. Operates upstream of rotate()/imu_orientation, so
+// it is platform-agnostic (helps Goggle, Goggle2 and BoxPro alike).
+static float gyr_bias_dyn[3] = {0.0f, 0.0f, 0.0f}; // float LSB correction, sensor frame
+static int gyr_still_cnt = 0;                       // consecutive stationary ticks
+
+#define GYR_STILL_DPS    1.5f                          // per-axis "stationary" threshold (deg/s)
+#define GYR_STILL_TICKS  (AHRS_UPDATE_FREQUENCY / 2)   // must be still this long before tracking (0.5s)
+#define GYR_BIAS_TC_SEC  20                            // bias IIR time constant (seconds)
+#define GYR_BIAS_K       (1.0f / (GYR_BIAS_TC_SEC * AHRS_UPDATE_FREQUENCY))
 
 // Intrinsic Tait-Bryan body-frame rotation (X -> Y -> Z, see util/math.c::rotate)
 // applied identically to gyro and accel before Madgwick fusion. Aligns IMU
@@ -275,10 +292,10 @@ void ht_set_alarm_angle() {
 
 static void calc_gyr(float *gyrAngle) // in degree
 {
-    // convert gyro readings to degrees/sec (with calibration offsets)
-    gyrAngle[0] = gyr_to_dps(ht_data.sensor_data.gyr.x - ht_data.gyr_offset[0]);
-    gyrAngle[1] = gyr_to_dps(ht_data.sensor_data.gyr.y - ht_data.gyr_offset[1]);
-    gyrAngle[2] = gyr_to_dps(ht_data.sensor_data.gyr.z - ht_data.gyr_offset[2]);
+    // convert gyro readings to degrees/sec (calibration offset + runtime bias)
+    gyrAngle[0] = gyr_to_dps_f((float)ht_data.sensor_data.gyr.x - ht_data.gyr_offset[0] - gyr_bias_dyn[0]);
+    gyrAngle[1] = gyr_to_dps_f((float)ht_data.sensor_data.gyr.y - ht_data.gyr_offset[1] - gyr_bias_dyn[1]);
+    gyrAngle[2] = gyr_to_dps_f((float)ht_data.sensor_data.gyr.z - ht_data.gyr_offset[2] - gyr_bias_dyn[2]);
     rotate(gyrAngle, imu_orientation);
 }
 
@@ -295,6 +312,10 @@ void ht_calibrate() {
     LOGI("HT calibration...");
     ht_data.acc_offset[0] = ht_data.acc_offset[1] = ht_data.acc_offset[2] = 0;
     ht_data.gyr_offset[0] = ht_data.gyr_offset[1] = ht_data.gyr_offset[2] = 0;
+
+    // Fresh baseline: drop the runtime bias correction so it re-converges from 0.
+    gyr_bias_dyn[0] = gyr_bias_dyn[1] = gyr_bias_dyn[2] = 0.0f;
+    gyr_still_cnt = 0;
 
     calibration_count = 0;
     calibrating = true;
@@ -319,6 +340,39 @@ void ht_calibrate() {
     LOGI("done!");
 }
 
+// Re-estimate the gyro bias while the goggles are held still. corr[] is the
+// current bias-corrected gyro reading (LSB, sensor frame); when the device is
+// stationary that residual is the leftover bias, so a slow IIR pulls
+// gyr_bias_dyn toward it and the corrected rate trends to zero. Frozen while
+// moving so genuine head motion is never absorbed.
+static void update_gyro_bias() {
+    float corr[3], dps[3];
+    corr[0] = (float)ht_data.sensor_data.gyr.x - ht_data.gyr_offset[0] - gyr_bias_dyn[0];
+    corr[1] = (float)ht_data.sensor_data.gyr.y - ht_data.gyr_offset[1] - gyr_bias_dyn[1];
+    corr[2] = (float)ht_data.sensor_data.gyr.z - ht_data.gyr_offset[2] - gyr_bias_dyn[2];
+    dps[0] = gyr_to_dps_f(corr[0]);
+    dps[1] = gyr_to_dps_f(corr[1]);
+    dps[2] = gyr_to_dps_f(corr[2]);
+
+    bool still = fabsf(dps[0]) < GYR_STILL_DPS &&
+                 fabsf(dps[1]) < GYR_STILL_DPS &&
+                 fabsf(dps[2]) < GYR_STILL_DPS;
+
+    if (!still) {
+        gyr_still_cnt = 0;
+        return;
+    }
+
+    if (gyr_still_cnt < GYR_STILL_TICKS) {
+        gyr_still_cnt++;
+        return;
+    }
+
+    gyr_bias_dyn[0] += GYR_BIAS_K * corr[0];
+    gyr_bias_dyn[1] += GYR_BIAS_K * corr[1];
+    gyr_bias_dyn[2] += GYR_BIAS_K * corr[2];
+}
+
 static void calculate_orientation() {
     float gyrAngle[3], accAngle[3];
     float tmp;
@@ -336,6 +390,9 @@ static void calculate_orientation() {
         calibration_count++;
         if (calibration_count == 1 << CALIBRATION_BCNT)
             calibrating = false;
+    } else {
+        // Not while calibrating: gyr_offset holds a running sum mid-calibration.
+        update_gyro_bias();
     }
 
     calc_gyr(gyrAngle);

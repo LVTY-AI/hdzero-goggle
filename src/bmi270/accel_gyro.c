@@ -117,6 +117,15 @@ float gyr_to_dps(int16_t gyr)
     return lsb_to_dps(gyr, 2000, bmi2_dev.resolution);
 }
 
+float gyr_to_dps_f(float lsb)
+{
+    /* Float-input twin of gyr_to_dps() for sub-LSB bias correction.
+     * Keep the 2000 dps range in sync with gyr_to_dps() above. */
+    float half_scale = ((float)(1 << bmi2_dev.resolution) / 2.0f);
+
+    return (2000.0f / half_scale) * lsb;
+}
+
 void get_bmi270(struct bmi2_sens_data* sensor_data)
 {
     int8_t rslt,ready=0;
@@ -230,8 +239,12 @@ static int8_t set_accel_gyro_config(struct bmi2_dev *bmi2_dev)
          * There are two modes
          *  0 -> Ultra low power mode(Default)
          *  1 -> High performance mode
+         * High performance lowers the gyro noise floor; that noise integrates
+         * into head-tracker yaw (pan) drift during motion, which the stationary
+         * bias tracker cannot correct. IMU power delta is negligible vs the
+         * goggle's display/RF/SoC draw.
          */
-        config[GYRO].cfg.gyr.noise_perf = BMI2_POWER_OPT_MODE;
+        config[GYRO].cfg.gyr.noise_perf = BMI2_PERF_OPT_MODE;
 
         /* Enable/Disable the filter performance mode where averaging of samples
          * will be done based on above set bandwidth and ODR.

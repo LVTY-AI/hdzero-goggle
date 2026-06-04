@@ -66,7 +66,8 @@ typedef struct {
     int is_av_in;
     int av_pal[2];
     int av_pal_w;
-    int av_valid[2]; // 0=AV in; 1=RF Analog
+    int av_valid[2];   // 0=AV in; 1=RF Analog
+    int av_reinit_req; // G1: full Source_AV() re-init requested after a live NTSC/PAL switch
 
     // hdmi in
     int hdmiin_valid;

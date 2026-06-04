@@ -909,35 +909,19 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
 
         if (det && det_cnt == AV_DET_SWITCH_CNT) {
             g_hw_stat.av_pal_w = g_hw_stat.av_pal_w ? 0 : 1;
-
-            // Keep the per-input detected format in sync with the live mode.
-            // The FPGA pipeline/enable bits (0x80/0x89 below) and DVR recording
-            // timing read av_pal[], which is otherwise frozen from the last
-            // UI-mode scan -- so after a live switch it would leave the FPGA
-            // pipeline timed for the old format and tear the picture.
             g_hw_stat.av_pal[g_hw_stat.is_av_in] = g_hw_stat.av_pal_w;
-
-            TP2825_Switch_Mode(g_hw_stat.av_pal_w);
-            AV_Mode_Switch(g_hw_stat.av_pal_w);
-
-            if (g_hw_stat.av_pal[g_hw_stat.is_av_in])
-                I2C_Write(ADDR_FPGA, 0x80, 0x10);
-            else
-                I2C_Write(ADDR_FPGA, 0x80, 0x00);
-
-            if (g_hw_stat.av_pal_w == g_hw_stat.av_pal[g_hw_stat.is_av_in])
-                I2C_Write(ADDR_FPGA, 0x89, 0x01);
-            else
-                I2C_Write(ADDR_FPGA, 0x89, 0x00);
-
             g_hw_stat.av_valid[g_hw_stat.is_av_in] = 0;
             ret = 1;
 
-            // Analog format is auto-detected (no manual NTSC/PAL toggle), so
-            // persist it like BoxPro: this seeds av_pal_w via Source_AV() on
-            // the next boot.
+            // Switching format live here (the old TP2825_Switch_Mode +
+            // AV_Mode_Switch + FPGA pokes) only re-times the V536 output and
+            // skips the rest of the analog bring-up (clock-phase, screen.vtmg,
+            // VO switch), which tears 720p50/PAL. Persist the detected format
+            // and ask thread_peripheral to re-run the full Source_AV() path --
+            // the same sequence that brings analog up cleanly from a cold boot.
             g_setting.source.analog_format = g_hw_stat.av_pal_w;
             ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
+            g_hw_stat.av_reinit_req = 1;
 
             LOGI("AV_in_detect -- switch: av_pal = %d,  rdat = %02x\n", g_hw_stat.av_pal_w, rdat);
         } else {

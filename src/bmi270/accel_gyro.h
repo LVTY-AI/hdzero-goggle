@@ -20,6 +20,8 @@ float acc_to_g(int16_t val);
 
 float gyr_to_dps(int16_t gyr);
 
+float gyr_to_dps_f(float lsb);
+
 #ifdef __cplusplus
 }
 #endif
