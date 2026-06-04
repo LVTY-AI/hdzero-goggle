@@ -462,6 +462,22 @@ void settings_load(void) {
     g_setting.ht.gyr_x = ini_getl("ht", "gyr_x", g_setting_defaults.ht.gyr_x, SETTING_INI);
     g_setting.ht.gyr_y = ini_getl("ht", "gyr_y", g_setting_defaults.ht.gyr_y, SETTING_INI);
     g_setting.ht.gyr_z = ini_getl("ht", "gyr_z", g_setting_defaults.ht.gyr_z, SETTING_INI);
+
+    // One-time gyro calibration migration. The gyro range was tightened from
+    // 2000 to 1000 dps, which doubles LSB-per-(deg/s), so offsets captured at the
+    // old range must double or they under-subtract. gyr_cal_range_idx is the BMI270
+    // range index the offsets were calibrated at (0 = 2000 dps, 1 = 1000 dps).
+    // Idempotent and keyed on its own flag so it never triggers settings_reset().
+    if (ini_getl("ht", "gyr_cal_range_idx", 0, SETTING_INI) == 0) {
+        g_setting.ht.gyr_x *= 2;
+        g_setting.ht.gyr_y *= 2;
+        g_setting.ht.gyr_z *= 2;
+        ini_putl("ht", "gyr_x", g_setting.ht.gyr_x, SETTING_INI);
+        ini_putl("ht", "gyr_y", g_setting.ht.gyr_y, SETTING_INI);
+        ini_putl("ht", "gyr_z", g_setting.ht.gyr_z, SETTING_INI);
+        ini_putl("ht", "gyr_cal_range_idx", 1, SETTING_INI);
+    }
+
     g_setting.ht.alarm_state = ini_getl("ht", "alarm_state", g_setting_defaults.ht.alarm_state, SETTING_INI);
     g_setting.ht.alarm_angle = ini_getl("ht", "alarm_angle", g_setting_defaults.ht.alarm_angle, SETTING_INI);
 

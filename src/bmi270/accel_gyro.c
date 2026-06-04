@@ -114,16 +114,17 @@ float acc_to_g(int16_t val)
 
 float gyr_to_dps(int16_t gyr)
 {
-    return lsb_to_dps(gyr, 2000, bmi2_dev.resolution);
+    return lsb_to_dps(gyr, 1000, bmi2_dev.resolution);
 }
 
 float gyr_to_dps_f(float lsb)
 {
     /* Float-input twin of gyr_to_dps() for sub-LSB bias correction.
-     * Keep the 2000 dps range in sync with gyr_to_dps() above. */
+     * Keep the 1000 dps range in sync with gyr_to_dps() above and the
+     * gyr.range register in set_accel_gyro_config(). */
     float half_scale = ((float)(1 << bmi2_dev.resolution) / 2.0f);
 
-    return (2000.0f / half_scale) * lsb;
+    return (1000.0f / half_scale) * lsb;
 }
 
 void get_bmi270(struct bmi2_sens_data* sensor_data)
@@ -229,8 +230,11 @@ static int8_t set_accel_gyro_config(struct bmi2_dev *bmi2_dev)
         /* Set Output Data Rate */
         config[GYRO].cfg.gyr.odr = BMI2_GYR_ODR_200HZ;
 
-        /* Gyroscope Angular Rate Measurement Range.By default the range is 2000dps. */
-        config[GYRO].cfg.gyr.range = BMI2_GYR_RANGE_2000;
+        /* Gyroscope Angular Rate Measurement Range. Bosch default is 2000dps, but
+         * head movement stays well under 1000dps; the tighter range halves the
+         * LSB (0.0305 deg/s) for less noise/quantization in the head tracker.
+         * NOTE: keep gyr_to_dps()/gyr_to_dps_f() in sync with this range. */
+        config[GYRO].cfg.gyr.range = BMI2_GYR_RANGE_1000;
 
         /* Gyroscope bandwidth parameters. By default the gyro bandwidth is in normal mode. */
         config[GYRO].cfg.gyr.bwp = BMI2_GYR_NORMAL_MODE;

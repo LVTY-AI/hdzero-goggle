@@ -10,7 +10,10 @@ extern "C" {
 #define CALIBRATION_BCNT   8 // calibartion loop cnt = (1<<CALIBRATION_BCNT)
 #define gyroWeightTiltRoll 0.98
 
-#define MOTION_GYRO_THR    3000
+// Motion-detect threshold on summed squared raw-LSB gyro deltas (OLED auto-off).
+// Scales with the square of the gyro range factor: tracks the ±1000 dps range
+// (was 3000 at ±2000 dps; halving the range doubles LSB, so diff scales ×4).
+#define MOTION_GYRO_THR    12000
 #define MOTION_DUR_1MINUTE 60
 
 #include "bmi270/bmi2_defs.h"
