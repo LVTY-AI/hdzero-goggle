@@ -530,16 +530,26 @@ void scan_core_idle_tick(void) {
 void scan_core_hdz_bw_tick(void) {
     static int dark_ticks = 0;
     static int period_ticks = 0;
+    static bool blanked = false; // showing the UI (black) plane to hide a search
 
     if (g_app_state != APP_STATE_VIDEO ||
         g_source_info.source != SOURCE_HDZERO ||
         g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH) {
+        // Context changed (left video, switched source, or Auto turned off);
+        // whoever changed it owns the display now -- just drop our state.
+        blanked = false;
         dark_ticks = 0;
         period_ticks = 0;
         return;
     }
 
     if ((rx_status[0].rx_valid | rx_status[1].rx_valid) != 0) {
+        // Locked. If we were hiding a search behind the UI plane, reveal the
+        // picture now.
+        if (blanked) {
+            Display_VO_SWITCH(1);
+            blanked = false;
+        }
         dark_ticks = 0;
         period_ticks = 0;
         return;
@@ -552,14 +562,25 @@ void scan_core_hdz_bw_tick(void) {
     if (period_ticks < HDZ_BW_REACQUIRE_PERIOD) return;
     period_ticks = 0;
 
+    // About to cycle the baseband: HDZero_open() toggles DM5680_SetBB, which
+    // flashes the live video plane green. Hide it behind the UI plane first so
+    // the screen stays steady black until a bandwidth actually locks. rx_valid
+    // still updates while blanked -- it reflects the baseband, not the display
+    // path (M0) we switch away from here.
+    if (!blanked) {
+        Display_VO_SWITCH(0);
+        blanked = true;
+    }
+
     uint8_t band = (uint8_t)g_setting.source.hdzero_band;
     uint8_t ch   = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
     uint8_t locked_bw = g_hdz_detected_bw;
     if (scan_probe_hdzero_sweep(band, ch, NULL, &locked_bw)) {
         g_hdz_detected_bw = locked_bw;
         // The sweep leaves the baseband on the last bandwidth tried, which may
-        // not be the winning one; reopen at the lock and re-tune so the picture
-        // comes back.
+        // not be the winning one; reopen at the lock and re-tune. Stay blanked
+        // until rx_valid confirms next tick, then reveal -- avoids showing a
+        // half-locked frame.
         HDZero_open(hdzero_effective_bw());
         DM6302_SetChannel(band, ch);
         DM5680_clear_vldflg();
