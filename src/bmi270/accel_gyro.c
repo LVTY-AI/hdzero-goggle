@@ -117,6 +117,15 @@ float gyr_to_dps(int16_t gyr)
     return lsb_to_dps(gyr, 2000, bmi2_dev.resolution);
 }
 
+float gyr_to_dps_f(float lsb)
+{
+    /* Float-input twin of gyr_to_dps() for sub-LSB bias correction.
+     * Keep the 2000 dps range in sync with gyr_to_dps() above. */
+    float half_scale = ((float)(1 << bmi2_dev.resolution) / 2.0f);
+
+    return (2000.0f / half_scale) * lsb;
+}
+
 void get_bmi270(struct bmi2_sens_data* sensor_data)
 {
     int8_t rslt,ready=0;
