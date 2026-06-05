@@ -60,7 +60,7 @@ const setting_t g_setting_defaults = {
         .osd = true,
         .audio = true,
         .audio_source = SETTING_RECORD_AUDIO_SOURCE_MIC,
-        .dvr_audio_volume = 6,
+        .dvr_audio_volume = 8,
         .live_audio_volume = 10,
         .naming = SETTING_NAMING_CONTIGUOUS,
     },
@@ -351,8 +351,36 @@ void settings_init(void) {
         settings_reset();
 }
 
+static int settings_migrate_dvr_audio_volume(int volume) {
+    if (volume > 10)
+        volume = volume - 25;
+
+    if (volume < 0)
+        return 0;
+
+    switch (volume) {
+    case 0:
+        return 0;
+    case 1:
+        return 1;
+    case 2:
+        return 1;
+    case 3:
+        return 2;
+    case 4:
+        return 3;
+    case 5:
+        return 5;
+    case 6:
+        return 8;
+    default:
+        return volume > 8 ? 8 : volume;
+    }
+}
+
 void settings_load(void) {
     int audio_volume;
+    int dvr_audio_volume;
 
     // Start with a fully configured structure then update!
     memcpy(&g_setting, &g_setting_defaults, sizeof(g_setting));
@@ -449,13 +477,14 @@ void settings_load(void) {
     g_setting.record.audio = settings_get_bool("record", "audio", g_setting_defaults.record.audio);
     g_setting.record.audio_source = ini_getl("record", "audio_source", g_setting_defaults.record.audio_source, SETTING_INI);
     audio_volume = ini_getl("record", "audio_volume", 31, SETTING_INI);
-    g_setting.record.dvr_audio_volume = ini_getl("record", "dvr_audio_volume", audio_volume, SETTING_INI);
-    if (g_setting.record.dvr_audio_volume > 10)
-        g_setting.record.dvr_audio_volume = g_setting.record.dvr_audio_volume - 25;
+    dvr_audio_volume = ini_getl("record", "dvr_audio_volume_v2", -1, SETTING_INI);
+    if (dvr_audio_volume < 0)
+        dvr_audio_volume = settings_migrate_dvr_audio_volume(ini_getl("record", "dvr_audio_volume", audio_volume, SETTING_INI));
+    g_setting.record.dvr_audio_volume = dvr_audio_volume;
     if (g_setting.record.dvr_audio_volume < 0)
         g_setting.record.dvr_audio_volume = 0;
-    else if (g_setting.record.dvr_audio_volume > 6)
-        g_setting.record.dvr_audio_volume = 6;
+    else if (g_setting.record.dvr_audio_volume > 8)
+        g_setting.record.dvr_audio_volume = 8;
     g_setting.record.live_audio_volume = ini_getl("record", "live_audio_volume", audio_volume, SETTING_INI);
     if (g_setting.record.live_audio_volume > 10)
         g_setting.record.live_audio_volume = (g_setting.record.live_audio_volume - 25) * 10 / 6;

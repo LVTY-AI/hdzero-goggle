@@ -91,8 +91,18 @@ function clamp_audio_volume()
 function dvr_volume_to_hardware()
 {
         volume=$(clamp_audio_volume ${1:-10})
-        if [ $volume -gt 6 ]; then volume=6; fi
-        echo $((25 + $volume))
+        if [ $volume -gt 8 ]; then volume=8; fi
+        case $volume in
+                0) echo 0 ;;
+                1) echo 26 ;;
+                2) echo 28 ;;
+                3) echo 29 ;;
+                4) echo 29 ;;
+                5) echo 30 ;;
+                6) echo 30 ;;
+                7) echo 31 ;;
+                *) echo 31 ;;
+        esac
 }
 
 function live_volume_to_lineout()
@@ -106,7 +116,17 @@ function amixer_dvr_volume()
         volume=$(clamp_audio_volume ${1:-10})
         hardware_volume=$(dvr_volume_to_hardware $volume)
 
-        dac_volume=$((($hardware_volume * 160 + 15) / 31))
+        if [ $volume -eq 0 ]; then
+                dac_volume=0
+        elif [ $volume -eq 4 ]; then
+                dac_volume=153
+        elif [ $volume -eq 6 ]; then
+                dac_volume=157
+        elif [ $volume -eq 7 ]; then
+                dac_volume=158
+        else
+                dac_volume=$((($hardware_volume * 160 + 15) / 31))
+        fi
 
         amixer cset name='lineout volume' $hardware_volume
         amixer cset name='DAC volume' $dac_volume,$dac_volume

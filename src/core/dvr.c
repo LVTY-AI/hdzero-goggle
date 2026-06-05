@@ -77,9 +77,11 @@ static int clamp_audio_volume(int volume) {
 }
 
 static int dvr_volume_to_hardware(int volume) {
-    if (volume > 6)
-        volume = 6;
-    return 25 + volume;
+    static const int volume_table[] = {0, 26, 28, 29, 29, 30, 30, 31, 31};
+
+    if (volume > 8)
+        volume = 8;
+    return volume_table[volume];
 }
 
 static int live_volume_to_lineout(int volume) {
@@ -94,7 +96,16 @@ void dvr_set_dvr_audio_volume(int volume) {
     volume = clamp_audio_volume(volume);
 
     hardware_volume = dvr_volume_to_hardware(volume);
-    dac_volume = (hardware_volume * 160 + 15) / 31;
+    if (volume == 0)
+        dac_volume = 0;
+    else if (volume == 4)
+        dac_volume = 153;
+    else if (volume == 6)
+        dac_volume = 157;
+    else if (volume == 7)
+        dac_volume = 158;
+    else
+        dac_volume = (hardware_volume * 160 + 15) / 31;
 
     snprintf(buf, sizeof(buf), "amixer cset name='lineout volume' %d", hardware_volume);
     system_exec(buf);

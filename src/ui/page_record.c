@@ -16,7 +16,7 @@
 #include "ui/ui_style.h"
 
 #define AUDIO_VOLUME_MIN 0
-#define DVR_AUDIO_VOLUME_MAX 6
+#define DVR_AUDIO_VOLUME_MAX 8
 #define LIVE_AUDIO_VOLUME_MAX 10
 
 static btn_group_t btn_group_record_mode;
@@ -180,7 +180,7 @@ static void page_record_exit_audio_volume() {
 
     if (selected_audio_volume_changed) {
         if (selected_audio_volume_row == ROW_DVR_AUDIO_VOLUME) {
-            ini_putl("record", "dvr_audio_volume", g_setting.record.dvr_audio_volume, SETTING_INI);
+            ini_putl("record", "dvr_audio_volume_v2", g_setting.record.dvr_audio_volume, SETTING_INI);
         } else if (selected_audio_volume_row == ROW_LIVE_AUDIO_VOLUME) {
             ini_putl("record", "live_audio_volume", g_setting.record.live_audio_volume, SETTING_INI);
             dvr_set_live_audio_volume(g_setting.record.live_audio_volume);
