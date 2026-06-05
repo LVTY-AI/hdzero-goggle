@@ -564,6 +564,25 @@ void scan_core_hdz_bw_tick(void) {
     if (dark_ticks < HDZ_BW_REACQUIRE_DARK_THRESH) return; // debounce the loss
     swept = true;
 
+    // The open/probe below drive the DM6302/DM5680 over SPI. The UI/input thread
+    // touches the same tuner -- app_switch_to_hdzero on a Scan Now pick,
+    // hdzero_switch_channel on a dial change, the Scan Now sweep -- and always
+    // holds lvgl_mutex while doing so. thread_peripheral holds no lock, so take
+    // the same one here; without it a reacquire can land on the bus mid-switch
+    // and hang the receiver (picking a Scan Now result could freeze the goggles).
+    pthread_mutex_lock(&lvgl_mutex);
+
+    // State can change between the unlocked guard above and acquiring the lock
+    // (the user may have just switched source or left video). Re-check under the
+    // lock and bail if a signal arrived or we are no longer the dark HDZ viewer.
+    if (g_app_state != APP_STATE_VIDEO ||
+        g_source_info.source != SOURCE_HDZERO ||
+        g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH ||
+        (rx_status[0].rx_valid | rx_status[1].rx_valid) != 0) {
+        pthread_mutex_unlock(&lvgl_mutex);
+        return;
+    }
+
     // Try the OTHER bandwidth first and stop the moment it locks -- one brief
     // reset, no full sweep and no re-open to settle. Only if nothing is there
     // (signal genuinely gone) restore the original bandwidth, for a VTX that
@@ -589,6 +608,7 @@ void scan_core_hdz_bw_tick(void) {
         DM5680_clear_vldflg();
         DM5680_req_vldflg();
     }
+    pthread_mutex_unlock(&lvgl_mutex);
     LOGI("HDZ BW reacquire: tried bw=%u found=%d (orig=%u) band=%u ch=%u",
          other, found, orig, band, ch);
 }
