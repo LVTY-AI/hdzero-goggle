@@ -331,8 +331,7 @@ static void page_source_select_auto_detect() {
     lv_timer_handler();
 
     // Power both radios for the probe. Use the resolved bandwidth (never the
-    // "Both" sentinel); scan_probe_both_sweep below re-opens per bandwidth
-    // when Both is selected.
+    // "Both" sentinel); the probe below reads HDZ at this open bandwidth.
     HDZero_open(hdzero_effective_bw());
     rtc6715.init(1, 0);
     scan_core_notify_analog_powered_on();
@@ -361,11 +360,14 @@ static void page_source_select_auto_detect() {
         }
     }
 
+    // Probe the current channel at the already-open bandwidth only -- no
+    // Wide+Narrow sweep. Each bandwidth change re-inits the DM6302 (~2s), and
+    // sweeping both here (on top of the open above and the switch below) made
+    // Auto Detect entry take ~12s longer than the loading bar. If the VTX is on
+    // the other bandwidth, the live bw-reacquire watchdog corrects it within a
+    // couple seconds after entering video.
     scan_result_t r = { PROTOCOL_NONE, 0, 0, 0, 0 };
-    uint8_t locked_bw = g_hdz_detected_bw;
-    if (entry) r = scan_probe_both_sweep(entry, &locked_bw);
-    if (r.protocol == PROTOCOL_HDZ)
-        g_hdz_detected_bw = locked_bw; // live open uses the bw that locked
+    if (entry) r = scan_probe_both(entry);
 
     if (r.protocol == PROTOCOL_ANALOG) {
         // If we crossed protocols, persist the analog channel that's at the
