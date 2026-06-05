@@ -335,7 +335,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_set_style_border_width(cont_mode, 0, 0);
         lv_obj_set_style_pad_all(cont_mode, 0, 0);
 
-        static const char *mode_names[3] = {"HDZero", "Analog", "Auto/Both"};
+        static const char *mode_names[3] = {"HDZero", "Analog", "Dual"};
         for (int i = 0; i < SCAN_MODE_COUNT; i++) {
             mode_btns[i] = lv_btn_create(cont_mode);
             lv_obj_set_size(mode_btns[i], 220, 44);
@@ -1018,7 +1018,8 @@ static void page_scannow_on_click(uint8_t key, int sel) {
                 g_hdz_detected_bw = (uint8_t)res->hdz_bw;
             g_setting.scan.channel = (uint8_t)res->hdz_channel + 1;
             ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
-            progress_bar.start = 1; // show the loading bar while HDZ comes up
+            // No loading bar: the receiver is already parked on this result's
+            // bandwidth (scan_settle_focused_bw), so HDZ comes up near-instantly.
             app_switch_to_hdzero(true);
             g_source_info.source = SOURCE_HDZERO;
         } else if (res->protocol == PROTOCOL_ANALOG) {
