@@ -909,7 +909,9 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
         //       the 50Hz field bit with HLOCK instead: (rdat&0x0C)==0x0C, no
         //       video loss. That bit toggles per-field on a matched NTSC
         //       signal, so the PAL direction is debounced hard (AV_DET_PAL_CNT).
-        if (g_hw_stat.av_pal_w)
+        if (!g_setting.source.analog_auto)
+            det = 0; // manual NTSC/PAL: never auto-switch
+        else if (g_hw_stat.av_pal_w)
             det = ((rdat & 0xAE) == 0x28) ? 1 : 0;
         else
             det = (!(rdat & 0x80) && (rdat & 0x0C) == 0x0C) ? 1 : 0;

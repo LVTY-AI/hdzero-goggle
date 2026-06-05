@@ -263,7 +263,8 @@ typedef enum {
 typedef struct {
     setting_sources_analog_module_t analog_module;
     setting_sources_analog_format_t analog_format; // 0=NTSC, 1= PAL
-    setting_sources_analog_ratio_t analog_ratio;   // 0=4:3, 1=16:9
+    bool analog_auto;                               // G1: auto-detect NTSC/PAL (gates AV_in_detect)
+    setting_sources_analog_ratio_t analog_ratio;    // 0=4:3, 1=16:9
     setting_sources_hdzero_band_t hdzero_band;
     setting_sources_hdzero_bw_t hdzero_bw;
     uint8_t analog_channel;

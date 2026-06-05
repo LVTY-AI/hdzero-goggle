@@ -170,8 +170,8 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     btn_group_set_sel(&btn_group2, g_setting.source.hdzero_bw);
 
 #if defined(HDZGOGGLE)
-    create_btn_group_item(&btn_group0, cont, 2, _lang("Analog Video"), "NTSC", "PAL", "", "", ROW_ANALOG_VIDEO);
-    btn_group_set_sel(&btn_group0, g_setting.source.analog_format);
+    create_btn_group_item(&btn_group0, cont, 3, _lang("Analog Video"), "NTSC", "PAL", _lang("Auto"), "", ROW_ANALOG_VIDEO);
+    btn_group_set_sel(&btn_group0, g_setting.source.analog_auto ? 2 : g_setting.source.analog_format);
 #elif defined(HDZGOGGLE2)
     create_btn_group_item(&btn_group0, cont, 2, _lang("Analog Module"), _lang("Built-in"), _lang("Expansion"), "", "", ROW_ANALOG_MODULE);
     btn_group_set_sel(&btn_group0, g_setting.source.analog_module);
@@ -471,11 +471,19 @@ static void page_source_on_click(uint8_t key, int sel) {
             g_hdz_detected_bw = g_hw_stat.hdz_bw ? 1 : 0;
         break;
 #if defined(HDZGOGGLE)
-    case ROW_ANALOG_VIDEO:
+    case ROW_ANALOG_VIDEO: {
         btn_group_toggle_sel(&btn_group0);
-        g_setting.source.analog_format = btn_group_get_sel(&btn_group0);
-        ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
+        int av_sel = btn_group_get_sel(&btn_group0);
+        // 0=NTSC, 1=PAL (manual), 2=Auto. Auto keeps the current active format
+        // as its starting point; AV_in_detect adjusts it from there.
+        g_setting.source.analog_auto = (av_sel == 2);
+        ini_putl("source", "analog_auto", g_setting.source.analog_auto, SETTING_INI);
+        if (av_sel < 2) {
+            g_setting.source.analog_format = av_sel;
+            ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
+        }
         break;
+    }
 #elif defined(HDZGOGGLE2)
     case ROW_ANALOG_MODULE:
         btn_group_toggle_sel(&btn_group0);
