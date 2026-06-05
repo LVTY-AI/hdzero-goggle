@@ -67,6 +67,7 @@ enum {
     ROW_GOGGLE2_ANALOG,
     ROW_GOGGLE2_HDMI,
     ROW_GOGGLE2_AV,
+    ROW_GOGGLE2_AUTO_DETECT,
     ROW_GOGGLE2_HDZ_WIDTH,
     ROW_GOGGLE2_ANALOG_MODULE,
     ROW_GOGGLE2_ANALOG_RATIO,
@@ -102,6 +103,7 @@ enum {
 #define ROW_ANALOG        ROW_GOGGLE2_ANALOG
 #define ROW_HDMI          ROW_GOGGLE2_HDMI
 #define ROW_AV            ROW_GOGGLE2_AV
+#define ROW_AUTO_DETECT   ROW_GOGGLE2_AUTO_DETECT
 #define ROW_HDZ_WIDTH     ROW_GOGGLE2_HDZ_WIDTH
 #define ROW_ANALOG_MODULE ROW_GOGGLE2_ANALOG_MODULE
 #define ROW_ANALOG_RATIO  ROW_GOGGLE2_ANALOG_RATIO
@@ -118,7 +120,7 @@ static lv_obj_t *label[6] = {NULL};
 static uint8_t oled_tst_mode = 0; // 0=Normal, 1=CB, 2=Grid, 3=All Black, 4=All White, 5=Boot logo
 static bool in_sourcepage = false;
 static btn_group_t btn_group0, btn_group2, btn_group3;
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 static lv_obj_t *auto_detect_label = NULL;
 #endif
 
@@ -157,7 +159,7 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "AV %s", _lang("In"));
     label[3] = create_label_item(cont, buf, 1, ROW_AV, 3);
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     auto_detect_label = create_label_item(cont, _lang("Auto Detect"),
                                           1, ROW_AUTO_DETECT, 3);
 #endif
@@ -254,7 +256,7 @@ void source_status_timer() {
     }
 }
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Picking a specific source explicitly disables auto-detect; without this,
 // the next dial click in video would silently switch protocols again.
 static void disable_auto_protocol_detect(void) {
@@ -266,7 +268,7 @@ static void disable_auto_protocol_detect(void) {
 #endif
 
 static void page_source_select_hdzero() {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
     progress_bar.start = 1;
@@ -284,7 +286,7 @@ static void page_source_select_hdzero() {
 }
 
 static void page_source_select_hdmi() {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
     if (g_source_info.hdmi_in_status)
@@ -292,7 +294,7 @@ static void page_source_select_hdmi() {
 }
 
 static void page_source_select_av_in() {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
     app_switch_to_analog(1);
@@ -303,7 +305,7 @@ static void page_source_select_av_in() {
 }
 
 static void page_source_select_analog() {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
     app_switch_to_analog(0);
@@ -313,7 +315,7 @@ static void page_source_select_analog() {
     dvr_enable_line_out(true);
 }
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Probes the user's current channel on both protocols and enters video on
 // whichever has signal. Defaults to HDZ if neither responds. After this
 // runs, auto_protocol_detect is on, so the next dial click in video will
@@ -486,7 +488,7 @@ static void page_source_on_click(uint8_t key, int sel) {
         g_setting.source.analog_ratio = btn_group_get_sel(&btn_group3);
         ini_putl("source", "analog_ratio", g_setting.source.analog_ratio, SETTING_INI);
         break;
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     case ROW_AUTO_DETECT:
         page_source_select_auto_detect();
         break;

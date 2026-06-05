@@ -67,7 +67,7 @@ static pthread_t input_device_pid;
 static int btn_value = 0;
 
 // action: 1 = tune up, 2 = tune down, 3 = confirm
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 static int auto_detect_freq_idx = -1;
 #endif
 
@@ -101,12 +101,12 @@ void exit_tune_channel() {
     channel_osd_mode = 0;
     channel_osd_preview_proto = 0;
     channel_osd_preview_band = 0xFF;
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     auto_detect_freq_idx = -1;
 #endif
 }
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 static int find_freq_table_index(void) {
     if (g_source_info.source == SOURCE_HDZERO) {
         uint8_t ch = (g_setting.scan.channel - 1) & 0x7F;
@@ -137,7 +137,7 @@ static int find_freq_table_index(void) {
 }
 #endif
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 static void apply_freq_entry(const scan_freq_entry_t *entry,
                              const scan_result_t *r,
                              bool send_msp) {
@@ -252,7 +252,7 @@ void tune_channel(uint8_t action) {
 
     LOGI("tune_channel:%d", action);
 
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     if (g_setting.source.auto_protocol_detect &&
         (g_source_info.source == SOURCE_HDZERO ||
          g_source_info.source == SOURCE_AV_MODULE)) {

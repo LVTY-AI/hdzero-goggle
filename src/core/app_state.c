@@ -63,7 +63,7 @@ void app_switch_to_menu() {
         IT66121_init();
 
     rtc6715.init(0, 0);
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     scan_core_notify_analog_powered_off();
 #endif
     system_script(REC_STOP_LIVE);
@@ -97,13 +97,13 @@ void app_switch_to_analog(bool is_av_in) {
 
     if (is_av_in) {
         rtc6715.init(0, 0);
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
         scan_core_notify_analog_powered_off();
 #endif
     } else {
         rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
         rtc6715.set_ch(g_setting.source.analog_channel - 1);
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
         scan_core_notify_analog_powered_on();
 #endif
     }
@@ -124,7 +124,7 @@ void app_switch_to_hdmi_in() {
     system_exec("aww 0x0300b084 0x0001555");
 #endif
     rtc6715.init(0, 0);
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     scan_core_notify_analog_powered_off();
 #endif
 
@@ -167,7 +167,7 @@ void app_switch_to_hdzero(bool is_default) {
 #endif
 
     rtc6715.init(0, 0);
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     scan_core_notify_analog_powered_off();
 #endif
 

@@ -137,7 +137,7 @@ int statusbar_init(void) {
     lv_label_set_recolor(label[STS_SDCARD], true);
 
     if (g_source_info.source == SOURCE_HDZERO) {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
         if (g_setting.source.auto_protocol_detect) {
             snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
                      channel2str_tagged(PROTOCOL_HDZ,
@@ -156,17 +156,12 @@ int statusbar_init(void) {
     } else if (g_source_info.source == SOURCE_AV_MODULE) {
 #if defined(HDZGOGGLE)
         sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
-#elif defined(HDZBOXPRO)
+#else // BoxPro + G2: built-in analog, with channel and auto-detect tagging
         if (g_setting.source.auto_protocol_detect) {
             snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
                      channel2str_tagged(PROTOCOL_ANALOG,
                                         g_setting.source.analog_channel));
         } else {
-            sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
-                    channel2str(0, 0, g_setting.source.analog_channel));
-        }
-#elif defined(HDZGOGGLE2)
-        {
             sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
                     channel2str(0, 0, g_setting.source.analog_channel));
         }
@@ -248,7 +243,7 @@ void statubar_update(void) {
     if (channel_changed || (source_last != g_source_info.source) || (hdzero_band_last != g_setting.source.hdzero_band)) {
         memset(buf, 0, sizeof(buf));
         if (g_source_info.source == SOURCE_HDZERO) {
-#if defined(HDZBOXPRO)
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
             if (g_setting.source.auto_protocol_detect) {
                 snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
                          channel2str_tagged(PROTOCOL_HDZ,
@@ -267,17 +262,12 @@ void statubar_update(void) {
         } else if (g_source_info.source == SOURCE_AV_MODULE) {
 #if defined(HDZGOGGLE)
             sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
-#elif defined(HDZBOXPRO)
+#else // BoxPro + G2: built-in analog, with channel and auto-detect tagging
             if (g_setting.source.auto_protocol_detect) {
                 snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
                          channel2str_tagged(PROTOCOL_ANALOG,
                                             g_setting.source.analog_channel));
             } else {
-                sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
-                        channel2str(0, 0, g_setting.source.analog_channel));
-            }
-#elif defined(HDZGOGGLE2)
-            {
                 sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
                         channel2str(0, 0, g_setting.source.analog_channel));
             }
