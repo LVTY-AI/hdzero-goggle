@@ -40,6 +40,7 @@ typedef struct {
     lv_obj_t *bar;
     int start;
     int val;
+    int step; // fill increment per ~100ms tick; 0 = default (4). Smaller = slower.
 } progress_bar_t;
 
 extern progress_bar_t progress_bar;

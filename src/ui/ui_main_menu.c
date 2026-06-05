@@ -434,16 +434,16 @@ void progress_bar_update() {
             lv_obj_clear_flag(menu, LV_OBJ_FLAG_HIDDEN);
             lv_obj_add_flag(progress_bar.bar, LV_OBJ_FLAG_HIDDEN);
             progress_bar.val = 0;
+            progress_bar.step = 0; // back to default fill rate for the next use
             // LOGI("Progress bar end");
         }
         break;
     }
 
     if (state == 1) {
-        // HDZero entry opens at one bandwidth on every mode now (the Auto entry
-        // sweep was removed -- live re-acquire handles bandwidth), so the bar
-        // fills at the normal rate.
-        uint8_t step = 4;
+        // Fill rate is per-use: the caller may slow it (progress_bar.step) so
+        // the bar tracks a longer operation. 0 = the normal rate (4).
+        int step = progress_bar.step ? progress_bar.step : 4;
         if (progress_bar.val < 100)
             progress_bar.val += step;
         lv_bar_set_value(progress_bar.bar, progress_bar.val, LV_ANIM_OFF);
