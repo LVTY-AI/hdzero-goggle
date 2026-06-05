@@ -868,6 +868,7 @@ void Source_AV(bool is_av_in) {
 }
 
 #define AV_DET_SWITCH_CNT 1
+#define AV_DET_PAL_CNT    10 // PAL: longer confirm to ride out per-field bit2 flicker
 #define AV_DET_LOCK_CNT   10
 #define AV_DET_DROP_CNT   5
 int AV_in_detect() // return = 1: vtmg to V536 changed
@@ -898,7 +899,20 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
 
         det_cnt = det2_cnt = 0;
     } else if (g_hw_stat.source_mode == SOURCE_MODE_AV) { // detect in AV_in/Module_bay mode
-        det = ((rdat & 0xAE) == (g_hw_stat.av_pal_w ? 0x28 : 0x2C)) ? 1 : 0;
+        // Detect a standard mismatch. The two directions are NOT symmetric on
+        // this decoder (confirmed by logging):
+        //   PAL mode  -> NTSC signal: reaches a clean locked pattern 0x28
+        //       (bit5 SLOCK + bit3 HLOCK, bit2=0). The original test works.
+        //   NTSC mode -> PAL signal:  NEVER asserts SLOCK (bit5) together with
+        //       the 50Hz bit (bit2), so the original (rdat&0xAE)==0x2C could
+        //       never fire -- NTSC->PAL went undetected and stayed torn. Detect
+        //       the 50Hz field bit with HLOCK instead: (rdat&0x0C)==0x0C, no
+        //       video loss. That bit toggles per-field on a matched NTSC
+        //       signal, so the PAL direction is debounced hard (AV_DET_PAL_CNT).
+        if (g_hw_stat.av_pal_w)
+            det = ((rdat & 0xAE) == 0x28) ? 1 : 0;
+        else
+            det = (!(rdat & 0x80) && (rdat & 0x0C) == 0x0C) ? 1 : 0;
 
         // TEMP diagnostic: trace rdat/format on every change so a log shows
         // whether a PAL signal is seen (and det fires) while in NTSC mode.
@@ -914,11 +928,13 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
         if (det_last != det) {
             det_last = det;
             det_cnt = 0;
-        } else if (det_cnt < AV_DET_SWITCH_CNT) {
+        } else if (det_cnt < AV_DET_PAL_CNT) {
             det_cnt++;
         }
 
-        if (det && det_cnt == AV_DET_SWITCH_CNT) {
+        // NTSC's 0x28 is a clean locked pattern -> switch fast. The PAL field-
+        // bit test needs a longer confirm to ride out the per-field flicker.
+        if (det && det_cnt >= (g_hw_stat.av_pal_w ? AV_DET_SWITCH_CNT : AV_DET_PAL_CNT)) {
             g_hw_stat.av_pal_w = g_hw_stat.av_pal_w ? 0 : 1;
             g_hw_stat.av_pal[g_hw_stat.is_av_in] = g_hw_stat.av_pal_w;
             g_hw_stat.av_valid[g_hw_stat.is_av_in] = 0;
