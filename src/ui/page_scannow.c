@@ -85,10 +85,10 @@ typedef enum {
     SCAN_MODE_AUTO   = 2,
 } scan_mode_t;
 
-// Modes offered by the picker. BoxPro has the built-in analog receiver, so it
-// gets HDZero / Analog / Auto/Both. G1/G2 are HDZ-only in this sub-project, so
-// the picker shows just HDZero (G2's analog scan is a later addition).
-#if defined(HDZBOXPRO)
+// Modes offered by the picker. BoxPro and Goggle 2 have the built-in analog
+// receiver, so they get HDZero / Analog / Auto/Both. Goggle 1 has no built-in
+// analog, so its picker shows just HDZero.
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 #define SCAN_MODE_COUNT 3
 #else
 #define SCAN_MODE_COUNT 1
@@ -321,10 +321,11 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_add_style(page, &style_scan, LV_PART_MAIN);
     lv_obj_set_style_pad_top(page, UI_SCANNOW_PAGE_PAD, 0);
 
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
-    // Mode selector at the very top of the page: SCAN_MODE_COUNT buttons in a
-    // row (3 on BoxPro, just HDZero on G1/G2). Sits in its own absolute-
-    // positioned container so it isn't constrained by cont1's grid template.
+#if SCAN_MODE_COUNT > 1
+    // Mode selector at the top: one button per scan mode (BoxPro only). G1/G2
+    // have a single mode (HDZero), so there is no picker -- they scan on enter.
+    // Sits in its own absolute-positioned container so it isn't constrained by
+    // cont1's grid template.
     {
         lv_obj_t *cont_mode = lv_obj_create(page);
         lv_obj_set_size(cont_mode, 780, 56);
@@ -395,7 +396,10 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "%s",
              _lang("Dial to pick mode, press Enter to scan"));
 #else
-    snprintf(buf, sizeof(buf), "%s", _lang("Press Enter to scan"));
+    snprintf(buf, sizeof(buf), "%s\n %s\n %s",
+             _lang("When scanning is complete, use the"),
+             _lang("dial to select a channel and press"),
+             _lang("the Enter button to choose"));
 #endif
     lv_label_set_text(label2, buf);
     lv_obj_set_style_text_font(label2, UI_SCANNOW_NOTE_FONT, 0);
@@ -845,13 +849,20 @@ static void start_scan_in_current_mode(void) {
 #endif
 
 static void page_scannow_enter() {
-    // Land in IDLE — user picks a mode with the dial, click runs the scan.
+#if SCAN_MODE_COUNT > 1
+    // Multi-mode (BoxPro): land in IDLE — user picks a mode, click runs the scan.
     page_state = SCAN_PAGE_IDLE;
     set_results_widget_visibility();
     update_mode_btn_focus();
     lv_label_set_text(label, _lang("Scan Ready"));
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
     auto_scaned_cnt = 0;
+#else
+    // Single-mode (G1/G2): no picker — scan HDZero right away and show the
+    // results list, the way Scan Now worked before the mode UI.
+    scan_mode = SCAN_MODE_HDZERO;
+    start_scan_in_current_mode();
+#endif
 }
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
@@ -859,6 +870,7 @@ static void page_scannow_enter() {
 // scan RESULTS, return to the IDLE mode-picker instead of leaving the page,
 // so the user can re-scan in a different mode without re-navigating the menu.
 static bool page_scannow_on_back(void) {
+#if SCAN_MODE_COUNT > 1
     if (page_state == SCAN_PAGE_RESULTS) {
         // Tear down analog RX the same way exit would, so a subsequent IDLE
         // scan power-on cycle starts from a clean state.
@@ -871,9 +883,10 @@ static bool page_scannow_on_back(void) {
         lv_label_set_text(label, _lang("Scan Ready"));
         lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
         auto_scaned_cnt = 0;
-        return true; // absorbed
+        return true; // absorbed -> back to the mode picker
     }
-    return false; // IDLE -> fall through to normal back-to-main-menu
+#endif
+    return false; // single-mode (no picker) or IDLE -> exit to main menu
 }
 #endif
 
@@ -979,6 +992,7 @@ static void page_scannow_on_click(uint8_t key, int sel) {
                 g_hdz_detected_bw = (uint8_t)res->hdz_bw;
             g_setting.scan.channel = (uint8_t)res->hdz_channel + 1;
             ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
+            progress_bar.start = 1; // show the loading bar while HDZ comes up
             app_switch_to_hdzero(true);
             g_source_info.source = SOURCE_HDZERO;
         } else if (res->protocol == PROTOCOL_ANALOG) {
