@@ -231,6 +231,22 @@ static void *thread_peripheral(void *ptr) {
             g_source_info.av_in_status = g_hw_stat.av_valid[1];
             g_source_info.av_bay_status = g_hw_stat.av_valid[0];
 
+#if defined(HDZGOGGLE)
+            // Auto NTSC/PAL (G1): AV_in_detect flags a format change instead of
+            // switching live (which tears). Replay the full menu round-trip --
+            // Display_UI() (1080p UI) then app_switch_to_analog() (720p analog)
+            // -- the 1080p->720p cycle that re-times the OLED cleanly. Both
+            // touch LVGL/hardware, so hold lvgl_mutex like the scan_core
+            // crossover. The user never leaves the source; just a brief blank.
+            if (g_hw_stat.av_reinit_req && g_hw_stat.source_mode == SOURCE_MODE_AV) {
+                g_hw_stat.av_reinit_req = 0;
+                pthread_mutex_lock(&lvgl_mutex);
+                Display_UI();
+                app_switch_to_analog(g_hw_stat.is_av_in);
+                pthread_mutex_unlock(&lvgl_mutex);
+            }
+#endif
+
             // detect HDMI in
             record_vtmg_change |= HDMI_in_detect();
             g_source_info.hdmi_in_status = g_hw_stat.hdmiin_valid;

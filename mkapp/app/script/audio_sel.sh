@@ -80,9 +80,75 @@ function amixer_lineout()
         #amixer cset name='Right Output Mixer DACR Switch' $onoff
 }
 
-if [ $# != 1 ]
+function clamp_audio_volume()
+{
+        volume=${1:-10}
+        if [ $volume -lt 0 ]; then volume=0; fi
+        if [ $volume -gt 10 ]; then volume=10; fi
+        echo $volume
+}
+
+function dvr_volume_to_hardware()
+{
+        volume=$(clamp_audio_volume ${1:-10})
+        if [ $volume -gt 8 ]; then volume=8; fi
+        case $volume in
+                0) echo 0 ;;
+                1) echo 26 ;;
+                2) echo 28 ;;
+                3) echo 29 ;;
+                4) echo 29 ;;
+                5) echo 30 ;;
+                6) echo 30 ;;
+                7) echo 31 ;;
+                *) echo 31 ;;
+        esac
+}
+
+function live_volume_to_lineout()
+{
+        volume=$(clamp_audio_volume ${1:-10})
+        echo $((($volume * 31 + 5) / 10))
+}
+
+function amixer_dvr_volume()
+{
+        volume=$(clamp_audio_volume ${1:-10})
+        hardware_volume=$(dvr_volume_to_hardware $volume)
+
+        if [ $volume -eq 0 ]; then
+                dac_volume=0
+        elif [ $volume -eq 4 ]; then
+                dac_volume=153
+        elif [ $volume -eq 6 ]; then
+                dac_volume=157
+        elif [ $volume -eq 7 ]; then
+                dac_volume=158
+        else
+                dac_volume=$((($hardware_volume * 160 + 15) / 31))
+        fi
+
+        amixer cset name='lineout volume' $hardware_volume
+        amixer cset name='DAC volume' $dac_volume,$dac_volume
+        amixer cset name='AIF1 DAC timeslot 0 volume' $dac_volume,$dac_volume
+        amixer cset name='AIF1 DAC timeslot 1 volume' $dac_volume,$dac_volume
+}
+
+function amixer_live_volume()
+{
+        volume=$(clamp_audio_volume ${1:-10})
+        lineout_volume=$(live_volume_to_lineout $volume)
+
+        linein_gain=$((($volume * $volume * $volume * 7 + 500) / 1000))
+        if [ $volume -gt 0 ] && [ $linein_gain -eq 0 ]; then linein_gain=1; fi
+
+        amixer cset name='lineout volume' $lineout_volume
+        amixer cset name='LINEINL/R to L_R output mixer gain' $linein_gain
+}
+
+if [ $# -lt 1 ]
 then
-        echo "params count must equal 1"
+        echo "params count must at least equal 1"
         exit 1
 fi
 
@@ -111,7 +177,16 @@ if [ $1 == "out_on" ]
 then
         amixer_lineout 1
         amixer cset name='lineout volume' 31
-        amixer cset name='LINEINL/R to L_R output mixer gain' 7
+fi
+
+if [ $1 == "out_dvr_volume" ]
+then
+        amixer_dvr_volume ${2:-10}
+fi
+
+if [ $1 == "out_live_volume" ]
+then
+        amixer_live_volume ${2:-10}
 fi
 
 if [ $1 == "out_off" ]
@@ -159,5 +234,3 @@ if [ $1 == "out_linein_off" ]
 then
         lineout_mixer_linein_switch 0
 fi
-
-

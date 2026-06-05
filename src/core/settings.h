@@ -102,6 +102,8 @@ typedef struct {
     bool osd;
     bool audio;
     setting_record_audio_source_t audio_source;
+    int dvr_audio_volume;
+    int live_audio_volume;
     setting_record_naming_t naming;
 } setting_record_t;
 

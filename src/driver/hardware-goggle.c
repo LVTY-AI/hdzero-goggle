@@ -24,6 +24,7 @@
 #include "i2c.h"
 #include "it66021.h"
 #include "it66121.h"
+#include "minIni.h"
 #include "msp_displayport.h"
 #include "screen.h"
 #include "tp2825.h"
@@ -908,20 +909,20 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
 
         if (det && det_cnt == AV_DET_SWITCH_CNT) {
             g_hw_stat.av_pal_w = g_hw_stat.av_pal_w ? 0 : 1;
-
-            TP2825_Switch_Mode(g_hw_stat.av_pal_w);
-
-            if (g_hw_stat.av_pal[g_hw_stat.is_av_in])
-                I2C_Write(ADDR_FPGA, 0x80, 0x10);
-            else
-                I2C_Write(ADDR_FPGA, 0x80, 0x00);
-
-            if (g_hw_stat.av_pal_w == g_hw_stat.av_pal[g_hw_stat.is_av_in])
-                I2C_Write(ADDR_FPGA, 0x89, 0x01);
-            else
-                I2C_Write(ADDR_FPGA, 0x89, 0x00);
-
+            g_hw_stat.av_pal[g_hw_stat.is_av_in] = g_hw_stat.av_pal_w;
             g_hw_stat.av_valid[g_hw_stat.is_av_in] = 0;
+
+            // Auto NTSC/PAL: don't switch the pipeline live here -- a live
+            // re-time tears on G1 because Source_AV()'s screen.vtmg(1) is a
+            // no-op when we're already in 720P (the last_mode guard in
+            // screen_vtmg). Persist the detected format and ask
+            // thread_peripheral to replay the full menu round-trip
+            // (Display_UI -> app_switch_to_analog): the 1080p->720p cycle that
+            // re-times the OLED cleanly, exactly like a manual menu re-entry.
+            g_setting.source.analog_format = g_hw_stat.av_pal_w;
+            ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
+            g_hw_stat.av_reinit_req = 1;
+            ret = 1;
 
             LOGI("AV_in_detect -- switch: av_pal = %d,  rdat = %02x\n", g_hw_stat.av_pal_w, rdat);
         } else {

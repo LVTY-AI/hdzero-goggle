@@ -84,9 +84,21 @@ static void update_mplayer() {
         lv_obj_add_flag(controller.bg, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(controller.bar, LV_OBJ_FLAG_HIDDEN);
     } else {
+        lv_obj_clear_flag(controller.bg, LV_OBJ_FLAG_HIDDEN);
+        if (!controller.controls_visible) {
+            lv_obj_add_flag(controller.bar, LV_OBJ_FLAG_HIDDEN);
+            return;
+        }
+
+        lv_obj_clear_flag(controller.bar, LV_OBJ_FLAG_HIDDEN);
         lv_img_set_src(controller._btn, controller.is_playing ? &img_Stop_0 : &img_Play_0);
         update_time_label(media != NULL);
     }
+}
+
+static void mplayer_toggle_controls() {
+    controller.controls_visible = !controller.controls_visible;
+    update_mplayer();
 }
 
 static void mplayer_create_btn(lv_obj_t *parent, int16_t x, int16_t y) {
@@ -170,6 +182,7 @@ static void init_mplayer() {
     lv_obj_add_style(controller.bar, &style_bar, 0);
 
     controller.enable = true;
+    controller.controls_visible = true;
     controller.is_playing = true;
     controller.value = controller.range = 0;
 }
@@ -235,6 +248,10 @@ uint8_t mplayer_on_key(uint8_t key) {
             controller.value = 0;
 
         media_seek(controller.value);
+        break;
+
+    case RIGHT_KEY_CLICK:
+        mplayer_toggle_controls();
         break;
     }
 
