@@ -642,6 +642,25 @@ static void render_auto_results_list(void) {
     if (auto_focused_btn) lv_obj_add_state(auto_focused_btn, LV_STATE_FOCUSED);
 }
 
+// After a BW=Both scan, leave the receiver on the bandwidth of the focused
+// (strongest, row 0) result and remember it as the detected BW. Picking the
+// default highlighted channel then enters video without a bandwidth reopen --
+// HDZero_open() resets the baseband (a black + green flash) only when the BW
+// changes, and a Both scan otherwise ends parked on Narrow (the last sweep
+// pass), so a Wide pick would always flash. Falls back to Wide (the common
+// default) when nothing was found or the top row is analog.
+static void scan_settle_focused_bw(void) {
+    if (g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH)
+        return;
+    uint8_t bw = SETTING_SOURCES_HDZERO_BW_WIDE;
+    if (auto_result_count > 0 &&
+        auto_results[0].protocol == PROTOCOL_HDZ &&
+        auto_results[0].hdz_bw >= 0)
+        bw = (uint8_t)auto_results[0].hdz_bw;
+    g_hdz_detected_bw = bw;
+    HDZero_open(bw);
+}
+
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Scan all 48 analog channels into auto_results (sorted by strength).
 static int8_t scan_now_analog(void) {
@@ -822,6 +841,13 @@ int scan(void) {
         g_source_info.source = SOURCE_HDZERO;
     }
     int8_t ret = scan_now_dispatch();
+    // Park the HDZ receiver on the focused result's bandwidth so the default
+    // pick enters video without a Wide<->Narrow reopen flash (a Both scan
+    // otherwise ends on Narrow). Skip pure analog scans -- they never open the
+    // HDZ baseband, and settling would needlessly power it on.
+    if (scan_mode != SCAN_MODE_ANALOG) {
+        scan_settle_focused_bw();
+    }
     g_scanning = false;
     return ret;
 }
