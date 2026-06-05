@@ -30,6 +30,7 @@ typedef struct {
     int32_t range;
 
     bool enable;
+    bool controls_visible;
     lv_obj_t *bg;
     lv_obj_t *bar;
 } player_control_t;
