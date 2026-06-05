@@ -66,7 +66,7 @@ extern "C" {
 #define UI_SCANNOW_PAGE_PAD               60
 #define UI_SCANNOW_SCANNER_SIZE           1053, 250
 #define UI_SCANNOW_PROG_BAR_SIZE          500, 50
-#define UI_SCANNOW_FREQ_SIZE              1164, 500
+#define UI_SCANNOW_FREQ_SIZE              1053, 500
 #define UI_CLOCK_COLS                     160, 160, 160, 160, 160, 160, LV_GRID_TEMPLATE_LAST
 #define UI_CLOCK_ROWS                     60, 60, 60, 60, 60, 15, 10, 60, 60, 60, LV_GRID_TEMPLATE_LAST
 #define UI_CLOCK_DATE_PAD                 8
