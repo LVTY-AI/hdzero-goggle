@@ -154,6 +154,28 @@ int scan_freq_table_find_by_mhz(uint16_t mhz) {
     return -1;
 }
 
+const scan_freq_entry_t *scan_band_order_entry(int idx) {
+    if (idx < 0 || idx >= SCAN_BAND_ORDER_COUNT)
+        return NULL;
+    if (idx < 40) {
+        // A..R: navigate by the analog band frequency. Frequencies that also
+        // carry HDZero (R band, E1, F1/F2/F4) resolve to the shared row, where
+        // the caller's auto-detect then picks HDZero over analog.
+        int t = scan_freq_table_find_by_mhz(scan_analog_idx_to_mhz[idx]);
+        return (t < 0) ? NULL : &scan_freq_table[t];
+    }
+    // L1..L8: HDZero Lowband rows (hdz_band 1, channel 0..7). The goggle's L
+    // band is HDZero Low, whose frequencies differ from analog L, so resolve
+    // these directly rather than via the analog frequency table.
+    int8_t lch = (int8_t)(idx - 40);
+    for (size_t i = 0; i < scan_freq_table_len; i++) {
+        if (scan_freq_table[i].hdz_band == 1 &&
+            scan_freq_table[i].hdz_channel == lch)
+            return &scan_freq_table[i];
+    }
+    return NULL;
+}
+
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Tunable: fraction of (calib_max - calib_min) above calib_min that counts as
 // "signal present". Lowered from 20% to 10% so the auto-detect crossover

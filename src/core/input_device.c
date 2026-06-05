@@ -107,31 +107,22 @@ void exit_tune_channel() {
 }
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+// Returns the band-order navigation index (0..SCAN_BAND_ORDER_COUNT-1) of the
+// channel currently being viewed, so the dial resumes from the right position.
 static int find_freq_table_index(void) {
     if (g_source_info.source == SOURCE_HDZERO) {
         uint8_t ch = (g_setting.scan.channel - 1) & 0x7F;
         int8_t  band = (int8_t)g_setting.source.hdzero_band;
-        for (size_t i = 0; i < scan_freq_table_len; i++) {
-            if (scan_freq_table[i].hdz_band == band &&
-                scan_freq_table[i].hdz_channel == (int8_t)ch) {
-                return (int)i;
-            }
+        for (int i = 0; i < SCAN_BAND_ORDER_COUNT; i++) {
+            const scan_freq_entry_t *e = scan_band_order_entry(i);
+            if (e && e->hdz_band == band && e->hdz_channel == (int8_t)ch)
+                return i;
         }
     } else if (g_source_info.source == SOURCE_AV_MODULE) {
-        int8_t ch = (int8_t)((g_setting.source.analog_channel - 1) & 0x7F);
-        for (size_t i = 0; i < scan_freq_table_len; i++) {
-            if (scan_freq_table[i].analog_channel == ch) {
-                return (int)i;
-            }
-        }
-        // Fallback: some analog indices alias another protocol's row at the
-        // same frequency (e.g. analog F8 idx=31 lives in the R7 row at
-        // 5880 MHz). Look up the frequency for this index and find the row
-        // by MHz so the dial starts at the correct position.
-        if (ch >= 0 && ch < 48) {
-            int idx = scan_freq_table_find_by_mhz(scan_analog_idx_to_mhz[ch]);
-            if (idx >= 0) return idx;
-        }
+        // The analog channel index is already in band order (A,B,E,F,R,L).
+        int ch = (int)((g_setting.source.analog_channel - 1) & 0x7F);
+        if (ch >= 0 && ch < SCAN_BAND_ORDER_COUNT)
+            return ch;
     }
     return 0;
 }
@@ -262,12 +253,13 @@ void tune_channel(uint8_t action) {
         if (auto_detect_freq_idx < 0) auto_detect_freq_idx = find_freq_table_index();
 
         if (action == DIAL_KEY_UP) {
-            auto_detect_freq_idx = (auto_detect_freq_idx + 1) % (int)scan_freq_table_len;
+            auto_detect_freq_idx = (auto_detect_freq_idx + 1) % SCAN_BAND_ORDER_COUNT;
         } else if (action == DIAL_KEY_DOWN) {
-            auto_detect_freq_idx = (auto_detect_freq_idx - 1 + (int)scan_freq_table_len)
-                       % (int)scan_freq_table_len;
+            auto_detect_freq_idx = (auto_detect_freq_idx - 1 + SCAN_BAND_ORDER_COUNT)
+                       % SCAN_BAND_ORDER_COUNT;
         } else if (action == DIAL_KEY_CLICK || action == DIAL_KEY_PRESS) {
-            const scan_freq_entry_t *entry = &scan_freq_table[auto_detect_freq_idx];
+            const scan_freq_entry_t *entry = scan_band_order_entry(auto_detect_freq_idx);
+            if (!entry) return;
             scan_result_t r;
             r.protocol  = PROTOCOL_NONE;
             r.strength  = 0;
@@ -324,7 +316,8 @@ void tune_channel(uint8_t action) {
         // back to whichever protocol the entry does have. channel_osd_mode
         // carries the channel index; channel_osd_preview_proto tells the OSD
         // which namespace (HDZ vs analog) to format with.
-        const scan_freq_entry_t *entry = &scan_freq_table[auto_detect_freq_idx];
+        const scan_freq_entry_t *entry = scan_band_order_entry(auto_detect_freq_idx);
+        if (!entry) return;
         bool prefer_hdz = (g_source_info.source == SOURCE_HDZERO);
         // Default: no band override. Set it below for HDZ previews so a
         // lowband entry shows "L*" even while the committed band is Race.

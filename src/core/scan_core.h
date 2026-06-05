@@ -46,6 +46,18 @@ extern const uint16_t scan_analog_idx_to_mhz[48];
 // Returns the scan_freq_table index whose freq_mhz matches, or -1 if absent.
 int scan_freq_table_find_by_mhz(uint16_t mhz);
 
+// Number of positions in the radio/ELRS band-order channel sequence:
+// A1-8, B1-8, E1-8, F1-8, R1-8, L1-8.
+#define SCAN_BAND_ORDER_COUNT 48
+
+// Map a band-order navigation index (0..SCAN_BAND_ORDER_COUNT-1, the A,B,E,F,R,L
+// order the radio/ELRS backpack and the Auto Detect dial step through) to its
+// scan_freq_table row, or NULL if absent. This differs from scan_freq_table's
+// own strictly-ascending-frequency order. A..R use the analog band frequencies;
+// L navigates the HDZero Lowband rows (the goggle's L band is HDZero Low, whose
+// frequencies differ from analog L).
+const scan_freq_entry_t *scan_band_order_entry(int idx);
+
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out);
 
