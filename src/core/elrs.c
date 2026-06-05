@@ -344,13 +344,20 @@ void msp_process_packet() {
                 applied = true;
             }
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-            if (!applied && g_source_info.source == SOURCE_AV_MODULE) {
-                if (g_setting.source.auto_protocol_detect && entry &&
-                    entry->analog_channel >= 0) {
-                    change_channel_analog((uint8_t)entry->analog_channel + 1);
-                } else {
-                    change_channel_analog(chan + 1);
-                }
+            if (!applied && g_setting.source.auto_protocol_detect &&
+                entry && entry->analog_channel >= 0) {
+                // Auto Detect: an analog-capable frequency with no HDZero
+                // channel (the HDZ block above did not apply). Switch to analog
+                // from whatever source we are on. Previously this was gated on
+                // already viewing the analog source, so picking an analog-only
+                // channel while on HDZero did nothing -- and scrolling appeared
+                // to skip every analog channel.
+                change_channel_analog((uint8_t)entry->analog_channel + 1);
+                applied = true;
+            } else if (!applied && g_source_info.source == SOURCE_AV_MODULE) {
+                // Fixed analog source.
+                change_channel_analog(chan + 1);
+                applied = true;
             }
 #endif
             if (!applied && g_source_info.source == SOURCE_HDZERO) {
@@ -393,7 +400,13 @@ void msp_process_packet() {
                 applied = true;
             }
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-            if (!applied && g_source_info.source == SOURCE_AV_MODULE) {
+            if (!applied && g_setting.source.auto_protocol_detect &&
+                entry && entry->analog_channel >= 0) {
+                // Auto Detect: analog-capable frequency, no HDZero channel.
+                // Switch to analog from any source (see MSP_SET_BAND_CHAN).
+                change_channel_analog((uint8_t)entry->analog_channel + 1);
+                applied = true;
+            } else if (!applied && g_source_info.source == SOURCE_AV_MODULE) {
                 if (entry && entry->analog_channel >= 0) {
                     change_channel_analog((uint8_t)entry->analog_channel + 1);
                 } else if (freq_index >= 0) {
