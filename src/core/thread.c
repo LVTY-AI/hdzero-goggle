@@ -240,6 +240,8 @@ static void *thread_peripheral(void *ptr) {
             // crossover. The user never leaves the source; just a brief blank.
             if (g_hw_stat.av_reinit_req && g_hw_stat.source_mode == SOURCE_MODE_AV) {
                 g_hw_stat.av_reinit_req = 0;
+                LOGI("Auto NTSC/PAL: re-entry (format=%d is_av_in=%d)",
+                     g_setting.source.analog_format, g_hw_stat.is_av_in);
                 pthread_mutex_lock(&lvgl_mutex);
                 Display_UI();
                 app_switch_to_analog(g_hw_stat.is_av_in);

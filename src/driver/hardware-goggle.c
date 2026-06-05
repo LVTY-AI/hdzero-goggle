@@ -900,6 +900,17 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
     } else if (g_hw_stat.source_mode == SOURCE_MODE_AV) { // detect in AV_in/Module_bay mode
         det = ((rdat & 0xAE) == (g_hw_stat.av_pal_w ? 0x28 : 0x2C)) ? 1 : 0;
 
+        // TEMP diagnostic: trace rdat/format on every change so a log shows
+        // whether a PAL signal is seen (and det fires) while in NTSC mode.
+        {
+            static int dbg_last_rdat = -1;
+            if (rdat != dbg_last_rdat) {
+                dbg_last_rdat = rdat;
+                LOGI("AV det: rdat=%02x av_pal_w=%d det=%d valid=%d", rdat,
+                     g_hw_stat.av_pal_w, det, g_hw_stat.av_valid[g_hw_stat.is_av_in]);
+            }
+        }
+
         if (det_last != det) {
             det_last = det;
             det_cnt = 0;
