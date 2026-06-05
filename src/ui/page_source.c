@@ -330,11 +330,13 @@ static void page_source_select_auto_detect() {
 
     // Show the loading bar immediately so the user gets the same feedback
     // they'd see when picking HDZero directly. Flush the LV timer so the bar
-    // is actually rendered before we enter the blocking probe. Auto Detect
-    // entry (probe + protocol/bandwidth settle) takes longer than a direct
-    // HDZero pick, so fill at half rate (~3s longer) to track the operation
-    // instead of maxing out and sitting full.
-    progress_bar.step = 2;
+    // is actually rendered before we enter the blocking probe. Only BW=Auto is
+    // slow to enter -- it settles a bandwidth as well as the protocol -- so
+    // slow the bar (tenths of a percent per tick) to track it. A fixed
+    // Wide/Narrow entry is quick, so keep the default fill; otherwise the bar
+    // only reaches ~half before video appears.
+    progress_bar.step =
+        (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) ? 23 : 0;
     progress_bar.start = 1;
     lv_timer_handler();
 

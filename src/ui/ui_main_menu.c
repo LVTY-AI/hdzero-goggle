@@ -416,6 +416,7 @@ void main_menu_update() {
 
 void progress_bar_update() {
     static uint8_t state = 0; // 0=idle, 1= in process
+    static int frac = 0;      // tenths-of-a-percent carry for the fill rate
 
     switch (state) {
     case 0:
@@ -424,6 +425,7 @@ void progress_bar_update() {
             lv_obj_add_flag(menu, LV_OBJ_FLAG_HIDDEN);
             lv_obj_clear_flag(progress_bar.bar, LV_OBJ_FLAG_HIDDEN);
             progress_bar.val = 0;
+            frac = 0;
             // LOGI("Progress bar start");
         }
         break;
@@ -435,17 +437,23 @@ void progress_bar_update() {
             lv_obj_add_flag(progress_bar.bar, LV_OBJ_FLAG_HIDDEN);
             progress_bar.val = 0;
             progress_bar.step = 0; // back to default fill rate for the next use
+            frac = 0;
             // LOGI("Progress bar end");
         }
         break;
     }
 
     if (state == 1) {
-        // Fill rate is per-use: the caller may slow it (progress_bar.step) so
-        // the bar tracks a longer operation. 0 = the normal rate (4).
-        int step = progress_bar.step ? progress_bar.step : 4;
+        // Fill rate is per-use: the caller may slow it (progress_bar.step) to
+        // track a longer operation. Units are tenths of a percent per ~100ms
+        // tick (so sub-percent rates are possible); 0 = the normal rate (40).
+        int step = progress_bar.step ? progress_bar.step : 40;
+        frac += step;
         if (progress_bar.val < 100)
-            progress_bar.val += step;
+            progress_bar.val += frac / 10;
+        frac %= 10;
+        if (progress_bar.val > 100)
+            progress_bar.val = 100;
         lv_bar_set_value(progress_bar.bar, progress_bar.val, LV_ANIM_OFF);
         lv_timer_handler();
     }
