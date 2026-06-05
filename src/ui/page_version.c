@@ -1,8 +1,10 @@
 #include "page_version.h"
 
+#include <ctype.h>
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 #include <log/log.h>
@@ -38,6 +40,8 @@ enum {
     ROW_GOGGLE_BACK,
     ROW_GOGGLE_COUNT
 };
+
+#define APP_VERSION_DISPLAY_PREFIX "ripples-"
 
 enum {
     ROW_BOXPRO_UPDATE_VTX = -1,
@@ -359,6 +363,9 @@ int generate_current_version(sys_version_t *sys_ver) {
     sys_ver->va = I2C_Read(ADDR_FPGA, 0xff);
     sys_ver->rx0 = rx_status[0].rx_ver;
     sys_ver->rx1 = rx_status[1].rx_ver;
+    sys_ver->app_major = 0;
+    sys_ver->app_minor = 0;
+    sys_ver->app_patch = 0;
     memset(sys_ver->commit, 0, sizeof(sys_ver->commit));
 
     FILE *fp = fopen("/mnt/app/version", "r");
@@ -366,41 +373,39 @@ int generate_current_version(sys_version_t *sys_ver) {
         return -1;
     }
 
-    // %9s to read max 9 chars and leave room for null terminator, since sys_ver->commit has length 10
-    fscanf(fp, "%hhd.%hhd.%hhd-%9s",
-           &sys_ver->app_major,
-           &sys_ver->app_minor,
-           &sys_ver->app_patch,
-           sys_ver->commit);
+    char app_version[32] = {0};
+    if (!fgets(app_version, sizeof(app_version), fp)) {
+        fclose(fp);
+        return -1;
+    }
     fclose(fp);
 
-    if (strlen(sys_ver->commit)) {
-        LOGI("app: %hhu.%hhu.%hhu-%s rx0: %u rx1: %u va: %u",
-             sys_ver->app_major,
-             sys_ver->app_minor,
-             sys_ver->app_patch,
-             sys_ver->commit,
-             sys_ver->rx0, sys_ver->rx1, sys_ver->va);
+    app_version[strcspn(app_version, "\r\n")] = '\0';
 
-        snprintf(sys_ver->current, CURRENT_VER_MAX, "app: %hhu.%hhu.%hhu-%s rx0: %u rx1: %u va: %u",
-                 sys_ver->app_major,
-                 sys_ver->app_minor,
-                 sys_ver->app_patch,
-                 sys_ver->commit,
-                 sys_ver->rx0, sys_ver->rx1, sys_ver->va);
-    } else {
-        LOGI("app: %hhu.%hhu.%hhu rx0: %u rx1: %u va: %u",
-             sys_ver->app_major,
-             sys_ver->app_minor,
-             sys_ver->app_patch,
-             sys_ver->rx0, sys_ver->rx1, sys_ver->va);
-
-        snprintf(sys_ver->current, CURRENT_VER_MAX, "app: %hhu.%hhu.%hhu rx0: %u rx1: %u va: %u",
-                 sys_ver->app_major,
-                 sys_ver->app_minor,
-                 sys_ver->app_patch,
-                 sys_ver->rx0, sys_ver->rx1, sys_ver->va);
+    const char *numeric_version = app_version;
+    while (*numeric_version && !isdigit((unsigned char)*numeric_version)) {
+        numeric_version++;
     }
+    int version_fields = sscanf(numeric_version, "%hhu.%hhu.%hhu",
+                                &sys_ver->app_major,
+                                &sys_ver->app_minor,
+                                &sys_ver->app_patch);
+    char display_app_version[32] = {0};
+    if (version_fields == 3) {
+        snprintf(display_app_version, sizeof(display_app_version), "%s%s",
+                 APP_VERSION_DISPLAY_PREFIX,
+                 numeric_version);
+    } else {
+        snprintf(display_app_version, sizeof(display_app_version), "%s", app_version);
+    }
+
+    LOGI("app: %s rx0: %u rx1: %u va: %u",
+         display_app_version,
+         sys_ver->rx0, sys_ver->rx1, sys_ver->va);
+
+    snprintf(sys_ver->current, CURRENT_VER_MAX, "app: %s rx0: %u rx1: %u va: %u",
+             display_app_version,
+             sys_ver->rx0, sys_ver->rx1, sys_ver->va);
 
     return 0;
 }
