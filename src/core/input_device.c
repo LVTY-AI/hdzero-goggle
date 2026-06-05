@@ -129,9 +129,12 @@ static int find_freq_table_index(void) {
 #endif
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+// analog_ch is the band-order index (== the analog channel for A..R), used in
+// place of the row's stored analog index so the F8/R7 alias (both 5880 MHz,
+// merged to the R7 row) tunes/labels as F8 at the F8 slot and R7 at the R7 slot.
 static void apply_freq_entry(const scan_freq_entry_t *entry,
                              const scan_result_t *r,
-                             bool send_msp) {
+                             bool send_msp, int analog_ch) {
     if (r->protocol == PROTOCOL_HDZ) {
         dvr_cmd(DVR_STOP);
 
@@ -183,7 +186,7 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
 
         bool channel_changed = false;
         if (entry->analog_channel >= 0) {
-            uint8_t new_ch = (uint8_t)entry->analog_channel + 1;
+            uint8_t new_ch = (uint8_t)analog_ch + 1;
             if (g_setting.source.analog_channel != new_ch) {
                 g_setting.source.analog_channel = new_ch;
                 ini_putl("source", "analog_channel",
@@ -217,7 +220,7 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
             g_setting.scan.channel = (uint8_t)entry->hdz_channel + 1;
             hdzero_switch_channel(g_setting.scan.channel - 1);
         } else if (g_source_info.source == SOURCE_AV_MODULE && entry->analog_channel >= 0) {
-            g_setting.source.analog_channel = (uint8_t)entry->analog_channel + 1;
+            g_setting.source.analog_channel = (uint8_t)analog_ch + 1;
             rtc6715.set_ch(g_setting.source.analog_channel - 1);
         }
     }
@@ -299,7 +302,8 @@ void tune_channel(uint8_t action) {
                     }
                 }
             }
-            apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS);
+            apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS,
+                             auto_detect_freq_idx);
             channel_osd_mode = CHANNEL_SHOWTIME;
             channel_osd_preview_proto = 0; // back to normal "CH:" display
             channel_osd_preview_band = 0xFF;
@@ -319,22 +323,31 @@ void tune_channel(uint8_t action) {
         const scan_freq_entry_t *entry = scan_band_order_entry(auto_detect_freq_idx);
         if (!entry) return;
         bool prefer_hdz = (g_source_info.source == SOURCE_HDZERO);
+        // F8 and R7 are the same 5880 MHz frequency, merged into one (R7-tagged)
+        // row. At the F8 band-order slot that row's HDZ channel (R7) really
+        // belongs to the R7 slot, so show this slot's own analog name (F8). The
+        // tell: the band-order index doesn't match the row's analog index.
+        // analog_ch is the band-order index, which equals the analog channel
+        // for A..R, so it names F8 as F8 (and R7 as R7 at the R7 slot).
+        int analog_ch = auto_detect_freq_idx;
+        bool alias_analog = (auto_detect_freq_idx < 40 &&
+                             (int)entry->analog_channel != auto_detect_freq_idx);
         // Default: no band override. Set it below for HDZ previews so a
         // lowband entry shows "L*" even while the committed band is Race.
         channel_osd_preview_band = 0xFF;
-        if (prefer_hdz && entry->hdz_channel >= 0) {
+        if (prefer_hdz && entry->hdz_channel >= 0 && !alias_analog) {
             channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
             channel_osd_preview_proto = 1;
             if (entry->hdz_band >= 0) channel_osd_preview_band = (uint8_t)entry->hdz_band;
-        } else if (!prefer_hdz && entry->analog_channel >= 0) {
-            channel_osd_mode = 0x80 | ((uint8_t)entry->analog_channel + 1);
+        } else if (entry->analog_channel >= 0 && (!prefer_hdz || alias_analog)) {
+            channel_osd_mode = 0x80 | ((uint8_t)analog_ch + 1);
             channel_osd_preview_proto = 2;
-        } else if (entry->hdz_channel >= 0) {
+        } else if (entry->hdz_channel >= 0 && !alias_analog) {
             channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
             channel_osd_preview_proto = 1;
             if (entry->hdz_band >= 0) channel_osd_preview_band = (uint8_t)entry->hdz_band;
         } else if (entry->analog_channel >= 0) {
-            channel_osd_mode = 0x80 | ((uint8_t)entry->analog_channel + 1);
+            channel_osd_mode = 0x80 | ((uint8_t)analog_ch + 1);
             channel_osd_preview_proto = 2;
         } else {
             channel_osd_mode = 0;
