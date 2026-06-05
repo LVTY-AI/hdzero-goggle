@@ -58,6 +58,12 @@ int scan_freq_table_find_by_mhz(uint16_t mhz);
 // frequencies differ from analog L).
 const scan_freq_entry_t *scan_band_order_entry(int idx);
 
+// "Dual" = the frequency carries both an HDZ and an analog channel (either
+// protocol may be present). Args are 0-based. Used to tag dual-protocol
+// channels (e.g. "R1/Dual") in Auto Detect.
+bool scan_hdz_is_dual(int8_t band, int8_t hdz_ch);
+bool scan_analog_is_dual(int8_t analog_ch);
+
 bool scan_probe_hdzero(uint8_t band, uint8_t channel,
                        uint8_t *gain_out, bool *valid_out);
 

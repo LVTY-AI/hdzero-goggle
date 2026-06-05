@@ -22,6 +22,7 @@
 #include "core/dvr.h"
 #include "core/elrs.h"
 #include "core/msp_displayport.h"
+#include "core/scan_core.h"
 #include "core/settings.h"
 #include "driver/dm5680.h"
 #include "driver/fans.h"
@@ -405,11 +406,18 @@ char *channel2str_tagged(int protocol, uint8_t channel_index) {
     static char buf[16];
     char *base;
     if (protocol == 1 /* PROTOCOL_HDZ */) {
-        base = channel2str(1, g_setting.source.hdzero_band, channel_index);
-        snprintf(buf, sizeof(buf), "%s/HDZ", base);
+        uint8_t band = g_setting.source.hdzero_band;
+        base = channel2str(1, band, channel_index);
+        // "Dual" when this frequency also carries an analog channel (e.g.
+        // "R1/Dual"); plain "HDZ" for HDZ-only frequencies (Lowband).
+        const char *tag = scan_hdz_is_dual((int8_t)band, (int8_t)channel_index - 1)
+                              ? "Dual" : "HDZ";
+        snprintf(buf, sizeof(buf), "%s/%s", base, tag);
     } else if (protocol == 2 /* PROTOCOL_ANALOG */) {
         base = channel2str(0, 0, channel_index);
-        snprintf(buf, sizeof(buf), "%s/ANA", base);
+        const char *tag = scan_analog_is_dual((int8_t)channel_index - 1)
+                              ? "Dual" : "ANA";
+        snprintf(buf, sizeof(buf), "%s/%s", base, tag);
     } else {
         snprintf(buf, sizeof(buf), "----");
     }
@@ -433,6 +441,8 @@ void osd_channel_show(bool bShow) {
             preview_is_hdz = true;
         } else if (channel_osd_preview_proto == 2) {
             preview_is_hdz = false;
+        } else if (channel_osd_preview_proto == 3) {
+            preview_is_hdz = true; // Dual: HDZ-named (same name in both)
         } else {
             preview_is_hdz = (g_source_info.source == SOURCE_HDZERO);
         }
@@ -440,9 +450,11 @@ void osd_channel_show(bool bShow) {
                                    ? g_setting.source.hdzero_band
                                    : channel_osd_preview_band;
         if (channel_osd_preview_proto != 0) {
+            const char *tag = (channel_osd_preview_proto == 3)
+                                  ? "Dual"
+                                  : (preview_is_hdz ? "HDZ" : "ANA");
             snprintf(buf, sizeof(buf), "  To %s/%s?  ",
-                     channel2str(preview_is_hdz, preview_band, ch),
-                     preview_is_hdz ? "HDZ" : "ANA");
+                     channel2str(preview_is_hdz, preview_band, ch), tag);
         } else {
             snprintf(buf, sizeof(buf), "  To %s?  ",
                      channel2str(preview_is_hdz, preview_band, ch));

@@ -332,10 +332,19 @@ void tune_channel(uint8_t action) {
         int analog_ch = auto_detect_freq_idx;
         bool alias_analog = (auto_detect_freq_idx < 40 &&
                              (int)entry->analog_channel != auto_detect_freq_idx);
+        // Dual = this frequency carries both protocols (the F8/R7 alias slot is
+        // presented as analog-only F8, so it is not "dual"). Tag it "Dual"; the
+        // name is the same in either namespace, so format it as HDZ.
+        bool is_dual = (entry->hdz_channel >= 0 && entry->analog_channel >= 0 &&
+                        !alias_analog);
         // Default: no band override. Set it below for HDZ previews so a
         // lowband entry shows "L*" even while the committed band is Race.
         channel_osd_preview_band = 0xFF;
-        if (prefer_hdz && entry->hdz_channel >= 0 && !alias_analog) {
+        if (is_dual) {
+            channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
+            channel_osd_preview_proto = 3; // Dual
+            if (entry->hdz_band >= 0) channel_osd_preview_band = (uint8_t)entry->hdz_band;
+        } else if (prefer_hdz && entry->hdz_channel >= 0 && !alias_analog) {
             channel_osd_mode = 0x80 | ((uint8_t)entry->hdz_channel + 1);
             channel_osd_preview_proto = 1;
             if (entry->hdz_band >= 0) channel_osd_preview_band = (uint8_t)entry->hdz_band;

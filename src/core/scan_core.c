@@ -176,6 +176,24 @@ const scan_freq_entry_t *scan_band_order_entry(int idx) {
     return NULL;
 }
 
+// "Dual" = the frequency carries both an HDZ and an analog channel. band/ch and
+// analog_ch are 0-based. Used to tag dual-protocol channels (e.g. "R1/Dual") in
+// Auto Detect, where either protocol may be present on that frequency.
+bool scan_hdz_is_dual(int8_t band, int8_t hdz_ch) {
+    for (size_t i = 0; i < scan_freq_table_len; i++)
+        if (scan_freq_table[i].hdz_band == band &&
+            scan_freq_table[i].hdz_channel == hdz_ch)
+            return scan_freq_table[i].analog_channel >= 0;
+    return false;
+}
+
+bool scan_analog_is_dual(int8_t analog_ch) {
+    for (size_t i = 0; i < scan_freq_table_len; i++)
+        if (scan_freq_table[i].analog_channel == analog_ch)
+            return scan_freq_table[i].hdz_channel >= 0;
+    return false;
+}
+
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 // Tunable: fraction of (calib_max - calib_min) above calib_min that counts as
 // "signal present". Lowered from 20% to 10% so the auto-detect crossover
