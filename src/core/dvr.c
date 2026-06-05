@@ -23,6 +23,8 @@ bool record_pending = false;
 
 static time_t dvr_recording_start = 0;
 static pthread_mutex_t dvr_mutex;
+static bool live_audio_line_out_enabled = false;
+static bool live_audio_muted_for_dvr = false;
 
 ///////////////////////////////////////////////////////////////////
 //-1=error;
@@ -50,16 +52,99 @@ void dvr_update_status() {
 void dvr_enable_line_out(bool enable) {
     char buf[128];
     if (enable) {
+        live_audio_line_out_enabled = true;
         snprintf(buf, sizeof(buf), "%s out_on", AUDIO_SEL_SH);
         system_exec(buf);
+        dvr_set_live_audio_volume(g_setting.record.live_audio_volume);
         snprintf(buf, sizeof(buf), "%s out_linein_on", AUDIO_SEL_SH);
         system_exec(buf);
         snprintf(buf, sizeof(buf), "%s out_dac_off", AUDIO_SEL_SH);
         system_exec(buf);
     } else {
+        live_audio_line_out_enabled = false;
+        live_audio_muted_for_dvr = false;
         snprintf(buf, sizeof(buf), "%s out_off", AUDIO_SEL_SH);
         system_exec(buf);
     }
+}
+
+static int clamp_audio_volume(int volume) {
+    if (volume < 0)
+        return 0;
+    if (volume > 10)
+        return 10;
+    return volume;
+}
+
+static int dvr_volume_to_hardware(int volume) {
+    if (volume > 6)
+        volume = 6;
+    return 25 + volume;
+}
+
+static int live_volume_to_lineout(int volume) {
+    return (volume * 31 + 5) / 10;
+}
+
+void dvr_set_dvr_audio_volume(int volume) {
+    char buf[128];
+    int hardware_volume;
+    int dac_volume;
+
+    volume = clamp_audio_volume(volume);
+
+    hardware_volume = dvr_volume_to_hardware(volume);
+    dac_volume = (hardware_volume * 160 + 15) / 31;
+
+    snprintf(buf, sizeof(buf), "amixer cset name='lineout volume' %d", hardware_volume);
+    system_exec(buf);
+    snprintf(buf, sizeof(buf), "amixer cset name='DAC volume' %d,%d", dac_volume, dac_volume);
+    system_exec(buf);
+    snprintf(buf, sizeof(buf), "amixer cset name='AIF1 DAC timeslot 0 volume' %d,%d", dac_volume, dac_volume);
+    system_exec(buf);
+    snprintf(buf, sizeof(buf), "amixer cset name='AIF1 DAC timeslot 1 volume' %d,%d", dac_volume, dac_volume);
+    system_exec(buf);
+}
+
+void dvr_set_live_audio_volume(int volume) {
+    char buf[128];
+    int lineout_volume;
+    int linein_gain;
+
+    volume = clamp_audio_volume(volume);
+    lineout_volume = live_volume_to_lineout(volume);
+    linein_gain = (volume * volume * volume * 7 + 500) / 1000;
+    if (volume > 0 && linein_gain == 0)
+        linein_gain = 1;
+
+    snprintf(buf, sizeof(buf), "amixer cset name='lineout volume' %d", lineout_volume);
+    system_exec(buf);
+    snprintf(buf, sizeof(buf), "amixer cset name='LINEINL/R to L_R output mixer gain' %d", linein_gain);
+    system_exec(buf);
+}
+
+void dvr_mute_live_audio(void) {
+    char buf[128];
+
+    if (!live_audio_line_out_enabled)
+        return;
+
+    snprintf(buf, sizeof(buf), "%s out_linein_off", AUDIO_SEL_SH);
+    system_exec(buf);
+    system_exec("amixer cset name='LINEINL/R to L_R output mixer gain' 0");
+    live_audio_muted_for_dvr = true;
+}
+
+void dvr_restore_live_audio(void) {
+    char buf[128];
+
+    if (!live_audio_muted_for_dvr || !live_audio_line_out_enabled)
+        return;
+
+    dvr_set_live_audio_volume(g_setting.record.live_audio_volume);
+    snprintf(buf, sizeof(buf), "%s out_linein_on", AUDIO_SEL_SH);
+    system_exec(buf);
+    live_audio_muted_for_dvr = false;
 }
 
 void dvr_select_audio_source(uint8_t source) {

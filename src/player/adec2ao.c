@@ -21,6 +21,9 @@
 
 #include <cdx_list.h>
 
+#include "core/dvr.h"
+#include "core/settings.h"
+
 // #define LOG_NDEBUG 0
 #define LOG_TAG "adec2ao"
 #include <log/log.h>
@@ -273,7 +276,9 @@ ERRORTYPE adec2ao_start(Adec2AoContext_t *aa) {
     // AW_MPI_CLOCK_Start(aa->clkChn);
 
     if (aa->aoChn >= 0) {
+        dvr_mute_live_audio();
         AW_MPI_AO_StartChn(aa->aoDev, aa->aoChn);
+        dvr_set_dvr_audio_volume(g_setting.record.dvr_audio_volume);
     }
     if (aa->adecChn >= 0) {
         AW_MPI_ADEC_StartRecvStream(aa->adecChn);
@@ -301,6 +306,7 @@ ERRORTYPE adec2ao_stop(Adec2AoContext_t *aa) {
     }
     if (aa->aoChn >= 0) {
         AW_MPI_AO_StopChn(aa->aoDev, aa->aoChn);
+        dvr_restore_live_audio();
     }
 
     return SUCCESS;

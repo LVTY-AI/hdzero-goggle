@@ -20,6 +20,10 @@ extern bool record_pending;
 
 void dvr_update_status();
 void dvr_select_audio_source(uint8_t audio_source);
+void dvr_set_dvr_audio_volume(int volume);
+void dvr_set_live_audio_volume(int volume);
+void dvr_mute_live_audio(void);
+void dvr_restore_live_audio(void);
 void dvr_enable_line_out(bool enable);
 void dvr_cmd(osd_dvr_cmd_t cmd);
 void dvr_update_vi_conf(video_resolution_t fmt);
