@@ -872,6 +872,13 @@ static lv_obj_t *page_version_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     create_select_item(arr, cont);
     cur_ver_label = create_label_item(cont, _lang("Current Version"), 1, ROW_CUR_VERSION, 3);
+#if defined(HDZBOXPRO)
+    // The full version string ("app: ... rx0: .. rx1: .. va: ...") is ~66 chars,
+    // right at the 630px label width on BoxPro's narrower grid, so the tail
+    // ("va: NNN") spills past the selection bar. Drop to the smaller label font
+    // so the whole line fits inside the bar. G1/G2's wider grid already fits.
+    lv_obj_set_style_text_font(cur_ver_label, UI_PAGE_LABEL_FONT, 0);
+#endif
 
     btn_reset_all_settings = create_label_item(cont, _lang("Reset all settings"), 1, ROW_RESET_ALL_SETTINGS, 2);
 

@@ -245,6 +245,21 @@ void source_status_timer() {
 #endif
     lv_label_set_text(label[1], buf);
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // Auto Detect row mirrors the HDZero/Analog rows: show the current channel
+    // with the same capability tag as the in-video status bar (e.g. "R1/Dual",
+    // "L1/HDZ", "A1/ANA"). Pure table lookup -- never probes from the menu.
+    if (auto_detect_label) {
+        bool is_ana = (g_source_info.source == SOURCE_AV_MODULE);
+        int proto = is_ana ? 2 /* PROTOCOL_ANALOG */ : 1 /* PROTOCOL_HDZ */;
+        uint8_t adch = is_ana ? g_setting.source.analog_channel
+                              : (g_setting.scan.channel & 0x7F);
+        snprintf(buf, sizeof(buf), "%s: %s", _lang("Auto Detect"),
+                 channel2str_tagged(proto, adch));
+        lv_label_set_text(auto_detect_label, buf);
+    }
+#endif
+
     snprintf(buf, sizeof(buf), "HDMI %s: %s", _lang("In"), state2string(g_source_info.hdmi_in_status));
     lv_label_set_text(label[2], buf);
 
