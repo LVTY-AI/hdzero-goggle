@@ -12,6 +12,7 @@
 #include "core/common.hh"
 #include "core/dvr.h"
 #include "core/settings.h"
+#include "core/osd.h"
 #include "driver/dm5680.h"
 #include "driver/dm6302.h"
 #include "driver/hardware.h"
@@ -636,6 +637,10 @@ void scan_core_hdz_bw_tick(void) {
     uint8_t gain = 0;
     bool found = false;
 
+    // Hide the green/black flash the baseband reset throws while we re-open the
+    // RF at the other bandwidth. Runs on thread_peripheral, but we hold
+    // lvgl_mutex here, so the synchronous paint is serialized with the main UI.
+    osd_cover(true, false);
     HDZero_open(other);
     usleep(200000); // settle at the new bandwidth before checking the lock
     scan_probe_hdzero(band, ch, &gain, &found);
@@ -648,6 +653,7 @@ void scan_core_hdz_bw_tick(void) {
         DM5680_clear_vldflg();
         DM5680_req_vldflg();
     }
+    osd_cover(false, false);
     pthread_mutex_unlock(&lvgl_mutex);
     LOGI("HDZ BW reacquire: tried bw=%u found=%d (orig=%u) band=%u ch=%u",
          other, found, orig, band, ch);

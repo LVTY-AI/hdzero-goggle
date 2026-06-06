@@ -115,6 +115,12 @@ char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel);
 // Declared as `int` (not `scan_protocol_t`) so osd.h does not need to include
 // scan_core.h.
 char *channel2str_tagged(int protocol, uint8_t channel_index);
+// Fullscreen black overlay (optionally with a "Detecting..." label) that hides
+// the green/black flash when HDZero_open() resets the baseband on an Auto-BW
+// bandwidth switch, and shows detect progress on the auto-detect dial. Created
+// once on the main thread via osd_cover_create() (called from osd_init).
+void osd_cover_create(void);
+void osd_cover(bool on, bool detecting);
 void load_fc_osd_font(uint8_t);
 void *thread_osd(void *ptr);
 void osd_resource_path(char *buf, const char *fmt, osd_resource_t osd_resource_type, ...);

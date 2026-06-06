@@ -491,6 +491,49 @@ void osd_channel_show(bool bShow) {
     }
 }
 
+static lv_obj_t *osd_cover_obj = NULL;
+static lv_obj_t *osd_cover_lbl = NULL;
+
+// Create the fullscreen cover up front, on the main thread, so the background
+// bw-reacquire watchdog never has to allocate an LVGL object itself.
+void osd_cover_create(void) {
+    if (osd_cover_obj)
+        return;
+    osd_cover_obj = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(osd_cover_obj);
+    lv_obj_set_size(osd_cover_obj, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_pos(osd_cover_obj, 0, 0);
+    lv_obj_clear_flag(osd_cover_obj, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(osd_cover_obj, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(osd_cover_obj, LV_OPA_COVER, 0);
+    osd_cover_lbl = lv_label_create(osd_cover_obj);
+    lv_label_set_text(osd_cover_lbl, "Detecting...");
+    lv_obj_set_style_text_color(osd_cover_lbl, lv_color_make(0xFF, 0xFF, 0xFF), 0);
+    lv_obj_center(osd_cover_lbl);
+    lv_obj_add_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Fullscreen opaque-black overlay that hides the brief green/black flash when
+// HDZero_open() resets the baseband during an Auto-BW bandwidth switch, and
+// (with detecting=true) shows a "Detecting..." status during the auto-detect
+// dial probe. Paints synchronously (lv_refr_now) so it covers BEFORE the
+// caller's blocking open/probe. The bw-reacquire watchdog calls this from a
+// background thread, but always while holding lvgl_mutex.
+void osd_cover(bool on, bool detecting) {
+    if (!osd_cover_obj)
+        osd_cover_create();
+    if (on) {
+        if (detecting)
+            lv_obj_clear_flag(osd_cover_lbl, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(osd_cover_lbl, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_refr_now(NULL);
+}
+
 static void osd_object_set_pos(uint8_t fhd, lv_obj_t *obj, setting_osd_goggle_element_positions_t *pos) {
     int x = (g_setting.osd.embedded_mode == EMBEDDED_16x9) ? pos->mode_16_9.x : pos->mode_4_3.x;
     int y = (g_setting.osd.embedded_mode == EMBEDDED_16x9) ? pos->mode_16_9.y : pos->mode_4_3.y;
@@ -1056,6 +1099,8 @@ int osd_init(void) {
     embedded_osd_init(1);
 
     sem_init(&osd_semaphore, 0, 1);
+
+    osd_cover_create();
 
     return 0;
 }
