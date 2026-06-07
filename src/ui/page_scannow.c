@@ -104,6 +104,9 @@ typedef enum {
 static scan_mode_t scan_mode = SCAN_MODE_HDZERO;
 static scan_page_state_t page_state = SCAN_PAGE_IDLE;
 static lv_obj_t *mode_btns[3];     // 0=HDZero, 1=Analog, 2=Auto/Both
+static bool page_focused = false;  // true only while the page holds input focus;
+                                   // gates the mode-picker green so it does not
+                                   // show while merely hovered in the sidebar.
 
 static void update_mode_btn_focus(void) {
     // Theme button background defaults are very light on this skin and the
@@ -111,7 +114,7 @@ static void update_mode_btn_focus(void) {
     // background for unfocused, green for focused, white text always.
     for (int i = 0; i < SCAN_MODE_COUNT; i++) {
         if (!mode_btns[i]) continue;
-        bool is_focused = (i == (int)scan_mode);
+        bool is_focused = page_focused && (i == (int)scan_mode);
         lv_obj_set_style_bg_color(mode_btns[i],
                                   is_focused ? lv_color_make(0, 0xA0, 0)
                                              : lv_color_make(0x40, 0x40, 0x40),
@@ -871,10 +874,15 @@ static void start_scan_in_current_mode(void) {
     LOGI("scan return :%d", auto_scaned_cnt);
     page_state = SCAN_PAGE_RESULTS;
     set_results_widget_visibility();
+    if (auto_result_count == 0)
+        lv_label_set_text(label, _lang("Scanning Done. No Signals Found."));
+    else
+        lv_label_set_text(label, _lang("Scanning Done"));
 }
 #endif
 
 static void page_scannow_enter() {
+    page_focused = true;
 #if SCAN_MODE_COUNT > 1
     // Multi-mode (BoxPro): land in IDLE — user picks a mode, click runs the scan.
     page_state = SCAN_PAGE_IDLE;
@@ -923,6 +931,14 @@ static void page_scannow_exit() {
         rtc6715.init(0, 0); // power down analog RX on exit
     }
     page_state = SCAN_PAGE_IDLE;
+    // Drop focus and clear the page's selection chrome so neither the picker's
+    // green mode nor the results list lingers while the user is back in the
+    // sidebar (the page stays rendered but unfocused).
+    page_focused = false;
+    set_results_widget_visibility();
+    update_mode_btn_focus();
+    lv_label_set_text(label, _lang("Scan Ready"));
+    lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
 #endif
     // HDZero_Close() is idempotent (resets DM5680 baseband and clears
     // hdzero_open flag). Always call so a session that ran scan_now_hdzero
@@ -993,6 +1009,15 @@ static void page_scannow_on_click(uint8_t key, int sel) {
         ini_putl("source", "scan_mode_initial",
                  g_setting.source.scan_mode_initial, SETTING_INI);
         start_scan_in_current_mode();
+        return;
+    }
+    // RESULTS state. An empty scan has nothing to pick, so a short press here
+    // returns to the mode picker instead of forcing a long-press back-out.
+    if (auto_result_count == 0) {
+        page_state = SCAN_PAGE_IDLE;
+        set_results_widget_visibility();
+        update_mode_btn_focus();
+        lv_label_set_text(label, _lang("Scan Ready"));
         return;
     }
     // RESULTS state: click selects a scan result and enters video. All three
