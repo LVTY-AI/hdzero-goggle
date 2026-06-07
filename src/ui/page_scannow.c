@@ -906,6 +906,12 @@ static void page_scannow_enter() {
 static bool page_scannow_on_back(void) {
 #if SCAN_MODE_COUNT > 1
     if (page_state == SCAN_PAGE_RESULTS) {
+        if (auto_result_count == 0) {
+            // Nothing was found, so there is no channel list to step back from;
+            // a long-press leaves the Scan Now page entirely. page_scannow_exit
+            // handles the analog RX teardown.
+            return false;
+        }
         // Tear down analog RX the same way exit would, so a subsequent IDLE
         // scan power-on cycle starts from a clean state.
         if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
@@ -931,12 +937,16 @@ static void page_scannow_exit() {
         rtc6715.init(0, 0); // power down analog RX on exit
     }
     page_state = SCAN_PAGE_IDLE;
-    // Drop focus and clear the page's selection chrome so neither the picker's
-    // green mode nor the results list lingers while the user is back in the
-    // sidebar (the page stays rendered but unfocused).
+    // Drop focus and grey the picker, but leave the results list on screen so
+    // the user can still glance at the last scan from the sidebar (and reach it
+    // via "Choose from Last Scan"). Just de-highlight the selected row so no
+    // green lingers while the page is unfocused.
     page_focused = false;
-    set_results_widget_visibility();
     update_mode_btn_focus();
+    if (auto_focused_btn) {
+        lv_obj_clear_state(auto_focused_btn, LV_STATE_FOCUSED);
+        style_auto_list_row(auto_focused_btn, false);
+    }
     lv_label_set_text(label, _lang("Scan Ready"));
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
 #endif
@@ -1011,13 +1021,10 @@ static void page_scannow_on_click(uint8_t key, int sel) {
         start_scan_in_current_mode();
         return;
     }
-    // RESULTS state. An empty scan has nothing to pick, so a short press here
-    // returns to the mode picker instead of forcing a long-press back-out.
+    // RESULTS state with an empty scan: nothing to select, so a short press just
+    // rescans in the same mode. (Long-press leaves the page -- see on_back.)
     if (auto_result_count == 0) {
-        page_state = SCAN_PAGE_IDLE;
-        set_results_widget_visibility();
-        update_mode_btn_focus();
-        lv_label_set_text(label, _lang("Scan Ready"));
+        start_scan_in_current_mode();
         return;
     }
     // RESULTS state: click selects a scan result and enters video. All three
