@@ -236,14 +236,13 @@ static void *thread_peripheral(void *ptr) {
             // switching live (which tears). 720p50<->720p60 are both screen_vtmg
             // "mode 1", so Source_AV()'s screen.vtmg(1) would no-op and the OLED
             // would keep its old field timing -- screen_vtmg_invalidate() forces
-            // the re-time, replacing the slow 1080p Display_UI() detour.
-            // lvgl_mutex like the scan_core crossover.
+            // the re-time. We are already in analog here, so run the hardware
+            // source path directly instead of the full app_switch_to_analog()
+            // sequence, which also touches LVGL/OSD/RTC/audio and sleeps 1s.
             if (g_hw_stat.av_reinit_req && g_hw_stat.source_mode == SOURCE_MODE_AV) {
                 g_hw_stat.av_reinit_req = 0;
-                pthread_mutex_lock(&lvgl_mutex);
                 screen_vtmg_invalidate();
-                app_switch_to_analog(g_hw_stat.is_av_in);
-                pthread_mutex_unlock(&lvgl_mutex);
+                Source_AV(g_hw_stat.is_av_in);
             }
 #endif
 
