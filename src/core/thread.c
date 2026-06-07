@@ -233,15 +233,15 @@ static void *thread_peripheral(void *ptr) {
 
 #if defined(HDZGOGGLE)
             // Auto NTSC/PAL (G1): AV_in_detect flags a format change instead of
-            // switching live (which tears). Replay the full menu round-trip --
-            // Display_UI() (1080p UI) then app_switch_to_analog() (720p analog)
-            // -- the 1080p->720p cycle that re-times the OLED cleanly. Both
-            // touch LVGL/hardware, so hold lvgl_mutex like the scan_core
-            // crossover. The user never leaves the source; just a brief blank.
+            // switching live (which tears). 720p50<->720p60 are both screen_vtmg
+            // "mode 1", so Source_AV()'s screen.vtmg(1) would no-op and the OLED
+            // would keep its old field timing -- screen_vtmg_invalidate() forces
+            // the re-time, replacing the slow 1080p Display_UI() detour.
+            // lvgl_mutex like the scan_core crossover.
             if (g_hw_stat.av_reinit_req && g_hw_stat.source_mode == SOURCE_MODE_AV) {
                 g_hw_stat.av_reinit_req = 0;
                 pthread_mutex_lock(&lvgl_mutex);
-                Display_UI();
+                screen_vtmg_invalidate();
                 app_switch_to_analog(g_hw_stat.is_av_in);
                 pthread_mutex_unlock(&lvgl_mutex);
             }

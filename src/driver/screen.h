@@ -30,6 +30,10 @@ typedef struct {
 
 extern screen_t screen;
 
+// G1 Auto NTSC/PAL only: force the next screen.vtmg() to reprogram the OLED even
+// if the mode is unchanged (720p50/720p60 share mode 1). Defined in screen-goggle.c.
+void screen_vtmg_invalidate(void);
+
 #ifdef __cplusplus
 }
 #endif

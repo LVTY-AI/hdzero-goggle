@@ -934,9 +934,9 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
             // re-time tears on G1 because Source_AV()'s screen.vtmg(1) is a
             // no-op when we're already in 720P (the last_mode guard in
             // screen_vtmg). Persist the detected format and ask
-            // thread_peripheral to replay the full menu round-trip
-            // (Display_UI -> app_switch_to_analog): the 1080p->720p cycle that
-            // re-times the OLED cleanly, exactly like a manual menu re-entry.
+            // thread_peripheral to invalidate the vtmg cache
+            // (screen_vtmg_invalidate) and re-enter analog via
+            // app_switch_to_analog(), which re-times the OLED cleanly.
             g_setting.source.analog_format = g_hw_stat.av_pal_w;
             ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
             g_hw_stat.av_reinit_req = 1;

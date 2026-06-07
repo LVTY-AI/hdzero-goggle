@@ -182,12 +182,21 @@ static void screen_pattern(bool enable, uint8_t mode, uint8_t speed) {
     screen_display(1);
 }
 
+// G1 Auto NTSC/PAL: force the next screen_vtmg() to reprogram the OLED even if
+// the mode arg is unchanged. 720p50 and 720p60 are both vtmg "mode 1", so an
+// analog NTSC<->PAL switch otherwise no-ops below and the OLED keeps its old
+// field timing -> tearing. screen_vtmg_invalidate() lets Source_AV()'s
+// screen.vtmg(1) re-sync the OLED directly, skipping the 1080p Display_UI() detour.
+static int screen_vtmg_last_mode = 0;
+
+void screen_vtmg_invalidate(void) {
+    screen_vtmg_last_mode = -1;
+}
+
 static void screen_vtmg(int mode) // mode: 0=1080P; 1=720P
 {
-    static int last_mode = 0;
-
-    if (last_mode != mode) {
-        last_mode = mode;
+    if (screen_vtmg_last_mode != mode) {
+        screen_vtmg_last_mode = mode;
         switch (mode) {
         case 0:
             I2C_Write(ADDR_AL, 0x33, 0x04);
