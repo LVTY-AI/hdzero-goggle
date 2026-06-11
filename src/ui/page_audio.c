@@ -49,11 +49,11 @@ enum {
     ROW_RECORD_AUDIO = 0,
     ROW_AUDIO_SOURCE,
     ROW_VOLUME_HEADER,
-    ROW_RUN_TEST,
     ROW_DVR_AUDIO_VOLUME,
     ROW_LIVE_AUDIO_VOLUME,
     ROW_MIC_GAIN,
     ROW_LINEIN_GAIN,
+    ROW_RUN_TEST, // last item of the Volume Control section
     ROW_BACK,
     ROW_NOTE,
 
