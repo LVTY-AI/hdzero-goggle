@@ -14,6 +14,7 @@
 #include "driver/screen.h"
 #include "lang/language.h"
 #include "ui/page_analog_rssi.h"
+#include "ui/page_audio.h"
 #include "ui/page_autoscan.h"
 #include "ui/page_clock.h"
 #include "ui/page_common.h"
@@ -49,11 +50,11 @@ static lv_obj_t *root_page;
  * To contain all menu pages.
  */
 
-#define PAGE_PACK_MAX_NUM 19
+#define PAGE_PACK_MAX_NUM 20
 
 static page_pack_t *page_packs[PAGE_PACK_MAX_NUM];
 static size_t page_packs_count = 0;
-static page_pack_t *post_bootup_actions[18];
+static page_pack_t *post_bootup_actions[PAGE_PACK_MAX_NUM];
 static size_t post_bootup_actions_count = 0;
 static bool bootup_actions_fired = false;
 
@@ -316,6 +317,7 @@ void main_menu_init(void) {
     page_packs[page_packs_count++] = &pp_power;
     page_packs[page_packs_count++] = &pp_fans;
     page_packs[page_packs_count++] = &pp_record;
+    page_packs[page_packs_count++] = &pp_audio;
     page_packs[page_packs_count++] = &pp_autoscan;
     if (g_setting.has_all_features) {
         page_packs[page_packs_count++] = &pp_elrs;
@@ -346,7 +348,6 @@ void main_menu_init(void) {
     root_page = lv_menu_page_create(menu, "aaa");
 
     lv_obj_t *section = lv_menu_section_create(root_page);
-    lv_obj_clear_flag(section, LV_OBJ_FLAG_SCROLLABLE);
 
     for (uint32_t i = 0; i < page_packs_count; i++) {
         main_menu_create_entry(menu, section, page_packs[i]);
@@ -370,7 +371,9 @@ void main_menu_init(void) {
     lv_menu_set_sidebar_page(menu, root_page);
     lv_event_send(lv_obj_get_child(lv_obj_get_child(lv_menu_get_cur_sidebar_page(menu), 0), 0), LV_EVENT_CLICKED, NULL);
     lv_obj_add_flag(lv_menu_get_sidebar_header(menu), LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(lv_menu_get_cur_sidebar_page(menu), LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(lv_menu_get_cur_sidebar_page(menu), LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(root_page, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(section, LV_OBJ_FLAG_SCROLLABLE);
 
     progress_bar.bar = lv_bar_create(lv_scr_act());
     lv_obj_set_size(progress_bar.bar, UI_MENU_PROG_BAR_SIZE);

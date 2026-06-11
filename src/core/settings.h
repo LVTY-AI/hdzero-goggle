@@ -104,6 +104,8 @@ typedef struct {
     setting_record_audio_source_t audio_source;
     int dvr_audio_volume;
     int live_audio_volume;
+    int mic_gain;
+    int linein_gain;
     setting_record_naming_t naming;
 } setting_record_t;
 

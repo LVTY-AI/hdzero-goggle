@@ -68,6 +68,10 @@ void dvr_enable_line_out(bool enable) {
     }
 }
 
+bool dvr_live_audio_is_enabled(void) {
+    return live_audio_line_out_enabled;
+}
+
 static int clamp_audio_volume(int volume) {
     if (volume < 0)
         return 0;
@@ -134,6 +138,40 @@ void dvr_set_live_audio_volume(int volume) {
     system_exec(buf);
 }
 
+static int clamp_record_gain(int gain) {
+    if (gain < 0)
+        return 0;
+    if (gain > 7)
+        return 7;
+    return gain;
+}
+
+void dvr_set_mic_gain(int gain) {
+    char buf[128];
+
+    gain = clamp_record_gain(gain);
+    snprintf(buf, sizeof(buf), "amixer cset name='MIC1 boost AMP gain control' %d", gain);
+    system_exec(buf);
+}
+
+void dvr_set_linein_gain(int gain) {
+    char buf[128];
+
+    gain = clamp_record_gain(gain);
+    snprintf(buf, sizeof(buf), "amixer cset name='ADC input gain control' %d", gain);
+    system_exec(buf);
+    snprintf(buf, sizeof(buf), "amixer cset name='MIC2 boost AMP gain control' %d", gain);
+    system_exec(buf);
+}
+
+static void dvr_apply_record_audio_gain(uint8_t source) {
+    if (source == SETTING_RECORD_AUDIO_SOURCE_MIC) {
+        dvr_set_mic_gain(g_setting.record.mic_gain);
+    } else {
+        dvr_set_linein_gain(g_setting.record.linein_gain);
+    }
+}
+
 void dvr_mute_live_audio(void) {
     char buf[128];
 
@@ -169,6 +207,7 @@ void dvr_select_audio_source(uint8_t source) {
         source = 2;
     snprintf(buf, sizeof(buf), "%s %s", AUDIO_SEL_SH, audio_source[source]);
     system_exec(buf);
+    dvr_apply_record_audio_gain(source);
 }
 
 // video input config

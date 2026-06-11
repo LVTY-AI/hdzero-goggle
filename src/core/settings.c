@@ -62,6 +62,8 @@ const setting_t g_setting_defaults = {
         .audio_source = SETTING_RECORD_AUDIO_SOURCE_MIC,
         .dvr_audio_volume = 8,
         .live_audio_volume = 10,
+        .mic_gain = 4,
+        .linein_gain = 3,
         .naming = SETTING_NAMING_CONTIGUOUS,
     },
     .image = {
@@ -500,6 +502,16 @@ void settings_load(void) {
         g_setting.record.live_audio_volume = 0;
     else if (g_setting.record.live_audio_volume > 10)
         g_setting.record.live_audio_volume = 10;
+    g_setting.record.mic_gain = ini_getl("record", "mic_gain", g_setting_defaults.record.mic_gain, SETTING_INI);
+    if (g_setting.record.mic_gain < 0)
+        g_setting.record.mic_gain = 0;
+    else if (g_setting.record.mic_gain > 7)
+        g_setting.record.mic_gain = 7;
+    g_setting.record.linein_gain = ini_getl("record", "linein_gain", g_setting_defaults.record.linein_gain, SETTING_INI);
+    if (g_setting.record.linein_gain < 0)
+        g_setting.record.linein_gain = 0;
+    else if (g_setting.record.linein_gain > 7)
+        g_setting.record.linein_gain = 7;
     g_setting.record.naming = ini_getl("record", "naming", g_setting_defaults.record.naming, SETTING_INI);
 
     // image
