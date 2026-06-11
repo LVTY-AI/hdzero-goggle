@@ -345,6 +345,16 @@ static void set_results_widget_visibility(void) {
         else
             lv_obj_add_flag(last_scan_btn, LV_OBJ_FLAG_HIDDEN);
     }
+#if SCAN_MODE_COUNT == 1
+    // ... and so is G1's Rescan button (without results the page scans on
+    // entry, so the picker never shows).
+    if (mode_btns[0]) {
+        if (auto_result_count > 0)
+            lv_obj_clear_flag(mode_btns[0], LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(mode_btns[0], LV_OBJ_FLAG_HIDDEN);
+    }
+#endif
 }
 #endif
 
@@ -358,11 +368,11 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_style_pad_top(page, UI_SCANNOW_PAGE_PAD, 0);
 
 #if SCAN_MODE_COUNT > 1
-    // Mode selector at the top: one button per scan mode (BoxPro/G2). G1 has a
-    // single protocol, so it gets no mode buttons -- pressing Enter in the
-    // IDLE landing starts the scan directly (the note says so), and the dial
-    // still reaches "Choose from Last Scan". Sits in its own
-    // absolute-positioned container so it isn't constrained by cont1's grid.
+    // Mode selector at the top: one button per scan mode (BoxPro/G2). G1 has
+    // a single protocol, so instead of mode buttons it scans on page entry
+    // and gets a "Rescan" button (created next to "Choose from Last Scan"
+    // below) once results exist. Sits in its own absolute-positioned
+    // container so it isn't constrained by cont1's grid.
     {
         lv_obj_t *cont_mode = lv_obj_create(page);
         lv_obj_set_size(cont_mode, 780, 56);
@@ -433,8 +443,10 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "%s",
              _lang("Dial to pick mode, press Enter to scan"));
 #else
+    // G1 scans on page entry; this note only shows in the picker, where the
+    // choice is Rescan vs Choose from Last Scan.
     snprintf(buf, sizeof(buf), "%s",
-             _lang("Press Enter to scan"));
+             _lang("Dial to pick, press Enter to select"));
 #endif
     lv_label_set_text(label2, buf);
     lv_obj_set_style_text_font(label2, UI_SCANNOW_NOTE_FONT, 0);
@@ -446,15 +458,40 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
                          LV_GRID_ALIGN_START, 0, 1);
 
     // "Choose from Last Scan" -- re-opens the persisted results without
-    // rescanning. Lives in the scanner's right column in line with the
-    // progress bar, shown only when a previous scan produced results, and
-    // reached by dialing past the last mode button. Content-sized and
-    // START-aligned: the stretched right grid column runs past the scanner
-    // container on G1/G2, which clipped a stretched button.
-    last_scan_btn = lv_btn_create(cont1);
-    lv_obj_set_size(last_scan_btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_grid_cell(last_scan_btn, LV_GRID_ALIGN_START, 2, 1,
+    // rescanning -- and, on G1 only, a "Rescan" button beside it. They live
+    // in a flex row in the scanner's right column in line with the progress
+    // bar, shown only when a previous scan produced results, and reached by
+    // dialing past the last mode button. Content-sized and START-aligned:
+    // the stretched right grid column runs past the scanner container on
+    // G1/G2, which clipped a stretched button.
+    lv_obj_t *btn_row = lv_obj_create(cont1);
+    lv_obj_remove_style_all(btn_row);
+    lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_layout(btn_row, LV_LAYOUT_FLEX);
+    lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(btn_row, 16, 0);
+    lv_obj_set_grid_cell(btn_row, LV_GRID_ALIGN_START, 2, 1,
                          LV_GRID_ALIGN_CENTER, 1, 1);
+
+#if SCAN_MODE_COUNT == 1
+    // G1's single "mode button" is a Rescan action (idle_sel 0). With no
+    // results the page scans on entry instead, so this button only ever
+    // appears next to "Choose from Last Scan".
+    mode_btns[0] = lv_btn_create(btn_row);
+    lv_obj_set_size(mode_btns[0], LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    {
+        lv_obj_t *rs_lbl = lv_label_create(mode_btns[0]);
+        lv_label_set_text(rs_lbl, _lang("Rescan"));
+        lv_obj_set_style_text_color(rs_lbl, lv_color_make(0xFF, 0xFF, 0xFF), 0);
+        lv_obj_set_style_text_font(rs_lbl, UI_SCANNOW_NOTE_FONT, 0);
+        lv_obj_center(rs_lbl);
+    }
+    lv_obj_add_flag(mode_btns[0], LV_OBJ_FLAG_HIDDEN);
+#endif
+
+    last_scan_btn = lv_btn_create(btn_row);
+    lv_obj_set_size(last_scan_btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     {
         lv_obj_t *ls_lbl = lv_label_create(last_scan_btn);
         lv_label_set_text(ls_lbl, _lang("Choose from Last Scan"));
@@ -950,6 +987,19 @@ static void start_scan_in_current_mode(void) {
     auto_scaned_cnt = scan();
     LOGI("scan return :%d", auto_scaned_cnt);
     if (auto_result_count == 0) {
+#if SCAN_MODE_COUNT == 1
+        // G1: there is no mode picker to fall back to, so back out to the
+        // main menu -- the next click on Scan Now starts a fresh scan
+        // directly. Boot autoscan stays on the page so its retry loop keeps
+        // working. The "no signals" text is set after submenu_exit() because
+        // the page's exit handler resets the label to "Scan Ready".
+        if (g_autoscan_exit) {
+            submenu_exit();
+            lv_label_set_text(label, _lang("Scanning Done. No Signals Found."));
+            lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
+            return;
+        }
+#endif
         // Nothing found: there is no channel list to land in, so drop straight
         // back to the picker -- the user can rescan (or leave) immediately
         // instead of having to back out of an empty results view first.
@@ -978,6 +1028,16 @@ static void page_scannow_enter() {
         start_scan_in_current_mode();
         return;
     }
+#if SCAN_MODE_COUNT == 1
+    // G1 has a single protocol, so entering the page IS the scan action --
+    // the first press scans. Only when a previous scan left results does the
+    // page land in the picker (Rescan / Choose from Last Scan) instead, so
+    // those results aren't clobbered by an unwanted rescan.
+    if (auto_result_count == 0) {
+        start_scan_in_current_mode();
+        return;
+    }
+#endif
     // Land in IDLE — user picks a mode (G1: the single Scan button) and the
     // click runs the scan.
     page_state = SCAN_PAGE_IDLE;
