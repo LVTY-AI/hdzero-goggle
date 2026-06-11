@@ -230,7 +230,12 @@ void menu_nav(uint8_t key) {
         if (selected >= page_packs_count)
             selected -= page_packs_count;
     }
-    lv_event_send(lv_obj_get_child(lv_obj_get_child(lv_menu_get_cur_sidebar_page(menu), 0), selected), LV_EVENT_CLICKED, NULL);
+    lv_obj_t *entry = lv_obj_get_child(lv_obj_get_child(lv_menu_get_cur_sidebar_page(menu), 0), selected);
+    lv_event_send(entry, LV_EVENT_CLICKED, NULL);
+    // The sidebar holds more entries than fit the BoxPro screen; keep the
+    // selected entry visible (the sidebar is scrollable but nothing else
+    // scrolls it).
+    lv_obj_scroll_to_view(entry, LV_ANIM_ON);
 }
 
 static void menu_reinit(void) {
