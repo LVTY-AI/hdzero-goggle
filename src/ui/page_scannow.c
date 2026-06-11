@@ -984,7 +984,13 @@ static bool page_scannow_on_back(void) {
             rtc6715.init(0, 0);
         }
         page_state = SCAN_PAGE_IDLE;
-        set_results_widget_visibility();
+        // Keep the results list on screen -- just de-green the selected row --
+        // so the channels stay visible from the picker; "Choose from Last
+        // Scan" re-focuses them without a rescan.
+        if (auto_focused_btn) {
+            lv_obj_clear_state(auto_focused_btn, LV_STATE_FOCUSED);
+            style_auto_list_row(auto_focused_btn, false);
+        }
         update_mode_btn_focus();
         lv_label_set_text(label, _lang("Scan Ready"));
         lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
