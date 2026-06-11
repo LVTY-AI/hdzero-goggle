@@ -479,12 +479,18 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
 #else
 #define PICKER_BTN_HEIGHT 48 // fits the 60px scanner grid row (G1/G2)
 #endif
+    // The row is fixed-height too, 8px taller than its top-aligned children:
+    // content-sized containers compute their height slightly short of the
+    // children and clip their bottoms, so leave the shortfall in empty slack
+    // below the buttons instead.
     lv_obj_t *btn_row = lv_obj_create(cont1);
     lv_obj_remove_style_all(btn_row);
-    lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_size(btn_row, LV_SIZE_CONTENT, PICKER_BTN_HEIGHT + 8);
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_layout(btn_row, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(btn_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START,
+                          LV_FLEX_ALIGN_START);
     lv_obj_set_style_pad_column(btn_row, 12, 0);
     lv_obj_set_grid_cell(btn_row, LV_GRID_ALIGN_START, 2, 1,
                          LV_GRID_ALIGN_CENTER, 1, 1);
