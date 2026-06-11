@@ -470,7 +470,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_clear_flag(btn_row, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_layout(btn_row, LV_LAYOUT_FLEX);
     lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(btn_row, 16, 0);
+    lv_obj_set_style_pad_column(btn_row, 12, 0);
     lv_obj_set_grid_cell(btn_row, LV_GRID_ALIGN_START, 2, 1,
                          LV_GRID_ALIGN_CENTER, 1, 1);
 
@@ -480,6 +480,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     // appears next to "Choose from Last Scan".
     mode_btns[0] = lv_btn_create(btn_row);
     lv_obj_set_size(mode_btns[0], LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_hor(mode_btns[0], 12, 0);
     {
         lv_obj_t *rs_lbl = lv_label_create(mode_btns[0]);
         lv_label_set_text(rs_lbl, _lang("Rescan"));
@@ -492,6 +493,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     last_scan_btn = lv_btn_create(btn_row);
     lv_obj_set_size(last_scan_btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_pad_hor(last_scan_btn, 12, 0);
     {
         lv_obj_t *ls_lbl = lv_label_create(last_scan_btn);
         lv_label_set_text(ls_lbl, _lang("Choose from Last Scan"));
@@ -500,6 +502,11 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_center(ls_lbl);
     }
     lv_obj_add_flag(last_scan_btn, LV_OBJ_FLAG_HIDDEN);
+    // Apply the explicit dark/unfocused styling now: on G1 the page can land
+    // straight in RESULTS (scan on entry) without any picker interaction, and
+    // until update_mode_btn_focus runs the theme default renders both buttons
+    // white-on-white.
+    update_mode_btn_focus();
 
     lv_obj_t *cont2 = lv_obj_create(page);
     lv_obj_set_size(cont2, UI_SCANNOW_FREQ_SIZE);
@@ -995,6 +1002,9 @@ static void start_scan_in_current_mode(void) {
         // the page's exit handler resets the label to "Scan Ready".
         if (g_autoscan_exit) {
             submenu_exit();
+            // The empty scan wiped the previous results; hide the stale
+            // Rescan / Choose from Last Scan buttons and list with it.
+            set_results_widget_visibility();
             lv_label_set_text(label, _lang("Scanning Done. No Signals Found."));
             lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
             return;
