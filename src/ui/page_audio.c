@@ -26,6 +26,7 @@
 #define AUDIO_TEST_SAMPLE "/mnt/app/app/audio/dvr_playback_volume_test.wav"
 #define AUDIO_TEST_SAMPLE_SDCARD "/mnt/extsd/dvr_playback_volume_test.wav"
 #define AUDIO_TEST_CAPTURE "/tmp/hdzero_audio_test.wav"
+#define AUDIO_TEST_CAPTURE_SDCARD "/mnt/extsd/audio_test_capture.wav"
 #define AUDIO_TEST_APLAY "/mnt/app/app/record/audio/aplay"
 #define AUDIO_TEST_ARECORD "/mnt/app/app/record/audio/arecord"
 #define AUDIO_TEST_COUNT 4
@@ -416,8 +417,11 @@ static void page_audio_play_wav(const char *path) {
     // plughw, not hw: the plug layer handles any format/rate conversion the
     // raw device won't, which the bare hw: playback rendered as heavy static
     // (normal DVR playback goes through the MPI AO engine instead and was
-    // clean).
-    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec %s", AUDIO_TEST_APLAY, path);
+    // clean). -B/-F force a deep buffer (0.5s, 125ms periods): aplay's
+    // defaults underrun on the G1 and the xrun crackle reads as static --
+    // the MPI engine never crackles there because it sizes its own buffers.
+    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec -B 500000 -F 125000 %s",
+             AUDIO_TEST_APLAY, path);
     system_exec(buf);
 }
 
@@ -474,6 +478,15 @@ static const char *page_audio_test_sample_path(void) {
     return AUDIO_TEST_SAMPLE;
 }
 
+static const char *page_audio_capture_path(void) {
+    // Prefer the SD card: same test behavior, but the captured clip can be
+    // pulled afterwards and listened to on a computer, which separates
+    // capture-side from playback-side noise when chasing static.
+    if (g_sdcard_ready)
+        return AUDIO_TEST_CAPTURE_SDCARD;
+    return AUDIO_TEST_CAPTURE;
+}
+
 static void page_audio_capture_wav(setting_record_audio_source_t source) {
     char buf[256];
 
@@ -481,7 +494,7 @@ static void page_audio_capture_wav(setting_record_audio_source_t source) {
     audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
     audio_test_phase = AUDIO_TEST_PHASE_RECORDING;
     snprintf(buf, sizeof(buf), "%s -D hw:audiocodec -t wav -f S16_LE -c2 -r 48000 -d %d %s",
-             AUDIO_TEST_ARECORD, AUDIO_TEST_SECONDS, AUDIO_TEST_CAPTURE);
+             AUDIO_TEST_ARECORD, AUDIO_TEST_SECONDS, page_audio_capture_path());
     system_exec(buf);
 }
 
@@ -513,7 +526,7 @@ static void *page_audio_test_thread(void *arg) {
         page_audio_enable_dac_playback();
         audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
         audio_test_phase = AUDIO_TEST_PHASE_PLAYING;
-        page_audio_play_wav(AUDIO_TEST_CAPTURE);
+        page_audio_play_wav(page_audio_capture_path());
         page_audio_disable_dac_playback(live_audio_was_enabled);
         dvr_select_audio_source(previous_source);
         break;
@@ -537,7 +550,7 @@ static void *page_audio_test_thread(void *arg) {
         page_audio_enable_dac_playback();
         audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
         audio_test_phase = AUDIO_TEST_PHASE_PLAYING;
-        page_audio_play_wav(AUDIO_TEST_CAPTURE);
+        page_audio_play_wav(page_audio_capture_path());
         page_audio_disable_dac_playback(live_audio_was_enabled);
         dvr_select_audio_source(previous_source);
         break;
