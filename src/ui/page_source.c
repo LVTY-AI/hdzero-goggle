@@ -36,7 +36,9 @@ enum {
     ROW_GOGGLE_HDMI,
     ROW_GOGGLE_AV,
     ROW_GOGGLE_HDZ_WIDTH,
-    ROW_GOGGLE_ANALOG_VIDEO,
+    // No Analog Video row: NTSC/PAL is no longer a user toggle on G1. Auto
+    // detection is fast enough now that the format is always derived from
+    // the signal, like BoxPro/G2.
     ROW_GOGGLE_ANALOG_RATIO,
     ROW_GOGGLE_TEST_PATTERN,
     ROW_GOGGLE_BACK,
@@ -85,7 +87,6 @@ enum {
 #define ROW_HDMI         ROW_GOGGLE_HDMI
 #define ROW_AV           ROW_GOGGLE_AV
 #define ROW_HDZ_WIDTH    ROW_GOGGLE_HDZ_WIDTH
-#define ROW_ANALOG_VIDEO ROW_GOGGLE_ANALOG_VIDEO
 #define ROW_ANALOG_RATIO ROW_GOGGLE_ANALOG_RATIO
 #define ROW_TEST_PATTERN ROW_GOGGLE_TEST_PATTERN
 #define ROW_BACK         ROW_GOGGLE_BACK
@@ -175,8 +176,13 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
     btn_group_set_sel(&btn_group2, g_setting.source.hdzero_bw);
 
 #if defined(HDZGOGGLE)
-    create_btn_group_item(&btn_group0, cont, 3, _lang("Analog Video"), "NTSC", "PAL", _lang("Auto"), "", ROW_ANALOG_VIDEO);
-    btn_group_set_sel(&btn_group0, g_setting.source.analog_auto ? 2 : g_setting.source.analog_format);
+    // Auto NTSC/PAL is fast enough now that the manual NTSC/PAL toggle is
+    // gone, matching BoxPro/G2. Normalize a manual choice persisted by an
+    // older build; analog_format keeps tracking the last detected standard.
+    if (!g_setting.source.analog_auto) {
+        g_setting.source.analog_auto = true;
+        settings_put_bool("source", "analog_auto", true);
+    }
 #elif defined(HDZGOGGLE2)
     create_btn_group_item(&btn_group0, cont, 2, _lang("Analog Module"), _lang("Built-in"), _lang("Expansion"), "", "", ROW_ANALOG_MODULE);
     btn_group_set_sel(&btn_group0, g_setting.source.analog_module);
@@ -500,21 +506,7 @@ static void page_source_on_click(uint8_t key, int sel) {
         if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH)
             g_hdz_detected_bw = g_hw_stat.hdz_bw ? 1 : 0;
         break;
-#if defined(HDZGOGGLE)
-    case ROW_ANALOG_VIDEO: {
-        btn_group_toggle_sel(&btn_group0);
-        int av_sel = btn_group_get_sel(&btn_group0);
-        // 0=NTSC, 1=PAL (manual), 2=Auto. Auto keeps the current active format
-        // as its starting point; AV_in_detect adjusts it from there.
-        g_setting.source.analog_auto = (av_sel == 2);
-        ini_putl("source", "analog_auto", g_setting.source.analog_auto, SETTING_INI);
-        if (av_sel < 2) {
-            g_setting.source.analog_format = av_sel;
-            ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
-        }
-        break;
-    }
-#elif defined(HDZGOGGLE2)
+#if defined(HDZGOGGLE2)
     case ROW_ANALOG_MODULE:
         btn_group_toggle_sel(&btn_group0);
         g_setting.source.analog_module = btn_group_get_sel(&btn_group0);
