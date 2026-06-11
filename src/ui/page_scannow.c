@@ -111,6 +111,7 @@ static bool page_focused = false;  // true only while the page holds input focus
 static int idle_sel = 0;           // picker cursor: 0..SCAN_MODE_COUNT-1 pick a
                                    // mode; SCAN_MODE_COUNT = "Choose from Last Scan".
 static lv_obj_t *last_scan_btn = NULL;
+static lv_obj_t *exit_note = NULL;
 static bool results_receiver_parked = false; // HDZ RX is parked on the focused
                                              // result (right after a scan), so a
                                              // pick enters video near-instantly
@@ -347,12 +348,19 @@ static void set_results_widget_visibility(void) {
     }
 #if SCAN_MODE_COUNT == 1
     // ... and so is G1's Rescan button (without results the page scans on
-    // entry, so the picker never shows).
+    // entry, so the picker never shows), and the bottom exit hint, which on
+    // G1 only applies while the picker is on offer.
     if (mode_btns[0]) {
         if (auto_result_count > 0)
             lv_obj_clear_flag(mode_btns[0], LV_OBJ_FLAG_HIDDEN);
         else
             lv_obj_add_flag(mode_btns[0], LV_OBJ_FLAG_HIDDEN);
+    }
+    if (exit_note) {
+        if (auto_result_count > 0)
+            lv_obj_clear_flag(exit_note, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(exit_note, LV_OBJ_FLAG_HIDDEN);
     }
 #endif
 }
@@ -481,6 +489,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     mode_btns[0] = lv_btn_create(btn_row);
     lv_obj_set_size(mode_btns[0], LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_hor(mode_btns[0], 12, 0);
+    lv_obj_set_style_pad_ver(mode_btns[0], 6, 0);
     {
         lv_obj_t *rs_lbl = lv_label_create(mode_btns[0]);
         lv_label_set_text(rs_lbl, _lang("Rescan"));
@@ -494,6 +503,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     last_scan_btn = lv_btn_create(btn_row);
     lv_obj_set_size(last_scan_btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
     lv_obj_set_style_pad_hor(last_scan_btn, 12, 0);
+    lv_obj_set_style_pad_ver(last_scan_btn, 6, 0);
     {
         lv_obj_t *ls_lbl = lv_label_create(last_scan_btn);
         lv_label_set_text(ls_lbl, _lang("Choose from Last Scan"));
@@ -551,13 +561,19 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     // Exit hint at the page bottom, mirroring the playback page's note style:
     // some users thought they were stuck after a scan or in the mode picker.
-    lv_obj_t *note = lv_label_create(page);
+    exit_note = lv_label_create(page);
     snprintf(buf, sizeof(buf), "*%s", _lang("Long press the Enter button to exit"));
-    lv_label_set_text(note, buf);
-    lv_obj_set_style_text_font(note, UI_PAGE_LABEL_FONT, 0);
-    lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
-    lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(exit_note, buf);
+    lv_obj_set_style_text_font(exit_note, UI_PAGE_LABEL_FONT, 0);
+    lv_obj_set_style_text_align(exit_note, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(exit_note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
+    lv_label_set_long_mode(exit_note, LV_LABEL_LONG_WRAP);
+#if SCAN_MODE_COUNT == 1
+    // G1 backs out automatically when a scan finds nothing, so the hint only
+    // applies when the picker (Rescan / Choose from Last Scan) is on offer;
+    // set_results_widget_visibility toggles it with the buttons.
+    lv_obj_add_flag(exit_note, LV_OBJ_FLAG_HIDDEN);
+#endif
 
     return page;
 }
