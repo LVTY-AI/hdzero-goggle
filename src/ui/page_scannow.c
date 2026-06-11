@@ -916,12 +916,24 @@ void autoscan_exit(void) {
 static void start_scan_in_current_mode(void) {
     auto_scaned_cnt = scan();
     LOGI("scan return :%d", auto_scaned_cnt);
+    if (auto_result_count == 0) {
+        // Nothing found: there is no channel list to land in, so drop straight
+        // back to the picker -- the user can rescan (or leave) immediately
+        // instead of having to back out of an empty results view first.
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+        if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
+            rtc6715.init(0, 0); // same analog RX teardown as leaving RESULTS
+        }
+#endif
+        page_state = SCAN_PAGE_IDLE;
+        set_results_widget_visibility();
+        update_mode_btn_focus();
+        lv_label_set_text(label, _lang("Scanning Done. No Signals Found."));
+        return;
+    }
     page_state = SCAN_PAGE_RESULTS;
     set_results_widget_visibility();
-    if (auto_result_count == 0)
-        lv_label_set_text(label, _lang("Scanning Done. No Signals Found."));
-    else
-        lv_label_set_text(label, _lang("Scanning Done"));
+    lv_label_set_text(label, _lang("Scanning Done"));
 }
 #endif
 
@@ -951,12 +963,6 @@ static void page_scannow_enter() {
 static bool page_scannow_on_back(void) {
 #if SCAN_MODE_COUNT > 1
     if (page_state == SCAN_PAGE_RESULTS) {
-        if (auto_result_count == 0) {
-            // Nothing was found, so there is no channel list to step back from;
-            // a long-press leaves the Scan Now page entirely. page_scannow_exit
-            // handles the analog RX teardown.
-            return false;
-        }
         // Tear down analog RX the same way exit would, so a subsequent IDLE
         // scan power-on cycle starts from a clean state.
         if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
@@ -1084,14 +1090,9 @@ static void page_scannow_on_click(uint8_t key, int sel) {
         start_scan_in_current_mode();
         return;
     }
-    // RESULTS state with an empty scan: nothing to select, so a short press just
-    // rescans in the same mode. (Long-press leaves the page -- see on_back.)
-    if (auto_result_count == 0) {
-        start_scan_in_current_mode();
-        return;
-    }
     // RESULTS state: click selects a scan result and enters video. All three
-    // modes now feed the same auto_results list.
+    // modes now feed the same auto_results list. (An empty scan never lands in
+    // RESULTS -- start_scan_in_current_mode falls back to the picker.)
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     apply_auto_detect_for_mode(scan_mode);
 #endif
