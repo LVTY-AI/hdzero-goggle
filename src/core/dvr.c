@@ -53,6 +53,7 @@ void dvr_enable_line_out(bool enable) {
     char buf[128];
     if (enable) {
         live_audio_line_out_enabled = true;
+        live_audio_muted_for_dvr = false; // path below is fully reopened
         snprintf(buf, sizeof(buf), "%s out_on", AUDIO_SEL_SH);
         system_exec(buf);
         dvr_set_live_audio_volume(g_setting.record.live_audio_volume);
@@ -175,9 +176,10 @@ static void dvr_apply_record_audio_gain(uint8_t source) {
 void dvr_mute_live_audio(void) {
     char buf[128];
 
-    if (!live_audio_line_out_enabled)
-        return;
-
+    // Unconditional on purpose: live_audio_line_out_enabled can go stale
+    // (boot never sets it, and a source switch mid audio-test can desync it),
+    // and a skipped mute here means live audio mixes into DVR playback.
+    // Cutting LINEIN with the line out already off is harmless.
     snprintf(buf, sizeof(buf), "%s out_linein_off", AUDIO_SEL_SH);
     system_exec(buf);
     system_exec("amixer cset name='LINEINL/R to L_R output mixer gain' 0");
