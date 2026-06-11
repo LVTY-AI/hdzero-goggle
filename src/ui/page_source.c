@@ -270,7 +270,7 @@ void source_status_timer() {
         uint8_t oled_tm = oled_tst_mode & 0x0F;
         char *pattern_label[6] = {"Normal", "Color Bar", "Grid", "All Black", "All White", "Boot logo"};
         char str[32];
-        snprintf(str, sizeof(buf), "Display Pattern: %s", pattern_label[oled_tm]);
+        snprintf(str, sizeof(str), "Display Pattern: %s", pattern_label[oled_tm]);
         lv_label_set_text(label[4], str);
     }
 }

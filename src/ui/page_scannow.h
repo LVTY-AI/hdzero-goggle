@@ -7,7 +7,7 @@ extern "C" {
 #include "ui/ui_main_menu.h"
 #include <lvgl/lvgl.h>
 
-#define HDZERO_CHANNEL_NUM (g_setting.source.hdzero_band == RACE_BAND ? 12 : 8)
+#define HDZERO_CHANNEL_NUM (g_setting.source.hdzero_band == SETTING_SOURCES_HDZERO_BAND_RACEBAND ? 12 : 8)
 #define ANALOG_CHANNEL_NUM 48
 
 typedef enum {

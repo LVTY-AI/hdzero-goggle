@@ -241,7 +241,7 @@ static void menu_reinit(void) {
         return;
     }
 
-    if ((pp == &pp_scannow)) {
+    if (pp == &pp_scannow) {
         scan_reinit();
     }
 
