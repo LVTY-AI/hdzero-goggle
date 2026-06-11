@@ -207,7 +207,14 @@ static lv_obj_t *page_audio_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
     create_label_item(cont, buf, 1, ROW_BACK, 1);
     lv_obj_t *note = lv_label_create(cont);
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // The built-in RTC6715 squelches its audio without a locked analog
+    // carrier, so unlike G1's module there is no background hiss -- the
+    // Live/Line-AV tests are silent unless a signal is on the air.
+    lv_label_set_text(note, _lang("*Mic & Line/AV: record 5s, auto playback.\n**Live & Line/AV need an analog signal -- the receiver mutes without one.\n***Test fill: pulsing = loading, red = recording, green = playback."));
+#else
     lv_label_set_text(note, _lang("*Mic: record 5s, auto playback.\n**Line/AV: record 5s, auto playback.\n***Test fill: pulsing = loading, red = recording, green = playback."));
+#endif
     lv_obj_set_style_text_font(note, UI_PAGE_LABEL_FONT, 0);
     lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
@@ -493,7 +500,11 @@ static void page_audio_capture_wav(setting_record_audio_source_t source) {
     dvr_select_audio_source(source);
     audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
     audio_test_phase = AUDIO_TEST_PHASE_RECORDING;
-    snprintf(buf, sizeof(buf), "%s -D hw:audiocodec -t wav -f S16_LE -c2 -r 48000 -d %d %s",
+    // plughw + deep buffer (0.5s/125ms) for the same reason as playback:
+    // the captured clips themselves carried the static on G1 (confirmed by
+    // playing them on a computer), the signature of raw-hw capture overruns
+    // on its older kernel.
+    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec -B 500000 -F 125000 -t wav -f S16_LE -c2 -r 48000 -d %d %s",
              AUDIO_TEST_ARECORD, AUDIO_TEST_SECONDS, page_audio_capture_path());
     system_exec(buf);
 }
