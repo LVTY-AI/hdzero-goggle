@@ -765,16 +765,17 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
 
         if (det && det_cnt == AV_DET_SWITCH_CNT) {
             g_hw_stat.av_pal_w = g_hw_stat.av_pal_w ? 0 : 1;
+            // Track the new standard for consumers like dvr_update_vi_conf
+            // (records at 50 vs 60 fps based on this).
+            g_hw_stat.av_pal[g_hw_stat.is_av_in] = g_hw_stat.av_pal_w;
             g_hw_stat.av_valid[g_hw_stat.is_av_in] = 0;
 
+            // AV_Mode_Switch_fpga() writes FPGA reg 0x80 (0x10 PAL / 0x00
+            // NTSC) from the new standard; the old re-write here keyed off
+            // the av_pal ARRAY (always-true pointer) and forced the PAL bit
+            // back on after every switch to NTSC.
             TP2825_Switch_Mode(g_hw_stat.av_pal_w);
             AV_Mode_Switch(g_hw_stat.av_pal_w);
-            // LOGI("Switch mode:%d", g_hw_stat.av_pal_w);
-
-            if (g_hw_stat.av_pal)
-                I2C_Write(ADDR_FPGA, 0x80, 0x10);
-            else
-                I2C_Write(ADDR_FPGA, 0x80, 0x00);
 
             ret = 1;
 
