@@ -88,6 +88,10 @@ void HDZero_Close();
 
 void Source_HDMI_in();
 void Source_AV(bool is_av_in);
+#if defined(HDZGOGGLE)
+// Light analog NTSC<->PAL re-time for the G1 Auto switch (see hardware-goggle.c).
+void Source_AV_retime(void);
+#endif
 void Display_UI_init();
 void Display_UI();
 

@@ -830,6 +830,29 @@ void AV_Mode_Switch(int is_pal) {
     }
 }
 
+// Light re-time for an in-place analog NTSC<->PAL flip (Auto NTSC/PAL).
+// The pipeline is already in AV mode on the same input; only the standard
+// changed, so this mirrors G2's inline switch (TP2825_Switch_Mode +
+// AV_Mode_Switch_fpga) and skips Source_AV()'s TP2825_init/Switch_CH,
+// vclk/pclk phase, HDZero_Close and Display_VO_SWITCH. The G1-specific
+// part: both 720p50 and 720p60 are screen_vtmg "mode 1", so without
+// screen_vtmg_invalidate() the screen.vtmg(1) below would no-op and the
+// OLED would keep the old field timing (tearing).
+void Source_AV_retime(void) {
+    pthread_mutex_lock(&hardware_mutex);
+    screen.display(0);
+
+    TP2825_Switch_Mode(g_setting.source.analog_format);
+    AV_Mode_Switch_fpga(g_setting.source.analog_format);
+    g_hw_stat.av_pal_w = g_setting.source.analog_format;
+
+    screen_vtmg_invalidate();
+    screen.vtmg(1);
+
+    screen.display(1);
+    pthread_mutex_unlock(&hardware_mutex);
+}
+
 void Source_AV(bool is_av_in) {
     pthread_mutex_lock(&hardware_mutex);
     screen.display(0);

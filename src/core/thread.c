@@ -253,16 +253,14 @@ static void *thread_peripheral(void *ptr) {
 
 #if defined(HDZGOGGLE)
             // Auto NTSC/PAL (G1): AV_in_detect flags a format change instead of
-            // switching live (which tears). 720p50<->720p60 are both screen_vtmg
-            // "mode 1", so Source_AV()'s screen.vtmg(1) would no-op and the OLED
-            // would keep its old field timing -- screen_vtmg_invalidate() forces
-            // the re-time. We are already in analog here, so run the hardware
-            // source path directly instead of the full app_switch_to_analog()
-            // sequence, which also touches LVGL/OSD/RTC/audio and sleeps 1s.
+            // switching live (which tears). We're already in AV mode on the same
+            // input -- only the standard changed -- so run the light re-time
+            // (G2's inline switch plus the screen_vtmg_invalidate poke that G1's
+            // OLED needs to re-lock; see Source_AV_retime) instead of the full
+            // Source_AV rebuild.
             if (g_hw_stat.av_reinit_req && g_hw_stat.source_mode == SOURCE_MODE_AV) {
                 g_hw_stat.av_reinit_req = 0;
-                screen_vtmg_invalidate();
-                Source_AV(g_hw_stat.is_av_in);
+                Source_AV_retime();
             }
 #endif
 
