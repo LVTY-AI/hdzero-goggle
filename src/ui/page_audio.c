@@ -428,6 +428,13 @@ static void page_audio_enable_dac_playback(void) {
     system_exec(buf);
     snprintf(buf, sizeof(buf), "%s out_linein_off", AUDIO_SEL_SH);
     system_exec(buf);
+    // Cut the remaining analog inputs to the output mixer too: a MIC boost
+    // stage left enabled by the board's boot state feeds open-mic noise to
+    // the lineout whenever it is on (nothing in the app ever switches these).
+    snprintf(buf, sizeof(buf), "%s out_mic1_off", AUDIO_SEL_SH);
+    system_exec(buf);
+    snprintf(buf, sizeof(buf), "%s out_mic2_off", AUDIO_SEL_SH);
+    system_exec(buf);
     snprintf(buf, sizeof(buf), "%s out_dac_on", AUDIO_SEL_SH);
     system_exec(buf);
     // aplay drives AIF1 timeslot 0 only; force the documented clean playback
