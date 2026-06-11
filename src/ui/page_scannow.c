@@ -317,9 +317,11 @@ static void style_auto_list_row(lv_obj_t *btn, bool is_focused) {
 
 static void set_results_widget_visibility(void) {
     // All three modes (HDZero, Analog, Auto/Both) now render into auto_list,
-    // so the legacy signal-bar grid stays hidden. Show the list only in the
-    // RESULTS state; IDLE shows just the mode picker.
-    bool show_list = (page_state == SCAN_PAGE_RESULTS);
+    // so the legacy signal-bar grid stays hidden. The list stays on screen
+    // whenever a previous scan left results -- including the IDLE picker, so
+    // the channel list is visible while choosing a mode / Rescan / "Choose
+    // from Last Scan". Only an empty history hides it.
+    bool show_list = (page_state == SCAN_PAGE_RESULTS) || (auto_result_count > 0);
 
     if (auto_list) {
         if (show_list) {
@@ -508,9 +510,10 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_t *note = lv_label_create(page);
     snprintf(buf, sizeof(buf), "*%s", _lang("Long press the Enter button to exit"));
     lv_label_set_text(note, buf);
-    lv_obj_set_style_text_font(note, UI_SCANNOW_NOTE_FONT, 0);
+    lv_obj_set_style_text_font(note, UI_PAGE_LABEL_FONT, 0);
     lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
+    lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
 
     return page;
 }
