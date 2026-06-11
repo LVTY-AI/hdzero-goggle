@@ -86,8 +86,9 @@ typedef enum {
 } scan_mode_t;
 
 // Modes offered by the picker. BoxPro and Goggle 2 have the built-in analog
-// receiver, so they get HDZero / Analog / Auto/Both. Goggle 1 has no built-in
-// analog, so its picker shows just HDZero.
+// receiver, so they get HDZero / Analog / Dual. Goggle 1 has no built-in
+// analog, so its picker is a single "Scan" button (plus "Choose from Last
+// Scan" once results exist).
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
 #define SCAN_MODE_COUNT 3
 #else
@@ -351,11 +352,11 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_add_style(page, &style_scan, LV_PART_MAIN);
     lv_obj_set_style_pad_top(page, UI_SCANNOW_PAGE_PAD, 0);
 
-#if SCAN_MODE_COUNT > 1
-    // Mode selector at the top: one button per scan mode (BoxPro only). G1/G2
-    // have a single mode (HDZero), so there is no picker -- they scan on enter.
-    // Sits in its own absolute-positioned container so it isn't constrained by
-    // cont1's grid template.
+    // Mode selector at the top: one button per scan mode. On G1 there is a
+    // single mode (HDZero), so the picker is just a "Scan" button -- it still
+    // gets the IDLE landing so an empty scan isn't a dead end and "Choose from
+    // Last Scan" is reachable. Sits in its own absolute-positioned container
+    // so it isn't constrained by cont1's grid template.
     {
         lv_obj_t *cont_mode = lv_obj_create(page);
         lv_obj_set_size(cont_mode, 780, 56);
@@ -365,7 +366,11 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_set_style_border_width(cont_mode, 0, 0);
         lv_obj_set_style_pad_all(cont_mode, 0, 0);
 
+#if SCAN_MODE_COUNT > 1
         static const char *mode_names[3] = {"HDZero", "Analog", "Dual"};
+#else
+        static const char *mode_names[1] = {"Scan"};
+#endif
         for (int i = 0; i < SCAN_MODE_COUNT; i++) {
             mode_btns[i] = lv_btn_create(cont_mode);
             lv_obj_set_size(mode_btns[i], 220, 44);
@@ -382,7 +387,6 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         if ((int)scan_mode >= SCAN_MODE_COUNT) scan_mode = SCAN_MODE_HDZERO;
         update_mode_btn_focus();
     }
-#endif
 
     lv_obj_t *cont1 = lv_obj_create(page);
     lv_obj_set_size(cont1, UI_SCANNOW_SCANNER_SIZE);
@@ -422,14 +426,12 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
                          LV_GRID_ALIGN_CENTER, 0, 1);
 
     lv_obj_t *label2 = lv_label_create(cont1);
-#if defined(HDZBOXPRO)
+#if SCAN_MODE_COUNT > 1
     snprintf(buf, sizeof(buf), "%s",
              _lang("Dial to pick mode, press Enter to scan"));
 #else
-    snprintf(buf, sizeof(buf), "%s\n %s\n %s",
-             _lang("When scanning is complete, use the"),
-             _lang("dial to select a channel and press"),
-             _lang("the Enter button to choose"));
+    snprintf(buf, sizeof(buf), "%s",
+             _lang("Press Enter to scan"));
 #endif
     lv_label_set_text(label2, buf);
     lv_obj_set_style_text_font(label2, UI_SCANNOW_NOTE_FONT, 0);
@@ -440,7 +442,6 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_grid_cell(label2, LV_GRID_ALIGN_START, 2, 1,
                          LV_GRID_ALIGN_START, 0, 2);
 
-#if SCAN_MODE_COUNT > 1
     // "Choose from Last Scan" -- re-opens the persisted results without
     // rescanning. Lives in the scanner's right column below the note (matching
     // the mockup), shown only when a previous scan produced results, and reached
@@ -456,7 +457,6 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_center(ls_lbl);
     }
     lv_obj_add_flag(last_scan_btn, LV_OBJ_FLAG_HIDDEN);
-#endif
 
     lv_obj_t *cont2 = lv_obj_create(page);
     lv_obj_set_size(cont2, UI_SCANNOW_FREQ_SIZE);
@@ -954,8 +954,14 @@ static void start_scan_in_current_mode(void) {
 
 static void page_scannow_enter() {
     page_focused = true;
-#if SCAN_MODE_COUNT > 1
-    // Multi-mode (BoxPro): land in IDLE — user picks a mode, click runs the scan.
+    // Boot-time Auto Scan re-enters this page in a loop until a signal is
+    // found; scan immediately instead of parking on the picker.
+    if (!g_autoscan_exit) {
+        start_scan_in_current_mode();
+        return;
+    }
+    // Land in IDLE — user picks a mode (G1: the single Scan button) and the
+    // click runs the scan.
     page_state = SCAN_PAGE_IDLE;
     idle_sel = (int)scan_mode;
     set_results_widget_visibility();
@@ -963,12 +969,6 @@ static void page_scannow_enter() {
     lv_label_set_text(label, _lang("Scan Ready"));
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
     auto_scaned_cnt = 0;
-#else
-    // Single-mode (G1/G2): no picker — scan HDZero right away and show the
-    // results list, the way Scan Now worked before the mode UI.
-    scan_mode = SCAN_MODE_HDZERO;
-    start_scan_in_current_mode();
-#endif
 }
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
@@ -976,13 +976,14 @@ static void page_scannow_enter() {
 // scan RESULTS, return to the IDLE mode-picker instead of leaving the page,
 // so the user can re-scan in a different mode without re-navigating the menu.
 static bool page_scannow_on_back(void) {
-#if SCAN_MODE_COUNT > 1
     if (page_state == SCAN_PAGE_RESULTS) {
+#if SCAN_MODE_COUNT > 1
         // Tear down analog RX the same way exit would, so a subsequent IDLE
         // scan power-on cycle starts from a clean state.
         if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
             rtc6715.init(0, 0);
         }
+#endif
         page_state = SCAN_PAGE_IDLE;
         // Keep the results list on screen -- just de-green the selected row --
         // so the channels stay visible from the picker; "Choose from Last
@@ -997,8 +998,7 @@ static bool page_scannow_on_back(void) {
         auto_scaned_cnt = 0;
         return true; // absorbed -> back to the mode picker
     }
-#endif
-    return false; // single-mode (no picker) or IDLE -> exit to main menu
+    return false; // IDLE -> exit to main menu
 }
 #endif
 
@@ -1092,7 +1092,6 @@ static void page_scannow_on_roller(uint8_t key) {
 static void page_scannow_on_click(uint8_t key, int sel) {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
     if (page_state == SCAN_PAGE_IDLE) {
-#if SCAN_MODE_COUNT > 1
         if (idle_sel == SCAN_MODE_COUNT) {
             // "Choose from Last Scan": re-show the persisted results, no rescan.
             if (auto_result_count > 0) {
@@ -1103,7 +1102,6 @@ static void page_scannow_on_click(uint8_t key, int sel) {
             }
             return;
         }
-#endif
         // Click on a mode button: persist selection and trigger the scan.
         g_setting.source.scan_mode_initial = (uint8_t)scan_mode;
         ini_putl("source", "scan_mode_initial",
