@@ -150,6 +150,9 @@ static uint32_t osdFont_fhd[OSD_VNUM][OSD_HNUM][OSD_HEIGHT_FHD][OSD_WIDTH_FHD]; 
 static osd_font_t osd_font_hd;
 static osd_font_t osd_font_fhd;
 static lv_obj_t *analog_rssi_bar;
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+bool osd_element_preview_analog = false;
+#endif
 
 void osd_llock_show(bool bShow) {
     char buf[128];
@@ -740,6 +743,25 @@ void osd_show_all_elements() {
     else
         lv_obj_add_flag(g_osd_hdzero.ant3[is_fhd], LV_OBJ_FLAG_HIDDEN);
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    if (osd_element_preview_analog) {
+        // analog source: HDZero-only elements are not drawn
+        lv_obj_add_flag(g_osd_hdzero.vtx_temp[is_fhd], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(g_osd_hdzero.vlq[is_fhd], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(g_osd_hdzero.ant0[is_fhd], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(g_osd_hdzero.ant1[is_fhd], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(g_osd_hdzero.ant2[is_fhd], LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(g_osd_hdzero.ant3[is_fhd], LV_OBJ_FLAG_HIDDEN);
+    }
+
+    if (osd_element_preview_analog && g_setting.osd.element[OSD_GOGGLE_ANALOG_RSSI].show) {
+        // dummy value so the bar is visible while positioning
+        lv_bar_set_value(analog_rssi_bar, 75, LV_ANIM_OFF);
+        lv_obj_clear_flag(analog_rssi_bar, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(analog_rssi_bar, LV_OBJ_FLAG_HIDDEN);
+    }
+#endif
 
     if (!g_setting.storage.selftest)
         return;

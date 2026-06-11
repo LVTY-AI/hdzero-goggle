@@ -129,6 +129,12 @@ void *thread_osd(void *ptr);
 void osd_resource_path(char *buf, const char *fmt, osd_resource_t osd_resource_type, ...);
 void osd_toggle();
 void osd_analog_rssi_update_location();
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+// Editor preview only: while the OSD element position UI is open, selects
+// whether osd_show_all_elements() previews the analog-source elements (RSSI
+// bar) or the HDZero-only ones. Set by ui_osd_element_pos.
+extern bool osd_element_preview_analog;
+#endif
 #ifdef __cplusplus
 }
 #endif

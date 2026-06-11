@@ -17,8 +17,12 @@
 #include "ui/page_osd.h"
 #include "util/math.h"
 
-#define CANVAS_WIDTH  445
+#define CANVAS_WIDTH 445
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+#define CANVAS_HEIGHT 405
+#else
 #define CANVAS_HEIGHT 365
+#endif
 
 #define OSD_ELEMENT_MIN_X_POS 0
 #define OSD_ELEMENT_MAX_X_POS 1280
@@ -33,6 +37,9 @@
 
 enum {
     ROW_OSD_MODE = 0,
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    ROW_OSD_PROTOCOL,
+#endif
     ROW_OSD_ELEMENT,
     ROW_OSD_SHOW_ELEMENT,
     ROW_OSD_ELEMENT_POS_X,
@@ -65,10 +72,17 @@ static bool show_osd_element_pos_ui = false;
 
 // elements making up the ui
 static lv_coord_t col_dsc[] = {10, 95, 120, 120, 60, 30, LV_GRID_TEMPLATE_LAST};
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+static lv_coord_t row_dsc[] = {40, 40, 40, 40, 40, 40, 30, 30, 30, 30, LV_GRID_TEMPLATE_LAST};
+#else
 static lv_coord_t row_dsc[] = {40, 40, 40, 40, 40, 30, 30, 30, 30, LV_GRID_TEMPLATE_LAST};
+#endif
 static panel_arr_t ui_selection_panel = {.cur = 0, .max = ROW_COUNT};
 static lv_obj_t *ui_root_container;
 static btn_group_t btn_group_osd_mode;
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+static btn_group_t btn_group_osd_protocol;
+#endif
 static lv_obj_t *dropdown_osd_element;
 static btn_group_t btn_group_osd_show_element;
 static slider_group_t slider_group_osd_element_pos_x;
@@ -401,6 +415,12 @@ static int ui_handle_click() {
         osd_update_element_positions();
         break;
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    case ROW_OSD_PROTOCOL:
+        btn_group_toggle_sel(&btn_group_osd_protocol);
+        osd_element_preview_analog = btn_group_get_sel(&btn_group_osd_protocol) == 1;
+        break;
+#endif
 
     case ROW_OSD_ELEMENT:
         if (ui_state != UI_STATE_FOCUSED) {
@@ -526,6 +546,11 @@ static void reset_ui() {
     ui_set_selection(ui_cur_row);
     lv_dropdown_set_selected(dropdown_osd_element, 0);
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // preview the protocol that is currently active
+    osd_element_preview_analog = (g_source_info.source == SOURCE_AV_MODULE);
+    btn_group_set_sel(&btn_group_osd_protocol, osd_element_preview_analog ? 1 : 0);
+#endif
 
     save_osd_elements_reset_label_text();
     cancel_osd_elements_reset_label_text();
@@ -549,6 +574,9 @@ void ui_osd_element_pos_init(void) {
 
     // create all elements
     create_btn_group_item_compact(&btn_group_osd_mode, ui_root_container, 2, _lang("Mode"), "4x3", "16x9", "", "", ROW_OSD_MODE, 40, 80, UI_OSD_TEXT_FONT);
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    create_btn_group_item_compact(&btn_group_osd_protocol, ui_root_container, 2, _lang("Protocol"), "HDZero", _lang("Analog"), "", "", ROW_OSD_PROTOCOL, 40, 80, UI_OSD_TEXT_FONT);
+#endif
 
     snprintf(buf, sizeof(buf), "%s: ", _lang("Element"));
     create_label_item_compact(ui_root_container, buf, 1, ROW_OSD_ELEMENT, 1, 40, LV_TEXT_ALIGN_LEFT, LV_GRID_ALIGN_START, UI_OSD_TEXT_FONT);
