@@ -111,6 +111,9 @@ static bool page_focused = false;  // true only while the page holds input focus
 static int idle_sel = 0;           // picker cursor: 0..SCAN_MODE_COUNT-1 pick a
                                    // mode; SCAN_MODE_COUNT = "Choose from Last Scan".
 static lv_obj_t *last_scan_btn = NULL;
+static bool results_receiver_parked = false; // HDZ RX is parked on the focused
+                                             // result (right after a scan), so a
+                                             // pick enters video near-instantly
 
 static void update_mode_btn_focus(void) {
     // Theme button background defaults are very light on this skin and the
@@ -896,6 +899,7 @@ int scan_reinit(void) {
     // the live video receiver.
     page_state = SCAN_PAGE_IDLE;
     page_focused = false;
+    results_receiver_parked = false; // video retuned the receiver
     update_mode_btn_focus();
     if (auto_focused_btn) {
         lv_obj_clear_state(auto_focused_btn, LV_STATE_FOCUSED);
@@ -919,6 +923,7 @@ int scan(void) {
     // HDZ baseband, and settling would needlessly power it on.
     if (scan_mode != SCAN_MODE_ANALOG) {
         scan_settle_focused_bw();
+        results_receiver_parked = true;
     }
     g_scanning = false;
     return ret;
@@ -1019,6 +1024,7 @@ static void page_scannow_exit() {
         rtc6715.init(0, 0); // power down analog RX on exit
     }
     page_state = SCAN_PAGE_IDLE;
+    results_receiver_parked = false; // other pages may retune the receiver
     // Drop focus and grey the picker, but leave the results list on screen so
     // the user can still glance at the last scan from the sidebar (and reach it
     // via "Choose from Last Scan"). Just de-highlight the selected row so no
@@ -1128,6 +1134,13 @@ static void page_scannow_on_click(uint8_t key, int sel) {
     {
         if (auto_result_count == 0) return;
         const auto_result_t *res = &auto_results[auto_select_index];
+        // Picks from a fresh scan are near-instant (receiver parked on the
+        // focused result). Re-opened "Choose from Last Scan" results have to
+        // retune/reopen from scratch -- show the loading bar so the wait
+        // doesn't look like a hang.
+        if (!results_receiver_parked)
+            progress_bar.start = 1;
+        results_receiver_parked = false;
         app_state_push(APP_STATE_VIDEO);
         if (res->protocol == PROTOCOL_HDZ) {
             // Commit the result's band so app_switch_to_hdzero tunes the
