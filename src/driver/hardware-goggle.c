@@ -923,6 +923,32 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
             det_cnt++;
         }
 
+        // Adaptive fast-confirm for NTSC->PAL: once two consecutive thread-
+        // cadence (~102ms) samples suggest PAL, take the remaining
+        // confirmations inline at 20ms instead of waiting ~1.1s of thread
+        // passes. A genuine PAL signal holds the bits through every sample;
+        // matched-NTSC per-field flicker fails within a sample or two, which
+        // resets the debounce exactly like a slow-cadence miss. Same
+        // 10-consecutive-sample immunity, ~1.1s -> ~0.4s confirm.
+        if (det && !g_hw_stat.av_pal_w && det_cnt >= 1 && det_cnt < AV_DET_PAL_CNT) {
+            int confirmed = 1;
+            for (int i = det_cnt + 1; i < AV_DET_PAL_CNT; i++) {
+                usleep(20 * 1000);
+                rdat = I2C_Read(ADDR_TP2825, 0x01);
+                if (!(!(rdat & 0x80) && (rdat & 0x0C) == 0x0C)) {
+                    confirmed = 0;
+                    break;
+                }
+            }
+            if (confirmed) {
+                det_cnt = AV_DET_PAL_CNT;
+            } else {
+                det = 0;
+                det_last = 0;
+                det_cnt = 0;
+            }
+        }
+
         // NTSC's 0x28 is a clean locked pattern -> switch fast. The PAL field-
         // bit test needs a longer confirm to ride out the per-field flicker.
         if (det && det_cnt >= (g_hw_stat.av_pal_w ? AV_DET_SWITCH_CNT : AV_DET_PAL_CNT)) {
@@ -935,8 +961,8 @@ int AV_in_detect() // return = 1: vtmg to V536 changed
             // no-op when we're already in 720P (the last_mode guard in
             // screen_vtmg). Persist the detected format and ask
             // thread_peripheral to invalidate the vtmg cache
-            // (screen_vtmg_invalidate) and re-enter analog via
-            // app_switch_to_analog(), which re-times the OLED cleanly.
+            // (screen_vtmg_invalidate) and re-run Source_AV() directly,
+            // which re-times the OLED cleanly.
             g_setting.source.analog_format = g_hw_stat.av_pal_w;
             ini_putl("source", "analog_format", g_setting.source.analog_format, SETTING_INI);
             g_hw_stat.av_reinit_req = 1;
