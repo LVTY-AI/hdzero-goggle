@@ -469,9 +469,16 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     // rescanning -- and, on G1 only, a "Rescan" button beside it. They live
     // in a flex row in the scanner's right column in line with the progress
     // bar, shown only when a previous scan produced results, and reached by
-    // dialing past the last mode button. Content-sized and START-aligned:
-    // the stretched right grid column runs past the scanner container on
-    // G1/G2, which clipped a stretched button.
+    // dialing past the last mode button. Content-sized WIDTH and
+    // START-aligned: the stretched right grid column runs past the scanner
+    // container on G1/G2, which clipped a stretched button. The HEIGHT is
+    // fixed: an LV_SIZE_CONTENT-tall button with a centered label computes
+    // slightly short and clips its own bottom edge.
+#if defined(HDZBOXPRO)
+#define PICKER_BTN_HEIGHT 32 // fits the 40px scanner grid row
+#else
+#define PICKER_BTN_HEIGHT 48 // fits the 60px scanner grid row (G1/G2)
+#endif
     lv_obj_t *btn_row = lv_obj_create(cont1);
     lv_obj_remove_style_all(btn_row);
     lv_obj_set_size(btn_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -487,9 +494,9 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     // results the page scans on entry instead, so this button only ever
     // appears next to "Choose from Last Scan".
     mode_btns[0] = lv_btn_create(btn_row);
-    lv_obj_set_size(mode_btns[0], LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_size(mode_btns[0], LV_SIZE_CONTENT, PICKER_BTN_HEIGHT);
     lv_obj_set_style_pad_hor(mode_btns[0], 12, 0);
-    lv_obj_set_style_pad_ver(mode_btns[0], 6, 0);
+    lv_obj_set_style_pad_ver(mode_btns[0], 0, 0);
     {
         lv_obj_t *rs_lbl = lv_label_create(mode_btns[0]);
         lv_label_set_text(rs_lbl, _lang("Rescan"));
@@ -501,9 +508,9 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
 #endif
 
     last_scan_btn = lv_btn_create(btn_row);
-    lv_obj_set_size(last_scan_btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_size(last_scan_btn, LV_SIZE_CONTENT, PICKER_BTN_HEIGHT);
     lv_obj_set_style_pad_hor(last_scan_btn, 12, 0);
-    lv_obj_set_style_pad_ver(last_scan_btn, 6, 0);
+    lv_obj_set_style_pad_ver(last_scan_btn, 0, 0);
     {
         lv_obj_t *ls_lbl = lv_label_create(last_scan_btn);
         lv_label_set_text(ls_lbl, _lang("Choose from Last Scan"));
