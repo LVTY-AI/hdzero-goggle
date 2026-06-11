@@ -114,6 +114,7 @@ static osd_element_t osd_element_list[OSD_GOGGLE_NUM] = {
     {"Temperature Top", "goggle_temp_top"},
     {"Temperature Left", "goggle_temp_left"},
     {"Temperature Right", "goggle_temp_right"},
+    {"Analog RSSI", "analog_rssi_bar"},
 };
 
 // string used for the dropdown menu
@@ -158,6 +159,10 @@ static void fill_osd_elements_str() {
     if (g_setting.storage.selftest) {
         max_element = OSD_GOGGLE_TEMP_RIGHT;
     }
+
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    max_element = OSD_GOGGLE_ANALOG_RSSI;
+#endif
 
     osd_elements_str[0] = '\0';
     for (int idx = 0; idx < max_element; idx++) {

@@ -306,9 +306,9 @@ void osd_vlq_show(bool bShow) {
 
 void osd_analog_rssi_update_location() {
     if (g_setting.osd.embedded_mode == EMBEDDED_4x3)
-        lv_obj_set_pos(analog_rssi_bar, g_setting.osd.element[OSD_GOGGLE_ANT0].position.mode_4_3.x, g_setting.osd.element[OSD_GOGGLE_ANT0].position.mode_4_3.y + 14);
+        lv_obj_set_pos(analog_rssi_bar, g_setting.osd.element[OSD_GOGGLE_ANALOG_RSSI].position.mode_4_3.x, g_setting.osd.element[OSD_GOGGLE_ANALOG_RSSI].position.mode_4_3.y);
     else
-        lv_obj_set_pos(analog_rssi_bar, g_setting.osd.element[OSD_GOGGLE_ANT0].position.mode_16_9.x, g_setting.osd.element[OSD_GOGGLE_ANT0].position.mode_16_9.y + 14);
+        lv_obj_set_pos(analog_rssi_bar, g_setting.osd.element[OSD_GOGGLE_ANALOG_RSSI].position.mode_16_9.x, g_setting.osd.element[OSD_GOGGLE_ANALOG_RSSI].position.mode_16_9.y);
 }
 
 void osd_analog_rssi_create() {
@@ -338,7 +338,7 @@ void osd_analog_rssi_show(bool bShow) {
     char buf[128];
     // static uint8_t cnt = 0;
 
-    if (!bShow) {
+    if (!bShow || !g_setting.osd.element[OSD_GOGGLE_ANALOG_RSSI].show) {
         lv_obj_add_flag(analog_rssi_bar, LV_OBJ_FLAG_HIDDEN);
         return;
     }

@@ -181,6 +181,7 @@ typedef enum {
     OSD_GOGGLE_TEMP_TOP,
     OSD_GOGGLE_TEMP_LEFT,
     OSD_GOGGLE_TEMP_RIGHT,
+    OSD_GOGGLE_ANALOG_RSSI,
 
     OSD_GOGGLE_NUM,
 } osd_goggle_element_e;

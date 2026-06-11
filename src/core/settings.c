@@ -195,6 +195,11 @@ const setting_t g_setting_defaults = {
                 .show = true,
                 .position = {.mode_4_3 = {.x = 370, .y = 50}, .mode_16_9 = {.x = 370, .y = 50}},
             },
+            // OSD_GOGGLE_ANALOG_RSSI
+            {
+                .show = true,
+                .position = {.mode_4_3 = {.x = 960, .y = 14}, .mode_16_9 = {.x = 1120, .y = 14}},
+            },
         },
     },
     .clock = {
@@ -461,6 +466,7 @@ void settings_load(void) {
     settings_load_osd_element(&g_setting.osd.element[OSD_GOGGLE_TEMP_TOP], "goggle_temp_top", &g_setting_defaults.osd.element[OSD_GOGGLE_TEMP_TOP]);
     settings_load_osd_element(&g_setting.osd.element[OSD_GOGGLE_TEMP_LEFT], "goggle_temp_left", &g_setting_defaults.osd.element[OSD_GOGGLE_TEMP_LEFT]);
     settings_load_osd_element(&g_setting.osd.element[OSD_GOGGLE_TEMP_RIGHT], "goggle_temp_right", &g_setting_defaults.osd.element[OSD_GOGGLE_TEMP_RIGHT]);
+    settings_load_osd_element(&g_setting.osd.element[OSD_GOGGLE_ANALOG_RSSI], "analog_rssi_bar", &g_setting_defaults.osd.element[OSD_GOGGLE_ANALOG_RSSI]);
 
     // power
     g_setting.power.voltage = ini_getl("power", "voltage_mv", g_setting_defaults.power.voltage, SETTING_INI);
