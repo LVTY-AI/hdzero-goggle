@@ -46,6 +46,58 @@ enum STATUS_BOXLITE {
 static lv_obj_t *label[STS_GOGGLE_TOTAL];
 static lv_obj_t *img_sdc;
 static lv_obj_t *img_battery;
+static bool source_detecting = false;
+
+// Formats the "RF: ..." source text for the current source/channel. Shared by
+// statusbar_init, statubar_update, and statusbar_source_detecting(false).
+static void statusbar_format_source(char *buf, size_t len) {
+    if (g_source_info.source == SOURCE_HDZERO) {
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+        if (g_setting.source.auto_protocol_detect) {
+            snprintf(buf, len, "%s: %s", _lang("RF"),
+                     channel2str_tagged(PROTOCOL_HDZ,
+                                        g_setting.scan.channel & 0x7F));
+        } else
+#endif
+        {
+            snprintf(buf, len, "%s: HDZero %s", _lang("RF"),
+                     channel2str(1, g_setting.source.hdzero_band,
+                                 g_setting.scan.channel & 0x7F));
+        }
+    } else if (g_source_info.source == SOURCE_HDMI_IN) {
+        snprintf(buf, len, "HDMI %s", _lang("In"));
+    } else if (g_source_info.source == SOURCE_AV_IN) {
+        snprintf(buf, len, "AV %s", _lang("In"));
+    } else if (g_source_info.source == SOURCE_AV_MODULE) {
+#if defined(HDZGOGGLE)
+        snprintf(buf, len, "%s: %s", _lang("RF"), _lang("Analog"));
+#else // BoxPro + G2: built-in analog, with channel and auto-detect tagging
+        if (g_setting.source.auto_protocol_detect) {
+            snprintf(buf, len, "%s: %s", _lang("RF"),
+                     channel2str_tagged(PROTOCOL_ANALOG,
+                                        g_setting.source.analog_channel));
+        } else {
+            snprintf(buf, len, "%s: %s %s", _lang("RF"), _lang("Analog"),
+                     channel2str(0, 0, g_setting.source.analog_channel));
+        }
+#endif
+    } else {
+        snprintf(buf, len, " ");
+    }
+}
+
+// Swap the status bar's RF source tag for "RF: Detecting..." while the
+// blocking Auto Detect source entry probes (5-10s); restore it afterwards.
+void statusbar_source_detecting(bool on) {
+    char buf[128];
+
+    source_detecting = on;
+    if (on)
+        snprintf(buf, sizeof(buf), "%s: %s...", _lang("RF"), _lang("Detecting"));
+    else
+        statusbar_format_source(buf, sizeof(buf));
+    lv_label_set_text(label[STS_SOURCE], buf);
+}
 
 LV_IMG_DECLARE(img_bat);
 LV_IMG_DECLARE(img_esp);
@@ -136,40 +188,7 @@ int statusbar_init(void) {
     lv_label_set_text(label[STS_SDCARD], buf);
     lv_label_set_recolor(label[STS_SDCARD], true);
 
-    if (g_source_info.source == SOURCE_HDZERO) {
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-        if (g_setting.source.auto_protocol_detect) {
-            snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                     channel2str_tagged(PROTOCOL_HDZ,
-                                        g_setting.scan.channel & 0x7F));
-        } else
-#endif
-        {
-            snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"),
-                     channel2str(1, g_setting.source.hdzero_band,
-                                 g_setting.scan.channel & 0x7F));
-        }
-    } else if (g_source_info.source == SOURCE_HDMI_IN) {
-        snprintf(buf, sizeof(buf), "HDMI %s", _lang("In"));
-    } else if (g_source_info.source == SOURCE_AV_IN) {
-        snprintf(buf, sizeof(buf), "AV %s", _lang("In"));
-    } else if (g_source_info.source == SOURCE_AV_MODULE) {
-#if defined(HDZGOGGLE)
-        sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
-#else // BoxPro + G2: built-in analog, with channel and auto-detect tagging
-        if (g_setting.source.auto_protocol_detect) {
-            snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                     channel2str_tagged(PROTOCOL_ANALOG,
-                                        g_setting.source.analog_channel));
-        } else {
-            sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
-                    channel2str(0, 0, g_setting.source.analog_channel));
-        }
-#endif
-    } else {
-        sprintf(buf, " ");
-    }
-
+    statusbar_format_source(buf, sizeof(buf));
     lv_label_set_text(label[STS_SOURCE], buf);
 
     if (g_setting.has_all_features) {
@@ -240,42 +259,10 @@ void statubar_update(void) {
     static source_t source_last = SOURCE_HDZERO;
     static setting_sources_hdzero_band_t hdzero_band_last = SETTING_SOURCES_HDZERO_BAND_RACEBAND;
     uint8_t channel_changed = (hdzero_channel_last != g_setting.scan.channel) || (analog_channel_last != g_setting.source.analog_channel);
-    if (channel_changed || (source_last != g_source_info.source) || (hdzero_band_last != g_setting.source.hdzero_band)) {
+    if (!source_detecting &&
+        (channel_changed || (source_last != g_source_info.source) || (hdzero_band_last != g_setting.source.hdzero_band))) {
         memset(buf, 0, sizeof(buf));
-        if (g_source_info.source == SOURCE_HDZERO) {
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-            if (g_setting.source.auto_protocol_detect) {
-                snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                         channel2str_tagged(PROTOCOL_HDZ,
-                                            g_setting.scan.channel & 0x7F));
-            } else
-#endif
-            {
-                snprintf(buf, sizeof(buf), "%s: HDZero %s", _lang("RF"),
-                         channel2str(1, g_setting.source.hdzero_band,
-                                     g_setting.scan.channel & 0x7F));
-            }
-        } else if (g_source_info.source == SOURCE_HDMI_IN) {
-            snprintf(buf, sizeof(buf), "HDMI %s", _lang("In"));
-        } else if (g_source_info.source == SOURCE_AV_IN) {
-            snprintf(buf, sizeof(buf), "AV %s", _lang("In"));
-        } else if (g_source_info.source == SOURCE_AV_MODULE) {
-#if defined(HDZGOGGLE)
-            sprintf(buf, "%s: %s", _lang("RF"), _lang("Analog"));
-#else // BoxPro + G2: built-in analog, with channel and auto-detect tagging
-            if (g_setting.source.auto_protocol_detect) {
-                snprintf(buf, sizeof(buf), "%s: %s", _lang("RF"),
-                         channel2str_tagged(PROTOCOL_ANALOG,
-                                            g_setting.source.analog_channel));
-            } else {
-                sprintf(buf, "%s: %s %s", _lang("RF"), _lang("Analog"),
-                        channel2str(0, 0, g_setting.source.analog_channel));
-            }
-#endif
-        } else {
-            sprintf(buf, " ");
-        }
-
+        statusbar_format_source(buf, sizeof(buf));
         lv_label_set_text(label[STS_SOURCE], buf);
     }
 

@@ -24,6 +24,7 @@
 #include "ui/page_scannow.h"
 #include "ui/ui_main_menu.h"
 #include "ui/ui_porting.h"
+#include "ui/ui_statusbar.h"
 #include "ui/ui_style.h"
 #include <log/log.h>
 
@@ -350,6 +351,7 @@ static void page_source_select_auto_detect() {
     // slow the bar (tenths of a percent per tick) to track it. A fixed
     // Wide/Narrow entry is quick, so keep the default fill; otherwise the bar
     // only reaches ~half before video appears.
+    statusbar_source_detecting(true);
     progress_bar.step =
         (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) ? 23 : 0;
     progress_bar.start = 1;
@@ -428,6 +430,7 @@ static void page_source_select_auto_detect() {
     }
     dvr_select_audio_source(g_setting.record.audio_source);
     dvr_enable_line_out(true);
+    statusbar_source_detecting(false);
 }
 #endif
 

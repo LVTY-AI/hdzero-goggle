@@ -239,6 +239,11 @@ void tune_channel(uint8_t action) {
     if (g_setting.ease.no_dial)
         return;
 
+    // Channel selection is disabled while an auto-detect probe is in flight
+    // (the "Detecting..." tag is showing).
+    if (osd_is_detecting())
+        return;
+
 #if defined HDZGOGGLE
     if (g_source_info.source != SOURCE_HDZERO) {
         return;

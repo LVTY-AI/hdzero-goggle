@@ -424,10 +424,24 @@ char *channel2str_tagged(int protocol, uint8_t channel_index) {
     return buf;
 }
 
+// Set while an auto-detect probe is in flight (osd_cover with detecting=true).
+static bool osd_detecting = false;
+
 void osd_channel_show(bool bShow) {
     uint8_t ch;
     lv_color_t color;
     char buf[32];
+
+    // An auto-detect probe is in flight: replace the channel tag with a
+    // "Detecting..." status in the same style as the red "To R1/Dual?"
+    // preview, and keep it up until osd_cover(false, ...) drops the flag.
+    if (osd_detecting) {
+        lv_label_set_text(g_osd_hdzero.channel[is_fhd], "  Detecting...  ");
+        lv_obj_set_style_text_color(g_osd_hdzero.channel[is_fhd], lv_color_make(0xFF, 0x20, 0x20), 0);
+        lv_obj_set_style_bg_opa(g_osd_hdzero.channel[is_fhd], LV_OPA_100, 0);
+        lv_obj_clear_flag(g_osd_hdzero.channel[is_fhd], LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
 
     if (channel_osd_mode & 0x80) {
         ch = channel_osd_mode & 0x7F;
@@ -492,45 +506,47 @@ void osd_channel_show(bool bShow) {
 }
 
 static lv_obj_t *osd_cover_obj = NULL;
-static lv_obj_t *osd_cover_lbl = NULL;
+
+bool osd_is_detecting(void) {
+    return osd_detecting;
+}
 
 // Create the fullscreen cover up front, on the main thread, so the background
-// bw-reacquire watchdog never has to allocate an LVGL object itself.
+// bw-reacquire watchdog never has to allocate an LVGL object itself. The cover
+// sits at the BOTTOM of the screen's z-order: it blacks out the hardware video
+// layer showing through the transparent screen, while the OSD (and any UI)
+// keeps drawing on top of it. Oversized past every edge so boundary rounding
+// can't leave uncovered rows at the very top.
 void osd_cover_create(void) {
     if (osd_cover_obj)
         return;
-    osd_cover_obj = lv_obj_create(lv_layer_top());
+    osd_cover_obj = lv_obj_create(lv_scr_act());
     lv_obj_remove_style_all(osd_cover_obj);
-    lv_obj_set_size(osd_cover_obj, LV_PCT(100), LV_PCT(100));
-    lv_obj_set_pos(osd_cover_obj, 0, 0);
+    lv_obj_set_size(osd_cover_obj, LV_PCT(105), LV_PCT(105));
+    lv_obj_set_pos(osd_cover_obj, -16, -16);
     lv_obj_clear_flag(osd_cover_obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_color(osd_cover_obj, lv_color_black(), 0);
     lv_obj_set_style_bg_opa(osd_cover_obj, LV_OPA_COVER, 0);
-    osd_cover_lbl = lv_label_create(osd_cover_obj);
-    lv_label_set_text(osd_cover_lbl, "Detecting...");
-    lv_obj_set_style_text_color(osd_cover_lbl, lv_color_make(0xFF, 0xFF, 0xFF), 0);
-    lv_obj_center(osd_cover_lbl);
     lv_obj_add_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_background(osd_cover_obj);
 }
 
-// Fullscreen opaque-black overlay that hides the brief green/black flash when
-// HDZero_open() resets the baseband during an Auto-BW bandwidth switch, and
-// (with detecting=true) shows a "Detecting..." status during the auto-detect
-// dial probe. Paints synchronously (lv_refr_now) so it covers BEFORE the
-// caller's blocking open/probe. The bw-reacquire watchdog calls this from a
-// background thread, but always while holding lvgl_mutex.
+// Behind-the-OSD opaque-black mask that hides the brief green/black flash when
+// HDZero_open() resets the baseband during an Auto-BW bandwidth switch. With
+// detecting=true it also tags the channel OSD element with "Detecting..."
+// (see osd_channel_show) and disables dial channel selection (tune_channel
+// checks osd_is_detecting). Paints synchronously (lv_refr_now) so it covers
+// BEFORE the caller's blocking open/probe. The bw-reacquire watchdog calls
+// this from a background thread, but always while holding lvgl_mutex.
 void osd_cover(bool on, bool detecting) {
     if (!osd_cover_obj)
         osd_cover_create();
-    if (on) {
-        if (detecting)
-            lv_obj_clear_flag(osd_cover_lbl, LV_OBJ_FLAG_HIDDEN);
-        else
-            lv_obj_add_flag(osd_cover_lbl, LV_OBJ_FLAG_HIDDEN);
+    osd_detecting = on && detecting;
+    if (on)
         lv_obj_clear_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
-    } else {
+    else
         lv_obj_add_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
-    }
+    osd_channel_show(true); // repaint the channel tag for the detecting state
     lv_refr_now(NULL);
 }
 
