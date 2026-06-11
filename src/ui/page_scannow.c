@@ -877,6 +877,21 @@ int scan_reinit(void) {
     lv_label_set_text(label, _lang("Scanning ready"));
     lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
     user_clear_signal();
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
+    // Called when the menu reopens from video with Scan Now as the current
+    // page (after selecting a scan result into video). Drop the focused-green
+    // presentation -- mode button and selected row -- the same way page exit
+    // does; the results list itself stays visible. Also park the state in
+    // IDLE so a later page exit doesn't tear down the analog RX that is now
+    // the live video receiver.
+    page_state = SCAN_PAGE_IDLE;
+    page_focused = false;
+    update_mode_btn_focus();
+    if (auto_focused_btn) {
+        lv_obj_clear_state(auto_focused_btn, LV_STATE_FOCUSED);
+        style_auto_list_row(auto_focused_btn, false);
+    }
+#endif
     lv_timer_handler();
     return 0;
 }
