@@ -430,7 +430,21 @@ static void page_audio_enable_dac_playback(void) {
     system_exec(buf);
     snprintf(buf, sizeof(buf), "%s out_dac_on", AUDIO_SEL_SH);
     system_exec(buf);
+    // aplay drives AIF1 timeslot 0 only; force the documented clean playback
+    // route (record/audio/audiocodec/audio-setup.txt). The MPI AO engine sets
+    // its own codec route up (which is why normal DVR playback is clean), but
+    // a raw aplay inherits whatever DAC-mixer state the board booted with --
+    // an enabled ADC sidetone or an idle timeslot-1 input mixes noise
+    // straight into the DAC, heard as static under the test sample.
+    system_exec("amixer cset name='DACL Mixer AIF1DA0L Switch' 1");
+    system_exec("amixer cset name='DACR Mixer AIF1DA0R Switch' 1");
+    system_exec("amixer cset name='DACL Mixer ADCL Switch' 0");
+    system_exec("amixer cset name='DACR Mixer ADCR Switch' 0");
     dvr_set_dvr_audio_volume(g_setting.record.dvr_audio_volume);
+    // dvr_set_dvr_audio_volume raises both timeslot volumes; keep the unused
+    // timeslot 1 silent while the test plays (the next real playback or test
+    // restores it).
+    system_exec("amixer cset name='AIF1 DAC timeslot 1 volume' 0,0");
 }
 
 static void page_audio_disable_dac_playback(bool live_audio_was_enabled) {
