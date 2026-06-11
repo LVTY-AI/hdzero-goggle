@@ -1200,8 +1200,10 @@ static void page_scannow_on_click(uint8_t key, int sel) {
         // Picks from a fresh scan are near-instant (receiver parked on the
         // focused result). Re-opened "Choose from Last Scan" results have to
         // retune/reopen from scratch -- show the loading bar so the wait
-        // doesn't look like a hang.
-        if (!results_receiver_parked)
+        // doesn't look like a hang. HDZ picks only: analog comes up fast,
+        // and app_switch_to_analog never clears the bar (only the HDZ path
+        // does), so starting it for analog left it stuck on screen.
+        if (!results_receiver_parked && res->protocol == PROTOCOL_HDZ)
             progress_bar.start = 1;
         results_receiver_parked = false;
         app_state_push(APP_STATE_VIDEO);
