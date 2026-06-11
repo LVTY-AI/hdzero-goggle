@@ -740,6 +740,7 @@ void osd_show_all_elements() {
     else
         lv_obj_add_flag(g_osd_hdzero.ant3[is_fhd], LV_OBJ_FLAG_HIDDEN);
 
+
     if (!g_setting.storage.selftest)
         return;
 

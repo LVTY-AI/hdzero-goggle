@@ -111,10 +111,10 @@ static osd_element_t osd_element_list[OSD_GOGGLE_NUM] = {
     {"Antenna 2", "ant1"},
     {"Antenna 3", "ant2"},
     {"Antenna 4", "ant3"},
+    {"Analog RSSI", "analog_rssi_bar"},
     {"Temperature Top", "goggle_temp_top"},
     {"Temperature Left", "goggle_temp_left"},
     {"Temperature Right", "goggle_temp_right"},
-    {"Analog RSSI", "analog_rssi_bar"},
 };
 
 // string used for the dropdown menu
@@ -154,15 +154,15 @@ static setting_osd_goggle_element_t *get_osd_element_setting_entry(int element_i
 
 // creates the string used for the dropdown menu
 static void fill_osd_elements_str() {
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    int max_element = OSD_GOGGLE_ANALOG_RSSI;
+#else
     int max_element = OSD_GOGGLE_ANT3;
+#endif
 
     if (g_setting.storage.selftest) {
         max_element = OSD_GOGGLE_TEMP_RIGHT;
     }
-
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-    max_element = OSD_GOGGLE_ANALOG_RSSI;
-#endif
 
     osd_elements_str[0] = '\0';
     for (int idx = 0; idx < max_element; idx++) {
@@ -401,6 +401,7 @@ static int ui_handle_click() {
         osd_update_element_positions();
         break;
 
+
     case ROW_OSD_ELEMENT:
         if (ui_state != UI_STATE_FOCUSED) {
             ui_state = UI_STATE_FOCUSED;
@@ -524,6 +525,7 @@ static void reset_ui() {
 
     ui_set_selection(ui_cur_row);
     lv_dropdown_set_selected(dropdown_osd_element, 0);
+
 
     save_osd_elements_reset_label_text();
     cancel_osd_elements_reset_label_text();

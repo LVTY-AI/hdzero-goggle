@@ -183,6 +183,11 @@ const setting_t g_setting_defaults = {
                 .show = true,
                 .position = {.mode_4_3 = {.x = 1000, .y = 0}, .mode_16_9 = {.x = 1160, .y = 0}},
             },
+            // OSD_GOGGLE_ANALOG_RSSI
+            {
+                .show = true,
+                .position = {.mode_4_3 = {.x = 960, .y = 14}, .mode_16_9 = {.x = 1120, .y = 14}},
+            },
             // OSD_GOGGLE_TEMP_TOP
             {
                 .show = true,
@@ -197,11 +202,6 @@ const setting_t g_setting_defaults = {
             {
                 .show = true,
                 .position = {.mode_4_3 = {.x = 370, .y = 50}, .mode_16_9 = {.x = 370, .y = 50}},
-            },
-            // OSD_GOGGLE_ANALOG_RSSI
-            {
-                .show = true,
-                .position = {.mode_4_3 = {.x = 960, .y = 14}, .mode_16_9 = {.x = 1120, .y = 14}},
             },
         },
     },
