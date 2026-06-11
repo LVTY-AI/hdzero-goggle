@@ -104,6 +104,12 @@ typedef enum {
 static scan_mode_t scan_mode = SCAN_MODE_HDZERO;
 static scan_page_state_t page_state = SCAN_PAGE_IDLE;
 static lv_obj_t *mode_btns[3];     // 0=HDZero, 1=Analog, 2=Auto/Both
+static bool page_focused = false;  // true only while the page holds input focus;
+                                   // gates the mode-picker green so it does not
+                                   // show while merely hovered in the sidebar.
+static int idle_sel = 0;           // picker cursor: 0..SCAN_MODE_COUNT-1 pick a
+                                   // mode; SCAN_MODE_COUNT = "Choose from Last Scan".
+static lv_obj_t *last_scan_btn = NULL;
 
 static void update_mode_btn_focus(void) {
     // Theme button background defaults are very light on this skin and the
@@ -111,7 +117,7 @@ static void update_mode_btn_focus(void) {
     // background for unfocused, green for focused, white text always.
     for (int i = 0; i < SCAN_MODE_COUNT; i++) {
         if (!mode_btns[i]) continue;
-        bool is_focused = (i == (int)scan_mode);
+        bool is_focused = page_focused && (i == idle_sel);
         lv_obj_set_style_bg_color(mode_btns[i],
                                   is_focused ? lv_color_make(0, 0xA0, 0)
                                              : lv_color_make(0x40, 0x40, 0x40),
@@ -127,6 +133,22 @@ static void update_mode_btn_focus(void) {
         } else {
             lv_obj_clear_state(mode_btns[i], LV_STATE_FOCUSED);
         }
+    }
+    if (last_scan_btn) {
+        bool sel = page_focused && (idle_sel == SCAN_MODE_COUNT);
+        lv_obj_set_style_bg_color(last_scan_btn,
+                                  sel ? lv_color_make(0, 0xA0, 0)
+                                      : lv_color_make(0x40, 0x40, 0x40),
+                                  LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(last_scan_btn, LV_OPA_100, LV_PART_MAIN);
+        lv_obj_set_style_border_width(last_scan_btn, sel ? 2 : 0, LV_PART_MAIN);
+        lv_obj_set_style_border_color(last_scan_btn,
+                                      lv_color_make(0xFF, 0xFF, 0xFF),
+                                      LV_PART_MAIN);
+        if (sel)
+            lv_obj_add_state(last_scan_btn, LV_STATE_FOCUSED);
+        else
+            lv_obj_clear_state(last_scan_btn, LV_STATE_FOCUSED);
     }
 }
 
@@ -309,6 +331,14 @@ static void set_results_widget_visibility(void) {
         if (channel_tb[i].label) lv_obj_add_flag(channel_tb[i].label, LV_OBJ_FLAG_HIDDEN);
         if (channel_tb[i].img1)  lv_obj_add_flag(channel_tb[i].img1,  LV_OBJ_FLAG_HIDDEN);
     }
+
+    // "Choose from Last Scan" is offered only when a previous scan left results.
+    if (last_scan_btn) {
+        if (auto_result_count > 0)
+            lv_obj_clear_flag(last_scan_btn, LV_OBJ_FLAG_HIDDEN);
+        else
+            lv_obj_add_flag(last_scan_btn, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 #endif
 
@@ -408,8 +438,25 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_style_pad_top(label2, UI_SCANNOW_NOTE_PAD, 0);
     lv_label_set_long_mode(label2, LV_LABEL_LONG_WRAP);
     lv_obj_set_grid_cell(label2, LV_GRID_ALIGN_START, 2, 1,
-                         LV_GRID_ALIGN_START, 0, 3);
+                         LV_GRID_ALIGN_START, 0, 2);
 
+#if SCAN_MODE_COUNT > 1
+    // "Choose from Last Scan" -- re-opens the persisted results without
+    // rescanning. Lives in the scanner's right column below the note (matching
+    // the mockup), shown only when a previous scan produced results, and reached
+    // by dialing past the last mode button.
+    last_scan_btn = lv_btn_create(cont1);
+    lv_obj_set_grid_cell(last_scan_btn, LV_GRID_ALIGN_STRETCH, 2, 1,
+                         LV_GRID_ALIGN_CENTER, 2, 1);
+    {
+        lv_obj_t *ls_lbl = lv_label_create(last_scan_btn);
+        lv_label_set_text(ls_lbl, _lang("Choose from Last Scan"));
+        lv_obj_set_style_text_color(ls_lbl, lv_color_make(0xFF, 0xFF, 0xFF), 0);
+        lv_obj_set_style_text_font(ls_lbl, UI_SCANNOW_NOTE_FONT, 0);
+        lv_obj_center(ls_lbl);
+    }
+    lv_obj_add_flag(last_scan_btn, LV_OBJ_FLAG_HIDDEN);
+#endif
 
     lv_obj_t *cont2 = lv_obj_create(page);
     lv_obj_set_size(cont2, UI_SCANNOW_FREQ_SIZE);
@@ -871,13 +918,19 @@ static void start_scan_in_current_mode(void) {
     LOGI("scan return :%d", auto_scaned_cnt);
     page_state = SCAN_PAGE_RESULTS;
     set_results_widget_visibility();
+    if (auto_result_count == 0)
+        lv_label_set_text(label, _lang("Scanning Done. No Signals Found."));
+    else
+        lv_label_set_text(label, _lang("Scanning Done"));
 }
 #endif
 
 static void page_scannow_enter() {
+    page_focused = true;
 #if SCAN_MODE_COUNT > 1
     // Multi-mode (BoxPro): land in IDLE — user picks a mode, click runs the scan.
     page_state = SCAN_PAGE_IDLE;
+    idle_sel = (int)scan_mode;
     set_results_widget_visibility();
     update_mode_btn_focus();
     lv_label_set_text(label, _lang("Scan Ready"));
@@ -898,6 +951,12 @@ static void page_scannow_enter() {
 static bool page_scannow_on_back(void) {
 #if SCAN_MODE_COUNT > 1
     if (page_state == SCAN_PAGE_RESULTS) {
+        if (auto_result_count == 0) {
+            // Nothing was found, so there is no channel list to step back from;
+            // a long-press leaves the Scan Now page entirely. page_scannow_exit
+            // handles the analog RX teardown.
+            return false;
+        }
         // Tear down analog RX the same way exit would, so a subsequent IDLE
         // scan power-on cycle starts from a clean state.
         if (scan_mode == SCAN_MODE_ANALOG || scan_mode == SCAN_MODE_AUTO) {
@@ -923,6 +982,18 @@ static void page_scannow_exit() {
         rtc6715.init(0, 0); // power down analog RX on exit
     }
     page_state = SCAN_PAGE_IDLE;
+    // Drop focus and grey the picker, but leave the results list on screen so
+    // the user can still glance at the last scan from the sidebar (and reach it
+    // via "Choose from Last Scan"). Just de-highlight the selected row so no
+    // green lingers while the page is unfocused.
+    page_focused = false;
+    update_mode_btn_focus();
+    if (auto_focused_btn) {
+        lv_obj_clear_state(auto_focused_btn, LV_STATE_FOCUSED);
+        style_auto_list_row(auto_focused_btn, false);
+    }
+    lv_label_set_text(label, _lang("Scan Ready"));
+    lv_bar_set_value(progressbar, 0, LV_ANIM_OFF);
 #endif
     // HDZero_Close() is idempotent (resets DM5680 baseband and clears
     // hdzero_open flag). Always call so a session that ran scan_now_hdzero
@@ -933,15 +1004,21 @@ static void page_scannow_exit() {
 static void page_scannow_on_roller(uint8_t key) {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
     if (page_state == SCAN_PAGE_IDLE) {
-        // Cycle through the mode buttons.
-        int new_mode = (int)scan_mode;
-        if (key == DIAL_KEY_UP && new_mode + 1 < SCAN_MODE_COUNT) {
-            new_mode++;
-        } else if (key == DIAL_KEY_DOWN && new_mode > 0) {
-            new_mode--;
+        // Cycle the picker: modes 0..SCAN_MODE_COUNT-1, then "Choose from Last
+        // Scan" (index SCAN_MODE_COUNT) when a previous scan left results.
+        int maxsel = (last_scan_btn && auto_result_count > 0)
+                         ? SCAN_MODE_COUNT
+                         : SCAN_MODE_COUNT - 1;
+        int new_sel = idle_sel;
+        if (key == DIAL_KEY_UP && idle_sel < maxsel) {
+            new_sel = idle_sel + 1;
+        } else if (key == DIAL_KEY_DOWN && idle_sel > 0) {
+            new_sel = idle_sel - 1;
         }
-        if (new_mode != (int)scan_mode) {
-            scan_mode = (scan_mode_t)new_mode;
+        if (new_sel != idle_sel) {
+            idle_sel = new_sel;
+            if (idle_sel < SCAN_MODE_COUNT)
+                scan_mode = (scan_mode_t)idle_sel;
             update_mode_btn_focus();
         }
         return;
@@ -988,10 +1065,28 @@ static void page_scannow_on_roller(uint8_t key) {
 static void page_scannow_on_click(uint8_t key, int sel) {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
     if (page_state == SCAN_PAGE_IDLE) {
+#if SCAN_MODE_COUNT > 1
+        if (idle_sel == SCAN_MODE_COUNT) {
+            // "Choose from Last Scan": re-show the persisted results, no rescan.
+            if (auto_result_count > 0) {
+                render_auto_results_list();
+                page_state = SCAN_PAGE_RESULTS;
+                set_results_widget_visibility();
+                lv_label_set_text(label, _lang("Last scan"));
+            }
+            return;
+        }
+#endif
         // Click on a mode button: persist selection and trigger the scan.
         g_setting.source.scan_mode_initial = (uint8_t)scan_mode;
         ini_putl("source", "scan_mode_initial",
                  g_setting.source.scan_mode_initial, SETTING_INI);
+        start_scan_in_current_mode();
+        return;
+    }
+    // RESULTS state with an empty scan: nothing to select, so a short press just
+    // rescans in the same mode. (Long-press leaves the page -- see on_back.)
+    if (auto_result_count == 0) {
         start_scan_in_current_mode();
         return;
     }
