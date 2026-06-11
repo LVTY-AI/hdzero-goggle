@@ -352,11 +352,12 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_add_style(page, &style_scan, LV_PART_MAIN);
     lv_obj_set_style_pad_top(page, UI_SCANNOW_PAGE_PAD, 0);
 
-    // Mode selector at the top: one button per scan mode. On G1 there is a
-    // single mode (HDZero), so the picker is just a "Scan" button -- it still
-    // gets the IDLE landing so an empty scan isn't a dead end and "Choose from
-    // Last Scan" is reachable. Sits in its own absolute-positioned container
-    // so it isn't constrained by cont1's grid template.
+#if SCAN_MODE_COUNT > 1
+    // Mode selector at the top: one button per scan mode (BoxPro/G2). G1 has a
+    // single protocol, so it gets no mode buttons -- pressing Enter in the
+    // IDLE landing starts the scan directly (the note says so), and the dial
+    // still reaches "Choose from Last Scan". Sits in its own
+    // absolute-positioned container so it isn't constrained by cont1's grid.
     {
         lv_obj_t *cont_mode = lv_obj_create(page);
         lv_obj_set_size(cont_mode, 780, 56);
@@ -366,11 +367,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_set_style_border_width(cont_mode, 0, 0);
         lv_obj_set_style_pad_all(cont_mode, 0, 0);
 
-#if SCAN_MODE_COUNT > 1
         static const char *mode_names[3] = {"HDZero", "Analog", "Dual"};
-#else
-        static const char *mode_names[1] = {"Scan"};
-#endif
         for (int i = 0; i < SCAN_MODE_COUNT; i++) {
             mode_btns[i] = lv_btn_create(cont_mode);
             lv_obj_set_size(mode_btns[i], 220, 44);
@@ -387,6 +384,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         if ((int)scan_mode >= SCAN_MODE_COUNT) scan_mode = SCAN_MODE_HDZERO;
         update_mode_btn_focus();
     }
+#endif
 
     lv_obj_t *cont1 = lv_obj_create(page);
     lv_obj_set_size(cont1, UI_SCANNOW_SCANNER_SIZE);
