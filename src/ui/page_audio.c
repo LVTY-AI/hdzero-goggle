@@ -485,23 +485,16 @@ static void *page_audio_test_thread(void *arg) {
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     bool rx_powered_for_test = false;
-    bool rx_audio_forced = false;
-    // The Live and Line/AV tests sample the analog RX audio on LINEIN. Power
-    // the RX up if a non-analog source left it off, and always force its
-    // audio path on for the test: the normal record-source gating
-    // (audio on only when audio source == A/V In) otherwise leaves the RX
-    // muted, which made the Live test fully silent -- not even static.
+    // The Live and Line/AV tests sample the analog RX audio on LINEIN. In
+    // the menu the RX is ALWAYS powered down -- app_switch_to_menu turns it
+    // off even when the analog module is the active source, so
+    // g_source_info.source alone says nothing about its power state. Power
+    // it up and tune it unconditionally, with audio forced on (the normal
+    // record-source gating would leave it muted -- silent, not even static).
     if (mode == AUDIO_TEST_LIVE || mode == AUDIO_TEST_LINE_AV) {
-        if (g_source_info.source != SOURCE_AV_MODULE) {
-            rtc6715.init(1, 1);
-            rtc6715.set_ch(g_setting.source.analog_channel - 1);
-            rx_powered_for_test = true;
-        } else {
-            // RX is the live receiver, already powered and tuned: just
-            // unmute its audio for the test.
-            rtc6715.init(1, 1);
-            rx_audio_forced = true;
-        }
+        rtc6715.init(1, 1);
+        rtc6715.set_ch(g_setting.source.analog_channel - 1);
+        rx_powered_for_test = true;
     }
 #endif
 
@@ -552,12 +545,20 @@ static void *page_audio_test_thread(void *arg) {
     }
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-    // Power the RX back down unless it is (now) the live receiver -- then
-    // just restore the normal record-source audio gating instead.
-    if (rx_powered_for_test && g_source_info.source != SOURCE_AV_MODULE)
-        rtc6715.init(0, 0);
-    else if (rx_powered_for_test || rx_audio_forced)
-        rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
+    if (rx_powered_for_test) {
+        if (g_app_state == APP_STATE_VIDEO &&
+            g_source_info.source == SOURCE_AV_MODULE) {
+            // The user entered analog video mid-test: the RX is the live
+            // receiver now, so just restore the record-source audio gating.
+            rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
+        } else {
+            // Back to the menu's normal state: RX off. (Checking only
+            // g_source_info.source here once left the RX powered in the
+            // menu after every test -- it runs hot enough that
+            // rescue_from_hot maxed the fan out within a minute.)
+            rtc6715.init(0, 0);
+        }
+    }
 #endif
 
     audio_test_phase = AUDIO_TEST_PHASE_IDLE;
