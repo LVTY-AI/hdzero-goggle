@@ -12,6 +12,7 @@
 #include "core/app_state.h"
 #include "core/common.hh"
 #include "core/dvr.h"
+#include "driver/rtc6715.h"
 #include "lang/language.h"
 #include "page_common.h"
 #include "ui/ui_style.h"
@@ -356,7 +357,11 @@ static void page_audio_on_roller(uint8_t key) {
 static void page_audio_play_wav(const char *path) {
     char buf[256];
 
-    snprintf(buf, sizeof(buf), "%s -D hw:audiocodec %s", AUDIO_TEST_APLAY, path);
+    // plughw, not hw: the plug layer handles any format/rate conversion the
+    // raw device won't, which the bare hw: playback rendered as heavy static
+    // (normal DVR playback goes through the MPI AO engine instead and was
+    // clean).
+    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec %s", AUDIO_TEST_APLAY, path);
     system_exec(buf);
 }
 
@@ -406,6 +411,19 @@ static void *page_audio_test_thread(void *arg) {
     audio_test_mode_t mode = (audio_test_mode_t)(intptr_t)arg;
     setting_record_audio_source_t previous_source = g_setting.record.audio_source;
     bool live_audio_was_enabled = dvr_live_audio_is_enabled();
+    bool rx_powered_for_test = false;
+
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // The Live and Line/AV tests sample the analog RX audio on LINEIN; with a
+    // non-analog source the RX is powered down and the tests are silent.
+    // Power it up for the test the same way app_switch_to_analog does.
+    if ((mode == AUDIO_TEST_LIVE || mode == AUDIO_TEST_LINE_AV) &&
+        g_source_info.source != SOURCE_AV_MODULE) {
+        rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
+        rtc6715.set_ch(g_setting.source.analog_channel - 1);
+        rx_powered_for_test = true;
+    }
+#endif
 
     active_test_mode = mode;
     switch (mode) {
@@ -448,6 +466,14 @@ static void *page_audio_test_thread(void *arg) {
         page_audio_disable_dac_playback(live_audio_was_enabled);
         break;
     }
+
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // Power the RX back down unless the user switched to the analog source
+    // mid-test (then it is the live receiver now -- leave it running).
+    if (rx_powered_for_test && g_source_info.source != SOURCE_AV_MODULE)
+        rtc6715.init(0, 0);
+#endif
+    (void)rx_powered_for_test;
 
     audio_test_phase = AUDIO_TEST_PHASE_IDLE;
     audio_test_running = false;
