@@ -379,6 +379,9 @@ void main_menu_init(void) {
     lv_obj_add_flag(lv_menu_get_cur_sidebar_page(menu), LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(root_page, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(section, LV_OBJ_FLAG_SCROLLABLE);
+    // Let the scroll run a little past the last entry so its descenders
+    // (the "p" in "Sleep Now") aren't clipped at the bottom edge.
+    lv_obj_set_style_pad_bottom(section, 16, 0);
 
     progress_bar.bar = lv_bar_create(lv_scr_act());
     lv_obj_set_size(progress_bar.bar, UI_MENU_PROG_BAR_SIZE);
