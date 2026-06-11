@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/vfs.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <log/log.h>
@@ -118,6 +119,7 @@ static void detect_sdcard(void) {
 #define SIGNAL_ACCQ_DURATION_THR 10
 static void check_source_signal(int vtmg_change) {
     static uint8_t cnt = 0;
+    static time_t signal_loss_at = 0; // 0 = no pending delayed stop
     uint8_t is_valid;
 
     // HDZero digital
@@ -154,6 +156,7 @@ static void check_source_signal(int vtmg_change) {
             LOGI("AV VTMG change");
             dvr_cmd(DVR_STOP);
             dvr_cmd(DVR_START);
+            signal_loss_at = 0;
         }
     }
 
@@ -163,6 +166,7 @@ static void check_source_signal(int vtmg_change) {
         dvr_cmd(DVR_STOP);
         system_script(REC_STOP_LIVE);
         cnt = 0;
+        signal_loss_at = 0;
     }
 
     // HDMI VTMG change -> Restart recording
@@ -170,20 +174,36 @@ static void check_source_signal(int vtmg_change) {
         LOGI("HDMI IN VTMG change");
         dvr_cmd(DVR_STOP);
         cnt = 0;
+        signal_loss_at = 0;
     }
 
     if (dvr_is_recording) { // in-recording
         if (!is_valid) {
-            cnt++;
+            if (cnt < SIGNAL_LOSS_DURATION_THR)
+                cnt++;
             if (cnt >= SIGNAL_LOSS_DURATION_THR) {
-                cnt = 0;
-                LOGI("Signal lost");
-                g_setting.ht.alarm_on_video = false;
-                dvr_cmd(DVR_STOP);
+                // debounce satisfied; optionally hold on for the user's grace
+                // period so a brief dropout doesn't split the recording.
+                // HDMI-in keeps its immediate-stop behavior.
+                uint8_t effective_delay = (g_source_info.source == SOURCE_HDMI_IN)
+                                              ? 0
+                                              : g_setting.record.stop_delay_seconds;
+                if (signal_loss_at == 0)
+                    signal_loss_at = time(NULL);
+                if (difftime(time(NULL), signal_loss_at) >= effective_delay) {
+                    cnt = 0;
+                    signal_loss_at = 0;
+                    LOGI("Signal lost");
+                    g_setting.ht.alarm_on_video = false;
+                    dvr_cmd(DVR_STOP);
+                }
             }
-        } else
+        } else {
             cnt = 0;
+            signal_loss_at = 0; // signal reacquired -- cancel any pending stop
+        }
     } else { // not in-recording
+        signal_loss_at = 0;
         if (is_valid) {
             cnt++;
             if (cnt >= SIGNAL_ACCQ_DURATION_THR) {

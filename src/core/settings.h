@@ -107,6 +107,7 @@ typedef struct {
     int mic_gain;
     int linein_gain;
     setting_record_naming_t naming;
+    uint8_t stop_delay_seconds; // auto record: grace period after signal loss before stopping (0 = off)
 } setting_record_t;
 
 typedef struct {

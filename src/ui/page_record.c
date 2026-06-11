@@ -8,16 +8,21 @@
 #include "../conf/ui.h"
 
 #include "../core/common.hh"
+#include "core/app_state.h"
 #include "driver/rtc.h"
 #include "lang/language.h"
 #include "page_common.h"
 #include "ui/ui_style.h"
+
+#define STOP_DELAY_MAX 30
+#define STOP_DELAY_STEP 5
 
 static btn_group_t btn_group_record_mode;
 static btn_group_t btn_group_format;
 static btn_group_t btn_group_bitrate_scale;
 static btn_group_t btn_group_record_osd;
 static btn_group_t btn_group_file_naming;
+static slider_group_t slider_group_stop_delay;
 
 enum {
     ROW_RECORD_MODE = 0,
@@ -25,13 +30,28 @@ enum {
     ROW_RECORD_BITRATE,
     ROW_RECORD_OSD,
     ROW_NAMING_SCHEME,
+    ROW_STOP_DELAY,
     ROW_BACK,
 
     ROW_COUNT
 };
 
+static bool stop_delay_focused = false;
+static bool stop_delay_changed = false;
+
 static lv_coord_t col_dsc[] = {UI_RECORD_COLS};
 static lv_coord_t row_dsc[] = {UI_RECORD_ROWS};
+
+static void update_stop_delay_label() {
+    char buf[16];
+
+    lv_slider_set_value(slider_group_stop_delay.slider, g_setting.record.stop_delay_seconds, LV_ANIM_OFF);
+    if (g_setting.record.stop_delay_seconds == 0)
+        snprintf(buf, sizeof(buf), "%s", _lang("Off"));
+    else
+        snprintf(buf, sizeof(buf), "%ds", g_setting.record.stop_delay_seconds);
+    lv_label_set_text(slider_group_stop_delay.label, buf);
+}
 
 static void update_visibility() {
     btn_group_enable(&btn_group_file_naming, rtc_has_battery() == 0);
@@ -74,6 +94,7 @@ static lv_obj_t *page_record_create(lv_obj_t *parent, panel_arr_t *arr) {
     create_btn_group_item(&btn_group_bitrate_scale, cont, 3, _lang("Record Bitrate"), _lang("Normal"), "1/2", "1/4", "", ROW_RECORD_BITRATE);
     create_btn_group_item(&btn_group_record_osd, cont, 2, _lang("Record OSD"), _lang("Yes"), _lang("No"), "", "", ROW_RECORD_OSD);
     create_btn_group_item(&btn_group_file_naming, cont, 2, _lang("Naming Scheme"), _lang("Digits"), _lang("Date"), "", "", ROW_NAMING_SCHEME);
+    create_slider_item(&slider_group_stop_delay, cont, _lang("Auto Stop Delay"), STOP_DELAY_MAX, g_setting.record.stop_delay_seconds, ROW_STOP_DELAY);
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
     create_label_item(cont, buf, 1, ROW_BACK, 1);
 
@@ -82,14 +103,57 @@ static lv_obj_t *page_record_create(lv_obj_t *parent, panel_arr_t *arr) {
     btn_group_set_sel(&btn_group_bitrate_scale, g_setting.record.bitrate_scale);
     btn_group_set_sel(&btn_group_record_osd, g_setting.record.osd ? 0 : 1);
     btn_group_set_sel(&btn_group_file_naming, g_setting.record.naming);
+    update_stop_delay_label();
 
     update_visibility();
 
     return page;
 }
 
+static void page_record_exit_stop_delay() {
+    lv_obj_add_style(slider_group_stop_delay.slider, &style_silder_main, LV_PART_MAIN);
+    app_state_push(APP_STATE_SUBMENU);
+
+    if (stop_delay_changed) {
+        ini_putl("record", "stop_delay_seconds", g_setting.record.stop_delay_seconds, SETTING_INI);
+        stop_delay_changed = false;
+    }
+    stop_delay_focused = false;
+}
+
+static void page_record_exit() {
+    if (stop_delay_focused) {
+        page_record_exit_stop_delay();
+    }
+}
+
+static void page_record_on_roller(uint8_t key) {
+    int value;
+
+    if (!stop_delay_focused)
+        return;
+
+    value = g_setting.record.stop_delay_seconds;
+    if (key == DIAL_KEY_UP && value > 0) {
+        value -= STOP_DELAY_STEP;
+    } else if (key == DIAL_KEY_DOWN && value < STOP_DELAY_MAX) {
+        value += STOP_DELAY_STEP;
+    } else {
+        return;
+    }
+
+    g_setting.record.stop_delay_seconds = value;
+    update_stop_delay_label();
+    stop_delay_changed = true;
+}
+
 static void page_record_on_click(uint8_t key, int sel) {
     (void)key;
+
+    if (stop_delay_focused) {
+        page_record_exit_stop_delay();
+        return;
+    }
 
     if (sel == ROW_RECORD_MODE) {
         btn_group_toggle_sel(&btn_group_record_mode);
@@ -117,6 +181,11 @@ static void page_record_on_click(uint8_t key, int sel) {
             g_setting.record.naming = btn_group_get_sel(&btn_group_file_naming);
             ini_putl("record", "naming", g_setting.record.naming, SETTING_INI);
         }
+    } else if (sel == ROW_STOP_DELAY) {
+        stop_delay_focused = true;
+        stop_delay_changed = false;
+        app_state_push(APP_STATE_SUBMENU_ITEM_FOCUSED);
+        lv_obj_add_style(slider_group_stop_delay.slider, &style_silder_select, LV_PART_MAIN);
     }
 }
 
@@ -128,10 +197,10 @@ page_pack_t pp_record = {
     .name = "Record Option",
     .create = page_record_create,
     .enter = NULL,
-    .exit = NULL,
+    .exit = page_record_exit,
     .on_created = NULL,
     .on_update = NULL,
-    .on_roller = NULL,
+    .on_roller = page_record_on_roller,
     .on_click = page_record_on_click,
     .on_right_button = NULL,
 };

@@ -65,6 +65,7 @@ const setting_t g_setting_defaults = {
         .mic_gain = 4,
         .linein_gain = 3,
         .naming = SETTING_NAMING_CONTIGUOUS,
+        .stop_delay_seconds = 0,
     },
     .image = {
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
@@ -513,6 +514,9 @@ void settings_load(void) {
     else if (g_setting.record.linein_gain > 7)
         g_setting.record.linein_gain = 7;
     g_setting.record.naming = ini_getl("record", "naming", g_setting_defaults.record.naming, SETTING_INI);
+    g_setting.record.stop_delay_seconds = ini_getl("record", "stop_delay_seconds", g_setting_defaults.record.stop_delay_seconds, SETTING_INI);
+    if (g_setting.record.stop_delay_seconds > 30)
+        g_setting.record.stop_delay_seconds = 30;
 
     // image
     g_setting.image.oled = ini_getl("image", "oled", g_setting_defaults.image.oled, SETTING_INI);
