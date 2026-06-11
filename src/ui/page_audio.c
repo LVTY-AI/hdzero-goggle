@@ -29,6 +29,10 @@
 #define AUDIO_TEST_APLAY "/mnt/app/app/record/audio/aplay"
 #define AUDIO_TEST_ARECORD "/mnt/app/app/record/audio/arecord"
 #define AUDIO_TEST_COUNT 4
+#define AUDIO_TEST_SECONDS 5            // live stream / record length
+#define AUDIO_TEST_DVR_SAMPLE_MS 10000  // bundled test WAV length
+// content width inside the 3px button border, used by the progress fill
+#define AUDIO_TEST_FILL_MAX_W (UI_AUDIO_TEST_BUTTON_WIDTH - 6)
 
 static btn_group_t btn_group_record_audio;
 static btn_group_t btn_group_audio_source;
@@ -39,6 +43,7 @@ static slider_group_t slider_group_linein_gain;
 static lv_obj_t *test_container;
 static lv_obj_t *test_btn[AUDIO_TEST_COUNT];
 static lv_obj_t *test_label[AUDIO_TEST_COUNT];
+static lv_obj_t *test_fill[AUDIO_TEST_COUNT];
 
 enum {
     ROW_RECORD_AUDIO = 0,
@@ -73,6 +78,7 @@ static bool selected_slider_changed;
 static bool selected_test_active;
 static volatile bool audio_test_running;
 static volatile audio_test_phase_t audio_test_phase;
+static volatile uint32_t audio_test_phase_duration_ms; // 0 = indeterminate
 static volatile audio_test_mode_t active_test_mode = AUDIO_TEST_DVR;
 static volatile audio_test_mode_t selected_test_mode = AUDIO_TEST_DVR;
 static uint32_t audio_test_update_ms;
@@ -103,6 +109,16 @@ static void create_test_button(lv_obj_t *parent, audio_test_mode_t mode, const c
     lv_obj_set_style_border_color(test_btn[mode], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
     lv_obj_set_style_radius(test_btn[mode], 0, 0);
     lv_obj_set_style_pad_all(test_btn[mode], 0, 0);
+
+    // Progress fill: grows left-to-right behind the label while a test runs
+    // (red while recording, green while playing back). Created before the
+    // label so the text stays on top.
+    test_fill[mode] = lv_obj_create(test_btn[mode]);
+    lv_obj_remove_style_all(test_fill[mode]);
+    lv_obj_set_size(test_fill[mode], 0, UI_AUDIO_TEST_BUTTON_HEIGHT - 6);
+    lv_obj_align(test_fill[mode], LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_bg_opa(test_fill[mode], LV_OPA_TRANSP, 0);
+    lv_obj_clear_flag(test_fill[mode], LV_OBJ_FLAG_SCROLLABLE);
 
     test_label[mode] = lv_label_create(test_btn[mode]);
     lv_label_set_text(test_label[mode], name);
@@ -190,7 +206,7 @@ static lv_obj_t *page_audio_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
     create_label_item(cont, buf, 1, ROW_BACK, 1);
     lv_obj_t *note = lv_label_create(cont);
-    lv_label_set_text(note, _lang("*Mic: record 10s, auto playback.\n**Line/AV: record 10s, auto playback."));
+    lv_label_set_text(note, _lang("*Mic: record 5s, auto playback.\n**Line/AV: record 5s, auto playback."));
     lv_obj_set_style_text_font(note, UI_PAGE_LABEL_FONT, 0);
     lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
@@ -211,8 +227,12 @@ static lv_obj_t *page_audio_create(lv_obj_t *parent, panel_arr_t *arr) {
 }
 
 static void page_audio_update_test_indicator(uint32_t delta_ms) {
+    static audio_test_phase_t prev_phase = AUDIO_TEST_PHASE_IDLE;
+    static bool prev_running = false;
+    static uint32_t phase_elapsed_ms = 0;
     bool blink_on;
-    lv_color_t active_color = lv_color_make(0, 0xff, 0);
+    lv_color_t record_color = lv_color_make(0xff, 0x20, 0x20);
+    lv_color_t play_color = lv_color_make(0, 0xc0, 0);
     lv_color_t idle_color = lv_color_hex(TEXT_COLOR_DEFAULT);
     lv_color_t selected_color = lv_color_make(0xff, 0xff, 0xff);
     lv_color_t focused_color = lv_color_make(0xff, 0, 0);
@@ -220,22 +240,58 @@ static void page_audio_update_test_indicator(uint32_t delta_ms) {
     audio_test_update_ms += delta_ms;
     blink_on = (audio_test_update_ms / 250) % 2 == 0;
 
+    // Track how long the current phase has been showing so the fill can grow
+    // in step with the known phase duration.
+    audio_test_phase_t phase = audio_test_phase;
+    bool running = audio_test_running;
+    if (phase != prev_phase || running != prev_running) {
+        phase_elapsed_ms = 0;
+        prev_phase = phase;
+        prev_running = running;
+    } else {
+        phase_elapsed_ms += delta_ms;
+    }
+
     for (int i = 0; i < AUDIO_TEST_COUNT; i++) {
         lv_color_t color = i == (int)selected_test_mode ? selected_color : idle_color;
         lv_color_t border_color = color;
         lv_opa_t bg_opa = i == (int)selected_test_mode ? LV_OPA_20 : LV_OPA_TRANSP;
+        lv_coord_t fill_w = 0;
+        lv_color_t fill_color = idle_color;
+        lv_opa_t fill_opa = LV_OPA_TRANSP;
 
         if (selected_test_active && i == (int)selected_test_mode)
             border_color = focused_color;
 
-        if (audio_test_running && i == (int)active_test_mode) {
-            if (audio_test_phase == AUDIO_TEST_PHASE_PLAYING || blink_on)
-                color = active_color;
-            border_color = color;
+        if (running && i == (int)active_test_mode) {
+            color = selected_color;
+            if (phase == AUDIO_TEST_PHASE_RECORDING || phase == AUDIO_TEST_PHASE_PLAYING) {
+                // Scan-bar style: red fills while recording, green while
+                // playing back, growing left-to-right over the phase length.
+                uint32_t dur = audio_test_phase_duration_ms;
+                uint32_t el = (dur && phase_elapsed_ms > dur) ? dur : phase_elapsed_ms;
+                fill_color = (phase == AUDIO_TEST_PHASE_RECORDING) ? record_color : play_color;
+                fill_opa = LV_OPA_70;
+                fill_w = dur ? (lv_coord_t)((uint64_t)AUDIO_TEST_FILL_MAX_W * el / dur)
+                             : AUDIO_TEST_FILL_MAX_W;
+                border_color = fill_color;
+            } else {
+                // Setting up (audio routing before the first phase starts,
+                // noticeable on the Mic test): pulse a dim full-width fill so
+                // the wait reads as activity, not a hang.
+                fill_color = selected_color;
+                fill_opa = blink_on ? LV_OPA_30 : LV_OPA_10;
+                fill_w = AUDIO_TEST_FILL_MAX_W;
+            }
         }
         lv_obj_set_style_text_color(test_label[i], color, 0);
         lv_obj_set_style_border_color(test_btn[i], border_color, 0);
         lv_obj_set_style_bg_opa(test_btn[i], bg_opa, 0);
+        if (test_fill[i]) {
+            lv_obj_set_width(test_fill[i], fill_w);
+            lv_obj_set_style_bg_color(test_fill[i], fill_color, 0);
+            lv_obj_set_style_bg_opa(test_fill[i], fill_opa, 0);
+        }
     }
 }
 
@@ -401,9 +457,10 @@ static void page_audio_capture_wav(setting_record_audio_source_t source) {
     char buf[256];
 
     dvr_select_audio_source(source);
+    audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
     audio_test_phase = AUDIO_TEST_PHASE_RECORDING;
-    snprintf(buf, sizeof(buf), "%s -D hw:audiocodec -t wav -f S16_LE -c2 -r 48000 -d 10 %s",
-             AUDIO_TEST_ARECORD, AUDIO_TEST_CAPTURE);
+    snprintf(buf, sizeof(buf), "%s -D hw:audiocodec -t wav -f S16_LE -c2 -r 48000 -d %d %s",
+             AUDIO_TEST_ARECORD, AUDIO_TEST_SECONDS, AUDIO_TEST_CAPTURE);
     system_exec(buf);
 }
 
@@ -431,6 +488,7 @@ static void *page_audio_test_thread(void *arg) {
         dvr_mute_live_audio();
         page_audio_capture_wav(SETTING_RECORD_AUDIO_SOURCE_MIC);
         page_audio_enable_dac_playback();
+        audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
         audio_test_phase = AUDIO_TEST_PHASE_PLAYING;
         page_audio_play_wav(AUDIO_TEST_CAPTURE);
         page_audio_disable_dac_playback(live_audio_was_enabled);
@@ -440,8 +498,9 @@ static void *page_audio_test_thread(void *arg) {
         dvr_select_audio_source(SETTING_RECORD_AUDIO_SOURCE_LINE_IN);
         dvr_enable_line_out(true);
         dvr_set_live_audio_volume(g_setting.record.live_audio_volume);
+        audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
         audio_test_phase = AUDIO_TEST_PHASE_PLAYING;
-        sleep(10);
+        sleep(AUDIO_TEST_SECONDS);
         if (!live_audio_was_enabled)
             dvr_enable_line_out(false);
         else
@@ -453,6 +512,7 @@ static void *page_audio_test_thread(void *arg) {
         dvr_mute_live_audio();
         page_audio_capture_wav(SETTING_RECORD_AUDIO_SOURCE_LINE_IN);
         page_audio_enable_dac_playback();
+        audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
         audio_test_phase = AUDIO_TEST_PHASE_PLAYING;
         page_audio_play_wav(AUDIO_TEST_CAPTURE);
         page_audio_disable_dac_playback(live_audio_was_enabled);
@@ -461,6 +521,7 @@ static void *page_audio_test_thread(void *arg) {
     case AUDIO_TEST_DVR:
         dvr_mute_live_audio();
         page_audio_enable_dac_playback();
+        audio_test_phase_duration_ms = AUDIO_TEST_DVR_SAMPLE_MS;
         audio_test_phase = AUDIO_TEST_PHASE_PLAYING;
         page_audio_play_wav(page_audio_test_sample_path());
         page_audio_disable_dac_playback(live_audio_was_enabled);
