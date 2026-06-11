@@ -206,7 +206,7 @@ static lv_obj_t *page_audio_create(lv_obj_t *parent, panel_arr_t *arr) {
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
     create_label_item(cont, buf, 1, ROW_BACK, 1);
     lv_obj_t *note = lv_label_create(cont);
-    lv_label_set_text(note, _lang("*Mic: record 5s, auto playback.\n**Line/AV: record 5s, auto playback."));
+    lv_label_set_text(note, _lang("*Mic: record 5s, auto playback.\n**Line/AV: record 5s, auto playback.\n***Test fill: pulsing = loading, red = recording, green = playback."));
     lv_obj_set_style_text_font(note, UI_PAGE_LABEL_FONT, 0);
     lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
     lv_obj_set_style_text_color(note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
