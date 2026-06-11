@@ -440,15 +440,18 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_style_pad_top(label2, UI_SCANNOW_NOTE_PAD, 0);
     lv_label_set_long_mode(label2, LV_LABEL_LONG_WRAP);
     lv_obj_set_grid_cell(label2, LV_GRID_ALIGN_START, 2, 1,
-                         LV_GRID_ALIGN_START, 0, 2);
+                         LV_GRID_ALIGN_START, 0, 1);
 
     // "Choose from Last Scan" -- re-opens the persisted results without
-    // rescanning. Lives in the scanner's right column below the note (matching
-    // the mockup), shown only when a previous scan produced results, and reached
-    // by dialing past the last mode button.
+    // rescanning. Lives in the scanner's right column in line with the
+    // progress bar, shown only when a previous scan produced results, and
+    // reached by dialing past the last mode button. Content-sized and
+    // START-aligned: the stretched right grid column runs past the scanner
+    // container on G1/G2, which clipped a stretched button.
     last_scan_btn = lv_btn_create(cont1);
-    lv_obj_set_grid_cell(last_scan_btn, LV_GRID_ALIGN_STRETCH, 2, 1,
-                         LV_GRID_ALIGN_CENTER, 2, 1);
+    lv_obj_set_size(last_scan_btn, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_grid_cell(last_scan_btn, LV_GRID_ALIGN_START, 2, 1,
+                         LV_GRID_ALIGN_CENTER, 1, 1);
     {
         lv_obj_t *ls_lbl = lv_label_create(last_scan_btn);
         lv_label_set_text(ls_lbl, _lang("Choose from Last Scan"));
@@ -498,6 +501,15 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_add_flag(auto_list, LV_OBJ_FLAG_HIDDEN);
     set_results_widget_visibility();
 #endif
+
+    // Exit hint at the page bottom, mirroring the playback page's note style:
+    // some users thought they were stuck after a scan or in the mode picker.
+    lv_obj_t *note = lv_label_create(page);
+    snprintf(buf, sizeof(buf), "*%s", _lang("Long press the Enter button to exit"));
+    lv_label_set_text(note, buf);
+    lv_obj_set_style_text_font(note, UI_SCANNOW_NOTE_FONT, 0);
+    lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
 
     return page;
 }
