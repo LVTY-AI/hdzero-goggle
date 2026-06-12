@@ -502,9 +502,7 @@ void Display_HDZ_t(int mode, int is_43) {
     case VR_540P60:
         system_exec("dispw -s vdpo 720p60");
         g_hw_stat.vdpo_tmg = VDPO_TMG_720P60;
-        // TEST (#64 540p60 vertical shift): deframe with FPGA input mode 0x03
-        // (the working 540P90 mode) instead of 0x01. See hardware-goggle.c.
-        I2C_Write(ADDR_FPGA, 0x80, 0x03);
+        I2C_Write(ADDR_FPGA, 0x80, 0x01);
         pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50);
         break;
     case VR_540P90:

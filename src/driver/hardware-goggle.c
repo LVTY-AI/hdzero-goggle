@@ -607,12 +607,7 @@ void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
     vclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50, 0);
     pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50);
 
-    // TEST (#64 540p60 vertical shift): deframe 540p60 with FPGA input mode
-    // 0x03 -- the mode 540P90 uses, which places the same 720x536 active
-    // window correctly -- instead of the dedicated 540p60 mode 0x01. The
-    // VTX-side pattern test proved the shift is in the encode/decode framing,
-    // not the camera. Revert: 0x01.
-    I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x03 : 0x00);
+    I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x01 : 0x00);
 
     DM5680_SetFPS(mode);
     if (mode == VR_540P60) {
