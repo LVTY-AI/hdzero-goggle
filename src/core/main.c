@@ -100,6 +100,13 @@ void start_running(void) {
         } else { // auto scan disabled, go to go directly to last saved channel
             app_state_push(APP_STATE_MAINMENU);
         }
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    } else if (source == SETTING_AUTOSCAN_SOURCE_AUTO_DETECT) {
+        // Probes both protocols at the current channel and enters video on
+        // whichever responds; pushes APP_STATE_VIDEO and sets
+        // g_source_info.source itself.
+        page_source_select_auto_detect();
+#endif
     } else {
         app_state_push(APP_STATE_VIDEO);
         if (source == SETTING_AUTOSCAN_SOURCE_AV_MODULE) { // AV Module

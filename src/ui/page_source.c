@@ -345,8 +345,9 @@ static void page_source_select_analog() {
 // Probes the user's current channel on both protocols and enters video on
 // whichever has signal. Defaults to HDZ if neither responds. After this
 // runs, auto_protocol_detect is on, so the next dial click in video will
-// probe both protocols at the next freq-table entry.
-static void page_source_select_auto_detect() {
+// probe both protocols at the next freq-table entry. Non-static: the boot
+// Auto Scan path (start_running) enters Auto Detect through it as well.
+void page_source_select_auto_detect() {
     g_setting.source.auto_protocol_detect = true;
     settings_put_bool("source", "auto_protocol_detect", true);
 

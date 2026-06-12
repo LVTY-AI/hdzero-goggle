@@ -430,6 +430,14 @@ void settings_load(void) {
     g_setting.autoscan.status = ini_getl("autoscan", "status", g_setting_defaults.autoscan.status, SETTING_INI);
     g_setting.autoscan.source = ini_getl("autoscan", "source", g_setting_defaults.autoscan.source, SETTING_INI);
     g_setting.autoscan.last_source = ini_getl("autoscan", "last_source", g_setting_defaults.autoscan.last_source, SETTING_INI);
+#if defined(HDZGOGGLE)
+    // No Auto Detect on the G1 (external analog module only); fall back to
+    // HDZero if a setting.ini written by a BoxPro/G2 selected it.
+    if (g_setting.autoscan.source == SETTING_AUTOSCAN_SOURCE_AUTO_DETECT)
+        g_setting.autoscan.source = SETTING_AUTOSCAN_SOURCE_HDZERO;
+    if (g_setting.autoscan.last_source == SETTING_AUTOSCAN_SOURCE_AUTO_DETECT)
+        g_setting.autoscan.last_source = SETTING_AUTOSCAN_SOURCE_HDZERO;
+#endif
 
     // osd
     g_setting.osd.orbit = ini_getl("osd", "orbit", g_setting_defaults.osd.orbit, SETTING_INI);

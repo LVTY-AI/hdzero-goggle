@@ -109,6 +109,13 @@ void app_switch_to_analog(bool is_av_in) {
     }
 
     g_setting.autoscan.last_source = is_av_in ? SETTING_AUTOSCAN_SOURCE_AV_IN : SETTING_AUTOSCAN_SOURCE_AV_MODULE;
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // Reached via Auto Detect (entry probe or protocol crossover): record
+    // that, so Auto Scan "Last" re-enters Auto Detect instead of pinning the
+    // protocol it happened to land on this session.
+    if (!is_av_in && g_setting.source.auto_protocol_detect)
+        g_setting.autoscan.last_source = SETTING_AUTOSCAN_SOURCE_AUTO_DETECT;
+#endif
     ini_putl("autoscan", "last_source", g_setting.autoscan.last_source, SETTING_INI);
 
     // audio in&out
@@ -238,6 +245,11 @@ void app_switch_to_hdzero(bool is_default) {
     Display_Osd(g_setting.record.osd);
 
     g_setting.autoscan.last_source = SETTING_AUTOSCAN_SOURCE_HDZERO;
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // Reached via Auto Detect: record that (see app_switch_to_analog).
+    if (g_setting.source.auto_protocol_detect)
+        g_setting.autoscan.last_source = SETTING_AUTOSCAN_SOURCE_AUTO_DETECT;
+#endif
     ini_putl("autoscan", "last_source", g_setting.autoscan.last_source, SETTING_INI);
 
     dvr_update_vi_conf(CAM_MODE);

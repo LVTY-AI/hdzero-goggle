@@ -30,7 +30,10 @@ typedef enum {
     SETTING_AUTOSCAN_SOURCE_HDZERO = 1,
     SETTING_AUTOSCAN_SOURCE_AV_MODULE = 2,
     SETTING_AUTOSCAN_SOURCE_AV_IN = 3,
-    SETTING_AUTOSCAN_SOURCE_HDMI_IN = 4
+    SETTING_AUTOSCAN_SOURCE_HDMI_IN = 4,
+    // BoxPro/G2 only (built-in analog + Auto Detect); settings_load clamps it
+    // to HDZERO on the G1 in case a setting.ini moved between targets.
+    SETTING_AUTOSCAN_SOURCE_AUTO_DETECT = 5
 } setting_autoscan_source_t;
 
 typedef struct {

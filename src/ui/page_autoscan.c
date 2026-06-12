@@ -45,7 +45,13 @@ static lv_obj_t *page_autoscan_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     btn_group_t btn_group;
     create_btn_group_item(&btn_group0, cont, 3, _lang("Auto Scan"), _lang("On"), _lang("Last"), _lang("Off"), "", 0);
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // Matches setting_autoscan_source_t order; Auto Detect (=5) is BoxPro/G2
+    // only (built-in analog).
+    create_btn_group_item2(&btn_group1, cont, 6, _lang("Default"), _lang("Last"), _lang("HDZero"), _lang("Analog"), _lang("AV In"), _lang("HDMI In"), _lang("Auto Detect"), 1); // 2 rows
+#else
     create_btn_group_item2(&btn_group1, cont, 5, _lang("Default"), _lang("Last"), _lang("HDZero"), _lang("Analog"), _lang("AV In"), _lang("HDMI In"), " ", 1); // 2 rows
+#endif
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
     create_label_item(cont, buf, 1, 3, 1);
 
