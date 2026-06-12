@@ -454,6 +454,41 @@ static void try_crossover_probe(void) {
         scan_probe_analog((uint8_t)entry->analog_channel, &rssi_mv, &valid);
         if (!valid) return;
 
+        // An HDZero VTX's carrier raises the analog RSSI at the same
+        // frequency, so "analog valid" alone is ambiguous. Crossing on it
+        // sent the goggle on a detour -- static analog for several seconds
+        // until the analog->HDZ branch swept the bandwidths and came back --
+        // every time a VTX appeared on the other HDZ bandwidth in Both mode.
+        // Check the other bandwidth first and prefer HDZ (the same HDZ-wins
+        // tie-break scan_probe_both uses); only a real analog-only signal
+        // crosses protocols.
+        if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
+            uint8_t hdz_ch  = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
+            uint8_t open_bw = (uint8_t)g_hw_stat.hdz_bw;
+            uint8_t other   = (open_bw == SETTING_SOURCES_HDZERO_BW_WIDE)
+                                  ? SETTING_SOURCES_HDZERO_BW_NARROW
+                                  : SETTING_SOURCES_HDZERO_BW_WIDE;
+            uint8_t gain = 0;
+            bool hdz_found = false;
+
+            pthread_mutex_lock(&lvgl_mutex);
+            osd_detecting_show(true);
+            HDZero_open(other);
+            usleep(200000); // settle before checking the lock
+            scan_probe_hdzero((uint8_t)g_setting.source.hdzero_band, hdz_ch,
+                              &gain, &hdz_found);
+            if (hdz_found)
+                g_hdz_detected_bw = other; // picture returns on its own
+            osd_detecting_show(false);
+            pthread_mutex_unlock(&lvgl_mutex);
+            LOGI("auto-detect crossover: analog rssi=%u mv, HDZ bw=%u found=%d",
+                 rssi_mv, other, hdz_found);
+            if (hdz_found)
+                return; // stay on HDZero at the switched bandwidth
+            // No HDZ on either bandwidth: fall through to the analog switch
+            // (the receiver stays parked at `other`; analog takes over below).
+        }
+
         LOGI("auto-detect crossover: HDZ->analog (analog_ch=%u rssi=%u mv)",
              (uint8_t)entry->analog_channel + 1, rssi_mv);
         // We're on thread_peripheral here; app_switch_to_analog touches LVGL
