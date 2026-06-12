@@ -57,6 +57,14 @@ static lv_obj_t *page_autoscan_create(lv_obj_t *parent, panel_arr_t *arr) {
     // run a Scan Now sweep for its protocol first (HDZero's historical
     // behavior, now offered for Analog and Dual too).
     create_btn_group_item(&btn_group2, cont, 2, _lang("Load from Boot"), _lang("Yes"), _lang("No"), "", "", 3);
+    // "Load from Boot" is wider than the label column and bleeds into the
+    // column where the option grid normally starts, so the selection arrow of
+    // "Yes" would draw on top of the text. Shift both options one column
+    // right (under the picker's middle/right columns).
+    lv_obj_set_grid_cell(btn_group2.btn_a[0].container, LV_GRID_ALIGN_START, 3, 1,
+                         LV_GRID_ALIGN_CENTER, 3, 1);
+    lv_obj_set_grid_cell(btn_group2.btn_a[1].container, LV_GRID_ALIGN_START, 4, 1,
+                         LV_GRID_ALIGN_CENTER, 3, 1);
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
     create_label_item(cont, buf, 1, 4, 1);
 
