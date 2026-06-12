@@ -14,6 +14,7 @@
 #include <mm_common.h>
 #include <mpi_ai.h>
 #include <mpi_ao.h>
+#include <mpi_sys.h>
 #include <plat_type.h>
 
 // Samples per channel handed to the AO per frame; ~21ms at 48kHz.
@@ -21,6 +22,19 @@
 
 #define WAV_TEST_REC_RATE     48000
 #define WAV_TEST_REC_CHANNELS 2
+
+// The AI/AO engines sit on a process-global MPP context that must be brought
+// up with AW_MPI_SYS_Init before any other MPI call; without it the calls
+// wedge the device hard enough to need a reboot. Bracket each test with
+// init/exit the same way the media player brackets each playback
+// (vdec2vo_initSys / vdec2vo_deinitSys).
+static void wav_test_sys_init(void) {
+    MPP_SYS_CONF_S conf;
+    memset(&conf, 0, sizeof(conf));
+    conf.nAlignWidth = 32;
+    AW_MPI_SYS_SetConf(&conf);
+    AW_MPI_SYS_Init();
+}
 
 // ---- minimal RIFF/WAVE PCM16 handling --------------------------------------
 
@@ -131,6 +145,8 @@ int wav_test_play(const char *path) {
     LOGD("play %s: %u Hz, %u ch, %u bytes", path, wav.sample_rate,
          wav.channels, wav.data_len);
 
+    wav_test_sys_init();
+
     AUDIO_DEV aoDev = 0;
     AIO_ATTR_S attr;
     memset(&attr, 0, sizeof(attr));
@@ -156,6 +172,7 @@ int wav_test_play(const char *path) {
     }
     if (!chn_ok) {
         AW_MPI_AO_Disable(aoDev);
+        AW_MPI_SYS_Exit();
         fclose(fp);
         return -1;
     }
@@ -201,6 +218,7 @@ int wav_test_play(const char *path) {
     AW_MPI_AO_StopChn(aoDev, aoChn);
     AW_MPI_AO_DisableChn(aoDev, aoChn);
     AW_MPI_AO_Disable(aoDev);
+    AW_MPI_SYS_Exit();
     return 0;
 }
 
@@ -213,6 +231,8 @@ int wav_test_record(const char *path, int seconds) {
         return -1;
     }
     wav_write_header(fp, 0); // placeholder, patched below
+
+    wav_test_sys_init();
 
     AUDIO_DEV aiDev = 0;
     AIO_ATTR_S attr;
@@ -239,6 +259,7 @@ int wav_test_record(const char *path, int seconds) {
     }
     if (!chn_ok) {
         AW_MPI_AI_Disable(aiDev);
+        AW_MPI_SYS_Exit();
         fclose(fp);
         return -1;
     }
@@ -268,6 +289,7 @@ int wav_test_record(const char *path, int seconds) {
     AW_MPI_AI_ResetChn(aiDev, aiChn);
     AW_MPI_AI_DestroyChn(aiDev, aiChn);
     AW_MPI_AI_Disable(aiDev);
+    AW_MPI_SYS_Exit();
 
     wav_write_header(fp, written);
     fclose(fp);
