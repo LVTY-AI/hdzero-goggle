@@ -248,12 +248,19 @@ int wav_test_play(const char *path) {
 // ---- capture: AI -> WAV -----------------------------------------------------
 
 int wav_test_record(const char *path, int seconds) {
-    FILE *fp = fopen(path, "wb");
-    if (!fp) {
-        LOGE("open %s failed", path);
+    // Capture into RAM and only touch the filesystem after the AI is torn
+    // down: an fwrite to the SD card can stall for hundreds of ms, and
+    // holding the frame across that stall (or even pausing between GetFrame
+    // and ReleaseFrame) starves the AI's small buffer pool -- the dropouts
+    // get recorded straight into the clip. The record app likewise keeps all
+    // file I/O out of its frame path.
+    uint32_t target = (uint32_t)WAV_TEST_REC_RATE * (uint32_t)seconds *
+                      WAV_TEST_REC_CHANNELS * 2;
+    uint8_t *cap = malloc(target);
+    if (!cap) {
+        LOGE("alloc %u bytes failed", target);
         return -1;
     }
-    wav_write_header(fp, 0); // placeholder, patched below
 
     wav_test_sys_init();
 
@@ -283,13 +290,11 @@ int wav_test_record(const char *path, int seconds) {
     if (!chn_ok) {
         AW_MPI_AI_Disable(aiDev);
         AW_MPI_SYS_Exit();
-        fclose(fp);
+        free(cap);
         return -1;
     }
     AW_MPI_AI_EnableChn(aiDev, aiChn);
 
-    uint32_t target = (uint32_t)WAV_TEST_REC_RATE * (uint32_t)seconds *
-                      WAV_TEST_REC_CHANNELS * 2;
     uint32_t written = 0;
     while (written < target) {
         AUDIO_FRAME_S frm;
@@ -303,7 +308,7 @@ int wav_test_record(const char *path, int seconds) {
         if (n > target - written)
             n = target - written;
         if (frm.mpAddr && n)
-            fwrite(frm.mpAddr, 1, n, fp);
+            memcpy(cap + written, frm.mpAddr, n);
         written += n;
         AW_MPI_AI_ReleaseFrame(aiDev, aiChn, &frm, NULL);
     }
@@ -314,8 +319,16 @@ int wav_test_record(const char *path, int seconds) {
     AW_MPI_AI_Disable(aiDev);
     AW_MPI_SYS_Exit();
 
+    FILE *fp = fopen(path, "wb");
+    if (!fp) {
+        LOGE("open %s failed", path);
+        free(cap);
+        return -1;
+    }
     wav_write_header(fp, written);
+    fwrite(cap, 1, written, fp);
     fclose(fp);
+    free(cap);
     LOGD("recorded %u bytes to %s", written, path);
     return written > 0 ? 0 : -1;
 }
