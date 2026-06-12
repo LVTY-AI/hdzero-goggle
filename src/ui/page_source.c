@@ -158,7 +158,9 @@ static lv_obj_t *page_source_create(lv_obj_t *parent, panel_arr_t *arr) {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     // Created first so creation order matches the grid row order (Auto Detect
     // is row 0, the top of the menu).
-    auto_detect_label = create_label_item(cont, _lang("Auto Detect"),
+    // User-facing name is "Dual" (matches the Scan Now picker and the
+    // R1/Dual channel tags); internally this stays auto_detect everywhere.
+    auto_detect_label = create_label_item(cont, _lang("Dual"),
                                           1, ROW_AUTO_DETECT, 3);
 #endif
 
@@ -261,7 +263,7 @@ void source_status_timer() {
         int proto = is_ana ? 2 /* PROTOCOL_ANALOG */ : 1 /* PROTOCOL_HDZ */;
         uint8_t adch = is_ana ? g_setting.source.analog_channel
                               : (g_setting.scan.channel & 0x7F);
-        snprintf(buf, sizeof(buf), "%s: %s", _lang("Auto Detect"),
+        snprintf(buf, sizeof(buf), "%s: %s", _lang("Dual"),
                  channel2str_tagged(proto, adch));
         lv_label_set_text(auto_detect_label, buf);
     }
