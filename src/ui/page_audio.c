@@ -207,10 +207,10 @@ static lv_obj_t *page_audio_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_t *note = lv_label_create(cont);
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     // The internal module's audio is only routed in analog video mode, so
-    // from the menu these tests cover the wired jacks.
-    lv_label_set_text(note, _lang("*Mic & Line/AV: record 5s, auto playback.\n**Live & Line/AV test the wired Line In / A/V In; the analog module's audio plays in analog video.\n***Test fill: pulsing = loading, red = recording, green = playback."));
+    // from the menu the Live/Line-AV tests need audio wired into the jack.
+    lv_label_set_text(note, _lang("1. Mic: record 5s, auto playback.\n2. Line/AV: record 5s, auto playback.\n3. Test fill: pulsing = loading, red = recording, green = playback.\n4. Live & Line/AV need a wired analog audio source."));
 #else
-    lv_label_set_text(note, _lang("*Mic: record 5s, auto playback.\n**Line/AV: record 5s, auto playback.\n***Test fill: pulsing = loading, red = recording, green = playback."));
+    lv_label_set_text(note, _lang("1. Mic: record 5s, auto playback.\n2. Line/AV: record 5s, auto playback.\n3. Test fill: pulsing = loading, red = recording, green = playback."));
 #endif
     lv_obj_set_style_text_font(note, UI_PAGE_LABEL_FONT, 0);
     lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
