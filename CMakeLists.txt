@@ -79,6 +79,10 @@ else()
 endif()
 
 # main application
+# These GLOBs are resolved at configure time, so a build tree configured
+# before a source file was added will not see it (undefined references at
+# link). Touching this file forces existing trees to re-run cmake on the
+# next make. (Last touched for: src/player/wav_test.c)
 file(GLOB SRC_FILES_CORE   "src/core/*.c" "src/core/*.h")
 file(GLOB SRC_FILES_DRIVER "src/driver/*.c" "src/driver/*.h")
 file(GLOB SRC_FILES_FONTS  "src/fonts/*.c" "src/fonts/*.h")
