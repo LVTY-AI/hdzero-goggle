@@ -633,16 +633,20 @@ void scan_core_idle_tick(void) {
 // on every target, and it is independent of auto_protocol_detect (that setting
 // drives the separate protocol crossover in scan_core_idle_tick).
 //
-// While dark it ALTERNATES bandwidths on a slow period rather than acting once:
-// each attempt is a single baseband reset (brief flash, tagged "Detecting...")
-// and then it parks at the bandwidth it just tried, so a VTX powered on later
-// at EITHER bandwidth is picked up within one period -- at the parked bandwidth
-// the lock simply returns (no reset needed), at the opposite one the next
-// attempt finds it. The old behavior swept exactly once per dark spell, which
-// meant a VTX turned on afterwards at the other bandwidth was never found
-// until the source was re-entered. Per-tick sweeping is still avoided (that
-// flashed the screen green non-stop); between attempts the plane shows the
-// normal no-signal black.
+// While dark it keeps CHECKING the other bandwidth on a slow period rather
+// than acting once (the old behavior swept exactly once per dark spell, so a
+// VTX turned on afterwards at the other bandwidth was never found until the
+// source was re-entered). Each attempt hops to the bandwidth opposite the
+// last-locked one, probes, and -- if nothing is there -- returns HOME to the
+// last-locked bandwidth. Parking at home costs a second baseband reset per
+// attempt (only while the screen is dark anyway), but it means the receiver
+// is sitting on the right bandwidth when the user dials back to the signal
+// they just left: the click probe locks HDZ instantly instead of missing at
+// a randomly-parked bandwidth and detouring through the analog tie-break.
+// A VTX appearing on EITHER bandwidth is still picked up within one period:
+// at home the lock simply returns, at the opposite one the next probe finds
+// it. Per-tick sweeping is still avoided (that flashed the screen green
+// non-stop); between attempts the plane shows the normal no-signal black.
 #define HDZ_BW_REACQUIRE_DARK_THRESH 15 // ~1.5s of no signal before reacquiring
 #define HDZ_BW_REACQUIRE_RETRY_TICKS 40 // ~4s between attempts while still dark
 void scan_core_hdz_bw_tick(void) {
@@ -697,20 +701,19 @@ void scan_core_hdz_bw_tick(void) {
         return;
     }
 
-    // Flip to the bandwidth opposite the one currently OPEN (not the last
-    // detected one -- after the first attempt those differ) and check for a
-    // lock there. One baseband reset per attempt.
+    // Hop to the bandwidth opposite the last-locked one and check for a lock
+    // there; return home on a miss (see the header comment).
     uint8_t band  = (uint8_t)g_setting.source.hdzero_band;
     uint8_t ch    = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
-    uint8_t open_bw = (uint8_t)g_hw_stat.hdz_bw;
-    uint8_t other = (open_bw == SETTING_SOURCES_HDZERO_BW_WIDE)
+    uint8_t home  = g_hdz_detected_bw;
+    uint8_t other = (home == SETTING_SOURCES_HDZERO_BW_WIDE)
                         ? SETTING_SOURCES_HDZERO_BW_NARROW
                         : SETTING_SOURCES_HDZERO_BW_WIDE;
     uint8_t gain = 0;
     bool found = false;
 
     // Tag the channel OSD "Detecting..." so the user sees the bandwidth settle
-    // (and the baseband reset's brief flash) explained instead of a silent
+    // (and the baseband resets' brief flashes) explained instead of a silent
     // black screen. Runs on thread_peripheral, but we hold lvgl_mutex here, so
     // the synchronous paint is serialized with the main UI.
     osd_detecting_show(true);
@@ -719,16 +722,20 @@ void scan_core_hdz_bw_tick(void) {
     scan_probe_hdzero(band, ch, &gain, &found);
     if (found) {
         g_hdz_detected_bw = other; // locked on the opposite bandwidth; stay here
+    } else {
+        // Nothing there: park back HOME (the last-locked bandwidth), retune
+        // and re-arm the lock flags so a VTX appearing at home locks without
+        // any further reset -- and a dial back onto the signal the user just
+        // left probes at the right bandwidth immediately.
+        HDZero_open(home);
+        DM6302_SetChannel(band, ch);
+        DM5680_clear_vldflg();
+        DM5680_req_vldflg();
     }
-    // Not found: PARK here instead of re-opening the old bandwidth (that would
-    // be a second reset per attempt). The probe above already tuned the
-    // channel and re-armed the lock flags, so a VTX appearing on this
-    // bandwidth locks without any further reset, and the next attempt flips
-    // back the other way.
     osd_detecting_show(false);
     pthread_mutex_unlock(&lvgl_mutex);
-    LOGI("HDZ BW reacquire: tried bw=%u found=%d (was=%u) band=%u ch=%u",
-         other, found, open_bw, band, ch);
+    LOGI("HDZ BW reacquire: tried bw=%u found=%d (home=%u) band=%u ch=%u",
+         other, found, home, band, ch);
 }
 
 void scan_core_self_check(void) {
