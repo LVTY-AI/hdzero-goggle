@@ -1010,10 +1010,17 @@ void autoscan_exit(void) {
     if (!g_autoscan_exit) {
         LOGI("autoscan_exit, lelve=1");
         g_autoscan_exit = true;
-        if (auto_scaned_cnt > 1)
+        if (auto_scaned_cnt > 1) {
             app_state_push(APP_STATE_SUBMENU);
-        else
+        } else {
             app_state_push(APP_STATE_MAINMENU);
+            // A dial-cancel lands in the main menu without running the page's
+            // exit handler, so drop the focused presentation here too --
+            // otherwise the scanned protocol's button stays green whenever
+            // Scan Now is merely hovered in the sidebar afterwards.
+            page_focused = false;
+            update_mode_btn_focus();
+        }
     }
 }
 
