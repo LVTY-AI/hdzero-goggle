@@ -27,6 +27,8 @@
 #define AUDIO_TEST_SAMPLE_SDCARD "/mnt/extsd/dvr_playback_volume_test.wav"
 #define AUDIO_TEST_CAPTURE "/tmp/hdzero_audio_test.wav"
 #define AUDIO_TEST_CAPTURE_SDCARD "/mnt/extsd/audio_test_capture.wav"
+#define AUDIO_TEST_APLAY "/mnt/app/app/record/audio/aplay"
+#define AUDIO_TEST_ARECORD "/mnt/app/app/record/audio/arecord"
 #define AUDIO_TEST_COUNT 4
 #define AUDIO_TEST_SECONDS 5            // live stream / record length
 #define AUDIO_TEST_DVR_SAMPLE_MS 10000  // bundled test WAV length
@@ -416,10 +418,20 @@ static void page_audio_on_roller(uint8_t key) {
 }
 
 static void page_audio_play_wav(const char *path) {
+#if defined(HDZGOGGLE)
     // MPI AO engine, not aplay: the ALSA hw path renders static-laden audio
     // on the G1's kernel no matter how it is buffered, while the engine that
     // plays normal DVR files is clean on every target.
     wav_test_play(path);
+#else
+    // BoxPro/G2 keep the ALSA transport: plughw with deep buffers (0.5s,
+    // 125ms periods) is clean on their kernel, and these tests shipped
+    // working this way.
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec -B 500000 -F 125000 %s",
+             AUDIO_TEST_APLAY, path);
+    system_exec(buf);
+#endif
 }
 
 static void page_audio_enable_dac_playback(void) {
@@ -488,11 +500,20 @@ static void page_audio_capture_wav(setting_record_audio_source_t source) {
     dvr_select_audio_source(source);
     audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
     audio_test_phase = AUDIO_TEST_PHASE_RECORDING;
+#if defined(HDZGOGGLE)
     // MPI AI engine, not arecord: the captured clips themselves carried the
     // static on the G1 (confirmed by playing them on a computer) regardless
     // of ALSA device or buffering, while normal DVR recordings -- made by
     // this engine -- are clean.
     wav_test_record(page_audio_capture_path(), AUDIO_TEST_SECONDS);
+#else
+    // BoxPro/G2: ALSA capture is clean on their kernel (see
+    // page_audio_play_wav).
+    char buf[256];
+    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec -B 500000 -F 125000 -t wav -f S16_LE -c2 -r 48000 -d %d %s",
+             AUDIO_TEST_ARECORD, AUDIO_TEST_SECONDS, page_audio_capture_path());
+    system_exec(buf);
+#endif
 }
 
 static void *page_audio_test_thread(void *arg) {
