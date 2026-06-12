@@ -609,7 +609,12 @@ void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
 
     I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x01 : 0x00);
 
-    DM5680_SetFPS(mode);
+    // TEST (#64 540p60 vertical shift): have the RX DM5680 deframe with its
+    // 540P90 video mode -- the same 720x536 active window, placed correctly
+    // in every 540P90 session. The VTX pattern test proved the shift is in
+    // the encode/decode framing (camera exonerated); the FPGA deframe mode
+    // and TX raster totals are already ruled out. Revert: pass mode through.
+    DM5680_SetFPS(mode == VR_540P60 ? VR_540P90 : mode);
     if (mode == VR_540P60) {
         screen.mfpga.set540p60();
     } else {
