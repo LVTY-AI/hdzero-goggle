@@ -318,11 +318,35 @@ scan_result_t scan_probe_both(const scan_freq_entry_t *entry) {
                           &hdz_gain, &hdz_valid);
     }
 
+    // The HDZ probe above only checked the currently OPEN bandwidth, and an
+    // HDZero VTX's carrier raises the analog RSSI too -- so "analog valid,
+    // HDZ invalid" is ambiguous in Both mode (the bw-alternating watchdog may
+    // have parked the receiver on the wrong bandwidth). Check the other
+    // bandwidth before conceding to analog; without this, dialing back onto
+    // an HDZ signal after the watchdog flipped switched to static analog
+    // first and needed the crossover to recover.
+    if (!hdz_valid && analog_valid &&
+        g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH &&
+        entry->hdz_band >= 0 && entry->hdz_channel >= 0) {
+        uint8_t open_bw = (uint8_t)g_hw_stat.hdz_bw;
+        uint8_t other   = (open_bw == SETTING_SOURCES_HDZERO_BW_WIDE)
+                              ? SETTING_SOURCES_HDZERO_BW_NARROW
+                              : SETTING_SOURCES_HDZERO_BW_WIDE;
+        HDZero_open(other);
+        usleep(200000); // settle before checking the lock
+        scan_probe_hdzero((uint8_t)entry->hdz_band,
+                          (uint8_t)entry->hdz_channel,
+                          &hdz_gain, &hdz_valid);
+        if (hdz_valid)
+            g_hdz_detected_bw = other; // callers open hdzero_effective_bw()
+    }
+
     // Tie-break: HDZ wins if both valid.
     if (hdz_valid) {
         r.protocol  = PROTOCOL_HDZ;
         r.hdz_gain  = hdz_gain;
         r.strength  = hdz_strength_norm(hdz_gain);
+        r.hdz_bw    = (uint8_t)g_hw_stat.hdz_bw; // the bw the lock came from
     } else if (analog_valid) {
         r.protocol  = PROTOCOL_ANALOG;
         r.analog_mv = analog_mv;
