@@ -12,7 +12,6 @@
 #include "core/app_state.h"
 #include "core/common.hh"
 #include "core/dvr.h"
-#include "driver/rtc6715.h"
 #include "lang/language.h"
 #include "page_common.h"
 #include "ui/ui_style.h"
@@ -208,10 +207,9 @@ static lv_obj_t *page_audio_create(lv_obj_t *parent, panel_arr_t *arr) {
     create_label_item(cont, buf, 1, ROW_BACK, 1);
     lv_obj_t *note = lv_label_create(cont);
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-    // The built-in RTC6715 squelches its audio without a locked analog
-    // carrier, so unlike G1's module there is no background hiss -- the
-    // Live/Line-AV tests are silent unless a signal is on the air.
-    lv_label_set_text(note, _lang("*Mic & Line/AV: record 5s, auto playback.\n**Live & Line/AV need an analog signal -- the receiver mutes without one.\n***Test fill: pulsing = loading, red = recording, green = playback."));
+    // The internal module's audio is only routed in analog video mode, so
+    // from the menu these tests cover the wired jacks.
+    lv_label_set_text(note, _lang("*Mic & Line/AV: record 5s, auto playback.\n**Live & Line/AV test the wired Line In / A/V In; the analog module's audio plays in analog video.\n***Test fill: pulsing = loading, red = recording, green = playback."));
 #else
     lv_label_set_text(note, _lang("*Mic: record 5s, auto playback.\n**Line/AV: record 5s, auto playback.\n***Test fill: pulsing = loading, red = recording, green = playback."));
 #endif
@@ -514,20 +512,11 @@ static void *page_audio_test_thread(void *arg) {
     setting_record_audio_source_t previous_source = g_setting.record.audio_source;
     bool live_audio_was_enabled = dvr_live_audio_is_enabled();
 
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-    bool rx_powered_for_test = false;
-    // The Live and Line/AV tests sample the analog RX audio on LINEIN. In
-    // the menu the RX is ALWAYS powered down -- app_switch_to_menu turns it
-    // off even when the analog module is the active source, so
-    // g_source_info.source alone says nothing about its power state. Power
-    // it up and tune it unconditionally, with audio forced on (the normal
-    // record-source gating would leave it muted -- silent, not even static).
-    if (mode == AUDIO_TEST_LIVE || mode == AUDIO_TEST_LINE_AV) {
-        rtc6715.init(1, 1);
-        rtc6715.set_ch(g_setting.source.analog_channel - 1);
-        rx_powered_for_test = true;
-    }
-#endif
+    // No RX handling on BoxPro/G2: the internal analog module's audio only
+    // reaches the codec in analog video mode (a wired AV-in source plays
+    // through these tests in the menu, a powered+tuned RX does not), so
+    // powering it up here just made heat. From the menu the Live/Line-AV
+    // tests cover the wired Line In / A/V In path.
 
     active_test_mode = mode;
     switch (mode) {
@@ -574,23 +563,6 @@ static void *page_audio_test_thread(void *arg) {
         page_audio_disable_dac_playback(live_audio_was_enabled);
         break;
     }
-
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-    if (rx_powered_for_test) {
-        if (g_app_state == APP_STATE_VIDEO &&
-            g_source_info.source == SOURCE_AV_MODULE) {
-            // The user entered analog video mid-test: the RX is the live
-            // receiver now, so just restore the record-source audio gating.
-            rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
-        } else {
-            // Back to the menu's normal state: RX off. (Checking only
-            // g_source_info.source here once left the RX powered in the
-            // menu after every test -- it runs hot enough that
-            // rescue_from_hot maxed the fan out within a minute.)
-            rtc6715.init(0, 0);
-        }
-    }
-#endif
 
     audio_test_phase = AUDIO_TEST_PHASE_IDLE;
     audio_test_running = false;
