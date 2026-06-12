@@ -87,6 +87,19 @@ void start_running(void) {
     else
         source = g_setting.autoscan.source;
 
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    // Booting into an explicit source must not inherit Dual mode from the
+    // previous session (auto_protocol_detect persists in setting.ini): the
+    // Source page's direct picks disable it, so the boot equivalents do too.
+    // Without this, Default=HDZero booted with the Dual dial/channel
+    // behavior after a Dual session.
+    if (source != SETTING_AUTOSCAN_SOURCE_AUTO_DETECT &&
+        g_setting.source.auto_protocol_detect) {
+        g_setting.source.auto_protocol_detect = false;
+        settings_put_bool("source", "auto_protocol_detect", false);
+    }
+#endif
+
     // Auto Scan=On + Load from Boot=No: run a Scan Now sweep for the default
     // source's protocol at boot instead of entering the source directly
     // (HDZero's historical behavior, now offered for Analog and Dual too).
