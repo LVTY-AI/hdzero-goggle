@@ -613,7 +613,9 @@ void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
     vclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50, 0);
     pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50);
 
-    I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x01 : 0x00);
+    // TEST (#64 540p60 vertical shift): deframe 540p60 with FPGA input mode
+    // 0x03 (the working 540P90 mode) instead of 0x01. See hardware-goggle.c.
+    I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x03 : 0x00);
 
     DM5680_SetFPS(mode);
     if (mode == VR_540P60) {
