@@ -179,12 +179,11 @@ void app_switch_to_hdzero(bool is_default) {
         ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
     }
 
-    // Mask the green/black flash the baseband reset (HDZero_open) throws while
-    // the VO switches to the live plane. With BW=Auto also tag the channel OSD
-    // "Detecting..." -- the bandwidth is still settling (the bw-reacquire
-    // watchdog corrects a wrong guess after entry). The OSD and the progress
-    // bar draw above the cover, so entry feedback stays visible.
-    osd_cover(true, g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH);
+    // With BW=Auto, tag the channel OSD "Detecting..." for the switch sequence
+    // -- the bandwidth is still settling (the bw-reacquire watchdog corrects a
+    // wrong guess after entry).
+    if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH)
+        osd_detecting_show(true);
 
     HDZero_open(hdzero_effective_bw());
     ch &= 0x7f;
@@ -244,7 +243,7 @@ void app_switch_to_hdzero(bool is_default) {
     dvr_update_vi_conf(CAM_MODE);
     system_script(REC_STOP_LIVE);
 
-    osd_cover(false, false); // reveal the live plane
+    osd_detecting_show(false); // restore the normal channel tag
 }
 
 void hdzero_switch_channel(int channel) {

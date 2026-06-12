@@ -427,7 +427,8 @@ char *channel2str_tagged(int protocol, uint8_t channel_index) {
     return buf;
 }
 
-// Set while an auto-detect probe is in flight (osd_cover with detecting=true).
+// Set while an auto-detect probe / Auto-BW settle is in flight
+// (osd_detecting_show(true)).
 static bool osd_detecting = false;
 
 void osd_channel_show(bool bShow) {
@@ -437,7 +438,7 @@ void osd_channel_show(bool bShow) {
 
     // An auto-detect probe is in flight: replace the channel tag with a
     // "Detecting..." status in the same style as the red "To R1/Dual?"
-    // preview, and keep it up until osd_cover(false, ...) drops the flag.
+    // preview, and keep it up until osd_detecting_show(false) drops the flag.
     if (osd_detecting) {
         lv_label_set_text(g_osd_hdzero.channel[is_fhd], "  Detecting...  ");
         lv_obj_set_style_text_color(g_osd_hdzero.channel[is_fhd], lv_color_make(0xFF, 0x20, 0x20), 0);
@@ -508,47 +509,20 @@ void osd_channel_show(bool bShow) {
     }
 }
 
-static lv_obj_t *osd_cover_obj = NULL;
-
 bool osd_is_detecting(void) {
     return osd_detecting;
 }
 
-// Create the fullscreen cover up front, on the main thread, so the background
-// bw-reacquire watchdog never has to allocate an LVGL object itself. The cover
-// sits at the BOTTOM of the screen's z-order: it blacks out the hardware video
-// layer showing through the transparent screen, while the OSD (and any UI)
-// keeps drawing on top of it. Oversized past every edge so boundary rounding
-// can't leave uncovered rows at the very top.
-void osd_cover_create(void) {
-    if (osd_cover_obj)
-        return;
-    osd_cover_obj = lv_obj_create(lv_scr_act());
-    lv_obj_remove_style_all(osd_cover_obj);
-    lv_obj_set_size(osd_cover_obj, LV_PCT(105), LV_PCT(105));
-    lv_obj_set_pos(osd_cover_obj, -16, -16);
-    lv_obj_clear_flag(osd_cover_obj, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(osd_cover_obj, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(osd_cover_obj, LV_OPA_COVER, 0);
-    lv_obj_add_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_move_background(osd_cover_obj);
-}
-
-// Behind-the-OSD opaque-black mask that hides the brief green/black flash when
-// HDZero_open() resets the baseband during an Auto-BW bandwidth switch. With
-// detecting=true it also tags the channel OSD element with "Detecting..."
-// (see osd_channel_show) and disables dial channel selection (tune_channel
-// checks osd_is_detecting). Paints synchronously (lv_refr_now) so it covers
-// BEFORE the caller's blocking open/probe. The bw-reacquire watchdog calls
-// this from a background thread, but always while holding lvgl_mutex.
-void osd_cover(bool on, bool detecting) {
-    if (!osd_cover_obj)
-        osd_cover_create();
-    osd_detecting = on && detecting;
-    if (on)
-        lv_obj_clear_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
-    else
-        lv_obj_add_flag(osd_cover_obj, LV_OBJ_FLAG_HIDDEN);
+// Tag the channel OSD element "Detecting..." (see osd_channel_show) while an
+// auto-detect probe or Auto-BW settle is in flight, and disable dial channel
+// selection (tune_channel checks osd_is_detecting). Paints synchronously
+// (lv_refr_now) so the tag shows BEFORE the caller's blocking open/probe. The
+// bw-reacquire watchdog calls this from a background thread, but always while
+// holding lvgl_mutex. (There used to be a fullscreen black mask here hiding
+// the baseband reset's green flash; it could not reliably occlude the live
+// plane and is gone -- the tag alone explains the flash.)
+void osd_detecting_show(bool on) {
+    osd_detecting = on;
     osd_channel_show(true); // repaint the channel tag for the detecting state
     lv_refr_now(NULL);
 }
@@ -1138,8 +1112,6 @@ int osd_init(void) {
     embedded_osd_init(1);
 
     sem_init(&osd_semaphore, 0, 1);
-
-    osd_cover_create();
 
     return 0;
 }

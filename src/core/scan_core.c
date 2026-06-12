@@ -637,12 +637,11 @@ void scan_core_hdz_bw_tick(void) {
     uint8_t gain = 0;
     bool found = false;
 
-    // Hide the green/black flash the baseband reset throws while we re-open the
-    // RF at the other bandwidth, and tag the channel OSD "Detecting..." so the
-    // user sees the bandwidth settle instead of a silent black screen. Runs on
-    // thread_peripheral, but we hold lvgl_mutex here, so the synchronous paint
-    // is serialized with the main UI.
-    osd_cover(true, true);
+    // Tag the channel OSD "Detecting..." so the user sees the bandwidth settle
+    // (and the baseband reset's brief flash) explained instead of a silent
+    // black screen. Runs on thread_peripheral, but we hold lvgl_mutex here, so
+    // the synchronous paint is serialized with the main UI.
+    osd_detecting_show(true);
     HDZero_open(other);
     usleep(200000); // settle at the new bandwidth before checking the lock
     scan_probe_hdzero(band, ch, &gain, &found);
@@ -655,7 +654,7 @@ void scan_core_hdz_bw_tick(void) {
         DM5680_clear_vldflg();
         DM5680_req_vldflg();
     }
-    osd_cover(false, false);
+    osd_detecting_show(false);
     pthread_mutex_unlock(&lvgl_mutex);
     LOGI("HDZ BW reacquire: tried bw=%u found=%d (orig=%u) band=%u ch=%u",
          other, found, orig, band, ch);

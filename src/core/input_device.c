@@ -71,8 +71,8 @@ static int btn_value = 0;
 // Set to 0 to restore the per-click bandwidth sweep in Auto BW (Both) mode:
 // slower (re-inits the DM6302 on each click) but identifies the locking
 // bandwidth up front. When 1, Both-mode clicks take the single-bandwidth fast
-// path and let the live bw-reacquire watchdog settle the bandwidth (its flash
-// is hidden by osd_cover). Revert by setting this back to 0.
+// path and let the live bw-reacquire watchdog settle the bandwidth (tagged
+// "Detecting..." while it does). Revert by setting this back to 0.
 #define AUTODETECT_FAST_DIAL 1
 static int auto_detect_freq_idx = -1;
 #endif
@@ -274,9 +274,8 @@ void tune_channel(uint8_t action) {
         } else if (action == DIAL_KEY_CLICK || action == DIAL_KEY_PRESS) {
             const scan_freq_entry_t *entry = scan_band_order_entry(auto_detect_freq_idx);
             if (!entry) return;
-            // Mask the green/black flash from the probe's bandwidth re-inits and
-            // show "Detecting..." while the (blocking) probe runs.
-            osd_cover(true, true);
+            // Show "Detecting..." while the (blocking) probe runs.
+            osd_detecting_show(true);
             scan_result_t r;
             r.protocol  = PROTOCOL_NONE;
             r.strength  = 0;
@@ -324,7 +323,7 @@ void tune_channel(uint8_t action) {
             channel_osd_preview_band = 0xFF;
             tune_state = 1;
             tune_timer = 0;
-            osd_cover(false, false); // reveal the new picture
+            osd_detecting_show(false); // back to the normal channel tag
             return;
         } else {
             return;
