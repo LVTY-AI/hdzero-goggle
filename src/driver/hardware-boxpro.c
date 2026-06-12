@@ -382,10 +382,7 @@ void MFPGA_HDZ_VTMG(int mode, int is_43) {
         I2C_Write(ADDR_FPGA, 0x42, 0x1c);
         I2C_Write(ADDR_FPGA, 0x43, 0xe7);
         I2C_Write(ADDR_FPGA, 0x44, 0x43);
-        // TEST (#64 residual bottom band): input V-total 540 instead of 563
-        // -- the band equals the 23 blanking lines scaled up. See
-        // screen-goggle.c. Revert: 0x45=0x33.
-        I2C_Write(ADDR_FPGA, 0x45, 0x1c);
+        I2C_Write(ADDR_FPGA, 0x45, 0x33);
         I2C_Write(ADDR_FPGA, 0x48, 0x28);
         I2C_Write(ADDR_FPGA, 0x49, 0x20);
         I2C_Write(ADDR_FPGA, 0x4a, 0x00);

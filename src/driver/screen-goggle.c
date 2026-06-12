@@ -269,13 +269,7 @@ static void MFPGA_Set540P60() {
     I2C_Write(ADDR_FPGA, 0x42, 0x1c);
     I2C_Write(ADDR_FPGA, 0x43, 0x4B);
     I2C_Write(ADDR_FPGA, 0x44, 0x44);
-    // TEST (#64 residual bottom band): input V-total 540 (0x21c) instead of
-    // 563 (0x233). The ~32-line corruption band equals the input's 23
-    // blanking lines scaled to the output: the mode-1 deframe appears to
-    // scan the input's TOTAL raster as content, so real video fills only
-    // 540/563 of the frame. Window exactly the active lines instead.
-    // Revert: 0x45=0x33.
-    I2C_Write(ADDR_FPGA, 0x45, 0x1c);
+    I2C_Write(ADDR_FPGA, 0x45, 0x33);
     I2C_Write(ADDR_FPGA, 0x46, 0x00);
     I2C_Write(ADDR_FPGA, 0x47, 0x00);
     I2C_Write(ADDR_FPGA, 0x48, 0x28);

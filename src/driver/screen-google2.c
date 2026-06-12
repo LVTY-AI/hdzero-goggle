@@ -255,10 +255,7 @@ static void MFPGA_Set540P60() {
     I2C_Write(ADDR_FPGA, 0x42, 0x1c);
     I2C_Write(ADDR_FPGA, 0x43, 0x4b);
     I2C_Write(ADDR_FPGA, 0x44, 0x44);
-    // TEST (#64 residual bottom band): input V-total 540 instead of 563 --
-    // the band equals the 23 blanking lines scaled up. See screen-goggle.c.
-    // Revert: 0x45=0x33.
-    I2C_Write(ADDR_FPGA, 0x45, 0x1c);
+    I2C_Write(ADDR_FPGA, 0x45, 0x33);
     I2C_Write(ADDR_FPGA, 0x46, 0x00);
     I2C_Write(ADDR_FPGA, 0x47, 0x00);
     I2C_Write(ADDR_FPGA, 0x48, 0x28);
