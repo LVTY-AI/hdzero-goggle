@@ -17,6 +17,7 @@
 #include "ui/ui_style.h"
 #include "util/filesystem.h"
 #include "util/system.h"
+#include "wav_test.h"
 
 #define AUDIO_VOLUME_MIN 0
 #define DVR_AUDIO_VOLUME_MAX 8
@@ -26,8 +27,6 @@
 #define AUDIO_TEST_SAMPLE_SDCARD "/mnt/extsd/dvr_playback_volume_test.wav"
 #define AUDIO_TEST_CAPTURE "/tmp/hdzero_audio_test.wav"
 #define AUDIO_TEST_CAPTURE_SDCARD "/mnt/extsd/audio_test_capture.wav"
-#define AUDIO_TEST_APLAY "/mnt/app/app/record/audio/aplay"
-#define AUDIO_TEST_ARECORD "/mnt/app/app/record/audio/arecord"
 #define AUDIO_TEST_COUNT 4
 #define AUDIO_TEST_SECONDS 5            // live stream / record length
 #define AUDIO_TEST_DVR_SAMPLE_MS 10000  // bundled test WAV length
@@ -417,17 +416,10 @@ static void page_audio_on_roller(uint8_t key) {
 }
 
 static void page_audio_play_wav(const char *path) {
-    char buf[256];
-
-    // plughw, not hw: the plug layer handles any format/rate conversion the
-    // raw device won't, which the bare hw: playback rendered as heavy static
-    // (normal DVR playback goes through the MPI AO engine instead and was
-    // clean). -B/-F force a deep buffer (0.5s, 125ms periods): aplay's
-    // defaults underrun on the G1 and the xrun crackle reads as static --
-    // the MPI engine never crackles there because it sizes its own buffers.
-    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec -B 500000 -F 125000 %s",
-             AUDIO_TEST_APLAY, path);
-    system_exec(buf);
+    // MPI AO engine, not aplay: the ALSA hw path renders static-laden audio
+    // on the G1's kernel no matter how it is buffered, while the engine that
+    // plays normal DVR files is clean on every target.
+    wav_test_play(path);
 }
 
 static void page_audio_enable_dac_playback(void) {
@@ -493,18 +485,14 @@ static const char *page_audio_capture_path(void) {
 }
 
 static void page_audio_capture_wav(setting_record_audio_source_t source) {
-    char buf[256];
-
     dvr_select_audio_source(source);
     audio_test_phase_duration_ms = AUDIO_TEST_SECONDS * 1000;
     audio_test_phase = AUDIO_TEST_PHASE_RECORDING;
-    // plughw + deep buffer (0.5s/125ms) for the same reason as playback:
-    // the captured clips themselves carried the static on G1 (confirmed by
-    // playing them on a computer), the signature of raw-hw capture overruns
-    // on its older kernel.
-    snprintf(buf, sizeof(buf), "%s -D plughw:audiocodec -B 500000 -F 125000 -t wav -f S16_LE -c2 -r 48000 -d %d %s",
-             AUDIO_TEST_ARECORD, AUDIO_TEST_SECONDS, page_audio_capture_path());
-    system_exec(buf);
+    // MPI AI engine, not arecord: the captured clips themselves carried the
+    // static on the G1 (confirmed by playing them on a computer) regardless
+    // of ALSA device or buffering, while normal DVR recordings -- made by
+    // this engine -- are clean.
+    wav_test_record(page_audio_capture_path(), AUDIO_TEST_SECONDS);
 }
 
 static void *page_audio_test_thread(void *arg) {
