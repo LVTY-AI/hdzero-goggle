@@ -179,21 +179,31 @@ int wav_test_play(const char *path) {
     }
     AW_MPI_AO_StartChn(aoDev, aoChn);
 
+    // SendFrame is zero-copy: the AO queues the buffer POINTER and only lets
+    // go of it after the DMA has played it (MPP_EVENT_RELEASE_AUDIO_BUFFER --
+    // see ai2ao's using-list). Feeding every chunk from one reused buffer
+    // plays garbage for everything still queued, so load the whole file once
+    // and send pointers into it; it is freed after the drain below.
     size_t chunk = (size_t)WAV_TEST_POINTS_PER_FRAME * wav.channels * 2;
-    uint8_t *buf = malloc(chunk);
-    uint32_t left = wav.data_len;
+    uint8_t *data = malloc(wav.data_len);
+    size_t total = 0;
+    if (data) {
+        fseek(fp, wav.data_offset, SEEK_SET);
+        total = fread(data, 1, wav.data_len, fp);
+    } else {
+        LOGE("alloc %u bytes for %s failed", wav.data_len, path);
+    }
+    fclose(fp);
+
+    size_t sent = 0;
     unsigned int seq = 0;
     uint64_t pts_us = 0;
 
     struct timespec t0;
     clock_gettime(CLOCK_MONOTONIC, &t0);
 
-    fseek(fp, wav.data_offset, SEEK_SET);
-    while (buf && left > 0) {
-        size_t want = left < chunk ? left : chunk;
-        size_t n = fread(buf, 1, want, fp);
-        if (n == 0)
-            break;
+    while (sent < total) {
+        size_t n = total - sent < chunk ? total - sent : chunk;
 
         AUDIO_FRAME_S frm;
         memset(&frm, 0, sizeof(frm));
@@ -201,19 +211,15 @@ int wav_test_play(const char *path) {
         frm.mBitwidth = AUDIO_BIT_WIDTH_16;
         frm.mSoundmode = (wav.channels == 2) ? AUDIO_SOUND_MODE_STEREO
                                              : AUDIO_SOUND_MODE_MONO;
-        frm.mpAddr = buf;
+        frm.mpAddr = data + sent;
         frm.mLen = (unsigned int)n;
         frm.mSeq = seq++;
         frm.mTimeStamp = pts_us;
         pts_us += (uint64_t)(n / (wav.channels * 2)) * 1000000u / wav.sample_rate;
 
-        // Blocking send: returns once the AO has taken the frame, which paces
-        // the loop at the DMA's real consumption rate.
         AW_MPI_AO_SendFrame(aoDev, aoChn, &frm, -1);
-        left -= (uint32_t)n;
+        sent += n;
     }
-    free(buf);
-    fclose(fp);
 
     // SendFrame queues frames much faster than the DMA plays them, so by here
     // almost the whole file can still be waiting in the AO. Tearing the
@@ -235,7 +241,8 @@ int wav_test_play(const char *path) {
     AW_MPI_AO_DisableChn(aoDev, aoChn);
     AW_MPI_AO_Disable(aoDev);
     AW_MPI_SYS_Exit();
-    return 0;
+    free(data); // not before: queued frames point into it until played
+    return total > 0 ? 0 : -1;
 }
 
 // ---- capture: AI -> WAV -----------------------------------------------------
