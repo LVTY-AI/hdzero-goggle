@@ -607,13 +607,7 @@ void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
     vclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50, 0);
     pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50);
 
-    // TEST (#64 residual bottom band): deframe 540p60 with FPGA input mode
-    // 0x03 (540P90's) now that the output H-total is corrected to 1500 --
-    // the earlier mode-0x03 round ran against the broken 45fps output, which
-    // masked any band-level difference. On BoxPro the entire mfpga input
-    // config is identical between the working 540P90 and banded 540p60, so
-    // the deframe mode is the only input-side variable left. Revert: 0x01.
-    I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x03 : 0x00);
+    I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x01 : 0x00);
 
     DM5680_SetFPS(mode);
     if (mode == VR_540P60) {
