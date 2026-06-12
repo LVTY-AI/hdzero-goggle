@@ -26,7 +26,6 @@
 #define AUDIO_TEST_SAMPLE "/mnt/app/app/audio/dvr_playback_volume_test.wav"
 #define AUDIO_TEST_SAMPLE_SDCARD "/mnt/extsd/dvr_playback_volume_test.wav"
 #define AUDIO_TEST_CAPTURE "/tmp/hdzero_audio_test.wav"
-#define AUDIO_TEST_CAPTURE_SDCARD "/mnt/extsd/audio_test_capture.wav"
 #define AUDIO_TEST_APLAY "/mnt/app/app/record/audio/aplay"
 #define AUDIO_TEST_ARECORD "/mnt/app/app/record/audio/arecord"
 #define AUDIO_TEST_COUNT 4
@@ -506,11 +505,6 @@ static const char *page_audio_test_sample_path(void) {
 }
 
 static const char *page_audio_capture_path(void) {
-    // Prefer the SD card: same test behavior, but the captured clip can be
-    // pulled afterwards and listened to on a computer, which separates
-    // capture-side from playback-side noise when chasing static.
-    if (g_sdcard_ready)
-        return AUDIO_TEST_CAPTURE_SDCARD;
     return AUDIO_TEST_CAPTURE;
 }
 
