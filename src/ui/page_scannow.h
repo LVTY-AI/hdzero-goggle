@@ -19,6 +19,10 @@ int scan(void);
 int scan_reinit(void);
 void autoscan_exit(void);
 void page_scannow_set_channel_label(void);
+// Preset the protocol the boot-time Auto Scan runs in (scan_mode_t value:
+// 0=HDZero, 1=Analog, 2=Dual). Out-of-range values for the target (the G1
+// only scans HDZero) are ignored. Does not touch the persisted picker default.
+void page_scannow_set_boot_scan_mode(int mode);
 
 extern page_pack_t pp_scannow;
 

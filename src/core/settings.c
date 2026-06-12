@@ -42,6 +42,7 @@ const setting_t g_setting_defaults = {
         .status = SETTING_AUTOSCAN_STATUS_ON,
         .last_source = SETTING_AUTOSCAN_SOURCE_LAST,
         .source = SETTING_AUTOSCAN_SOURCE_HDZERO,
+        .load_from_boot = false,
     },
     .power = {
         .voltage = 3500,
@@ -430,6 +431,7 @@ void settings_load(void) {
     g_setting.autoscan.status = ini_getl("autoscan", "status", g_setting_defaults.autoscan.status, SETTING_INI);
     g_setting.autoscan.source = ini_getl("autoscan", "source", g_setting_defaults.autoscan.source, SETTING_INI);
     g_setting.autoscan.last_source = ini_getl("autoscan", "last_source", g_setting_defaults.autoscan.last_source, SETTING_INI);
+    g_setting.autoscan.load_from_boot = settings_get_bool("autoscan", "load_from_boot", g_setting_defaults.autoscan.load_from_boot);
 #if defined(HDZGOGGLE)
     // No Auto Detect on the G1 (external analog module only); fall back to
     // HDZero if a setting.ini written by a BoxPro/G2 selected it.

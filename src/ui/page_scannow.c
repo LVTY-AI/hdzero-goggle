@@ -1060,6 +1060,20 @@ static void start_scan_in_current_mode(void) {
 }
 #endif
 
+// Preset the protocol the boot-time Auto Scan runs in (start_running, before
+// the autoscan thread enters this page). Runtime-only: the user's persisted
+// picker default (scan_mode_initial) is untouched.
+void page_scannow_set_boot_scan_mode(int mode) {
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2) || defined(HDZGOGGLE)
+    if (mode >= 0 && mode < SCAN_MODE_COUNT) {
+        scan_mode = (scan_mode_t)mode;
+        idle_sel = mode;
+    }
+#else
+    (void)mode;
+#endif
+}
+
 static void page_scannow_enter() {
     page_focused = true;
     // Boot-time Auto Scan re-enters this page in a loop until a signal is

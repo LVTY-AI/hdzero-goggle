@@ -40,6 +40,11 @@ typedef struct {
     setting_autoscan_status_t status;
     setting_autoscan_source_t last_source;
     setting_autoscan_source_t source;
+    // With Auto Scan=On: false = run a Scan Now sweep for the default
+    // source's protocol at boot (HDZero's historical behavior), true = enter
+    // the source directly. AV In and HDMI In always enter directly (nothing
+    // to scan); same for Analog on the G1 (external module, not scannable).
+    bool load_from_boot;
 } setting_autoscan_t;
 
 typedef enum {

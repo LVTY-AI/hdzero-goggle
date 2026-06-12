@@ -87,14 +87,25 @@ void start_running(void) {
     else
         source = g_setting.autoscan.source;
 
+    // Auto Scan=On + Load from Boot=No: run a Scan Now sweep for the default
+    // source's protocol at boot instead of entering the source directly
+    // (HDZero's historical behavior, now offered for Analog and Dual too).
+    // AV In and HDMI In always load directly -- there is nothing to scan --
+    // and the G1's external analog module cannot be scanned either. A dial
+    // up/down during initialization (g_init_done) skips the scan, as before.
+    bool boot_scan = (g_setting.autoscan.status == SETTING_AUTOSCAN_STATUS_ON) &&
+                     !g_setting.autoscan.load_from_boot && (g_init_done == 0);
+
     if (source == SETTING_AUTOSCAN_SOURCE_HDZERO) { // HDZero
         g_source_info.source = SOURCE_HDZERO;
-        // go autoscan only if no dial up/down during initialization
-        if ((g_setting.autoscan.status == SETTING_AUTOSCAN_STATUS_ON) && (g_init_done == 0)) {
+        if (boot_scan) {
             pthread_t pid;
             g_autoscan_exit = false;
+            page_scannow_set_boot_scan_mode(0); // SCAN_MODE_HDZERO
             pthread_create(&pid, NULL, thread_autoscan, NULL);
-        } else if (g_setting.autoscan.status == SETTING_AUTOSCAN_STATUS_LAST) {
+        } else if (g_setting.autoscan.status == SETTING_AUTOSCAN_STATUS_LAST ||
+                   (g_setting.autoscan.status == SETTING_AUTOSCAN_STATUS_ON &&
+                    g_setting.autoscan.load_from_boot)) {
             app_state_push(APP_STATE_VIDEO);
             app_switch_to_hdzero(true);
         } else { // auto scan disabled, go to go directly to last saved channel
@@ -102,10 +113,24 @@ void start_running(void) {
         }
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     } else if (source == SETTING_AUTOSCAN_SOURCE_AUTO_DETECT) {
-        // Probes both protocols at the current channel and enters video on
-        // whichever responds; pushes APP_STATE_VIDEO and sets
-        // g_source_info.source itself.
-        page_source_select_auto_detect();
+        if (boot_scan) {
+            pthread_t pid;
+            g_autoscan_exit = false;
+            page_scannow_set_boot_scan_mode(2); // SCAN_MODE_AUTO (Dual)
+            pthread_create(&pid, NULL, thread_autoscan, NULL);
+        } else {
+            // Probes both protocols at the current channel and enters video
+            // on whichever responds; pushes APP_STATE_VIDEO and sets
+            // g_source_info.source itself.
+            page_source_select_auto_detect();
+        }
+    } else if (source == SETTING_AUTOSCAN_SOURCE_AV_MODULE && boot_scan) {
+        // Boot scan on the built-in analog receiver. (The G1 has no built-in
+        // analog, so its AV Module default keeps the direct entry below.)
+        pthread_t pid;
+        g_autoscan_exit = false;
+        page_scannow_set_boot_scan_mode(1); // SCAN_MODE_ANALOG
+        pthread_create(&pid, NULL, thread_autoscan, NULL);
 #endif
     } else {
         app_state_push(APP_STATE_VIDEO);
