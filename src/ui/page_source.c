@@ -419,6 +419,9 @@ void page_source_select_auto_detect() {
         app_switch_to_analog(0);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_AV_MODULE;
+        // The HDZ landing ends the loading bar inside app_switch_to_hdzero;
+        // the analog path has to end it itself or it stays running.
+        progress_bar.start = 0;
     } else {
         // PROTOCOL_HDZ or PROTOCOL_NONE: default to HDZ. HDZero_open
         // already ran; app_switch_to_hdzero(true) tunes to current channel.

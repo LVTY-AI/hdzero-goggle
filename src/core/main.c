@@ -80,6 +80,31 @@ a_exit:
     return NULL;
 }
 
+// In normal operation the version thread animates progress_bar (its 100ms
+// loop calls progress_bar_update, page_version.c), but start_running executes
+// before create_threads -- so a direct boot entry showed a frozen menu for
+// the 5-10s the source bring-up takes. Tick the bar from this short-lived
+// thread so Load from Boot shows the same loading animation (and the same
+// per-source/Auto-BW fill rates) as the equivalent Source-page pick; hand
+// off as soon as the main loop starts.
+static void *thread_boot_progress(void *ptr) {
+    while (progress_bar.start && !g_init_done) {
+        progress_bar_update();
+        usleep(100000);
+    }
+    if (!g_init_done)
+        progress_bar_update(); // run the bar's end-of-use cleanup tick
+    pthread_exit(NULL);
+    return NULL;
+}
+
+static void boot_progress_start(void) {
+    pthread_t pid;
+    progress_bar.start = 1;
+    if (pthread_create(&pid, NULL, thread_boot_progress, NULL) == 0)
+        pthread_detach(pid);
+}
+
 void start_running(void) {
     int source;
     if (g_setting.autoscan.source == SETTING_AUTOSCAN_SOURCE_LAST)
@@ -120,6 +145,7 @@ void start_running(void) {
                    (g_setting.autoscan.status == SETTING_AUTOSCAN_STATUS_ON &&
                     g_setting.autoscan.load_from_boot)) {
             app_state_push(APP_STATE_VIDEO);
+            boot_progress_start(); // same loading bar as a Source-page pick
             app_switch_to_hdzero(true);
         } else { // auto scan disabled, go to go directly to last saved channel
             app_state_push(APP_STATE_MAINMENU);
@@ -134,7 +160,9 @@ void start_running(void) {
         } else {
             // Probes both protocols at the current channel and enters video
             // on whichever responds; pushes APP_STATE_VIDEO and sets
-            // g_source_info.source itself.
+            // g_source_info.source itself. It sets the bar's per-Auto-BW fill
+            // rate; the ticker just needs to be running before it blocks.
+            boot_progress_start();
             page_source_select_auto_detect();
         }
     } else if (source == SETTING_AUTOSCAN_SOURCE_AV_MODULE && boot_scan) {
