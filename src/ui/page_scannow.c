@@ -1080,6 +1080,12 @@ static void page_scannow_enter() {
     // found; scan immediately instead of parking on the picker.
     if (!g_autoscan_exit) {
         start_scan_in_current_mode();
+        // One successful scan is enough: stop the boot loop so the results
+        // sit waiting for the user instead of rescanning every 5s. An empty
+        // scan keeps the loop retrying until a VTX appears (or the user
+        // takes over with the dial).
+        if (auto_result_count > 0)
+            g_autoscan_exit = true;
         return;
     }
 #if SCAN_MODE_COUNT == 1
