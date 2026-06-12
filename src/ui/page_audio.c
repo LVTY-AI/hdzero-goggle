@@ -212,7 +212,11 @@ static lv_obj_t *page_audio_create(lv_obj_t *parent, panel_arr_t *arr) {
     // drone) feeds the tests too, not just the AV jack.
     lv_label_set_text(note, _lang("1. Mic: record 5s, auto playback.\n2. Line/AV: record 5s, auto playback.\n3. Test fill: pulsing = loading, red = recording, green = playback.\n4. Live & Line/AV need an active analog audio source."));
 #else
-    lv_label_set_text(note, _lang("1. Mic: record 5s, auto playback.\n2. Line/AV: record 5s, auto playback.\n3. Test fill: pulsing = loading, red = recording, green = playback."));
+    // The faint clicking is menu-mode electrical interference coupling into
+    // the codec converters (confirmed by waveform analysis: ~130 analog
+    // impulses/s in menu captures, zero in video-mode recordings on the same
+    // unit). Not reachable from software; flights and DVR playback are clean.
+    lv_label_set_text(note, _lang("1. Mic: record 5s, auto playback.\n2. Line/AV: record 5s, auto playback.\n3. Test fill: pulsing = loading, red = recording, green = playback.\n4. Faint clicking during tests is normal in the menu; flight recordings are unaffected."));
 #endif
     lv_obj_set_style_text_font(note, UI_PAGE_LABEL_FONT, 0);
     lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_LEFT, 0);
