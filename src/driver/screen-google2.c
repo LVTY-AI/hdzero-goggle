@@ -264,10 +264,11 @@ static void MFPGA_Set540P60() {
     I2C_Write(ADDR_FPGA, 0x4b, 0x05);
     I2C_Write(ADDR_FPGA, 0x4c, 0x11);
 
-    // TEST (#64 540p60 vertical shift): output H-total 1328 (0x530), the
-    // working 540P90 value, instead of 2000 (0x7d0). See screen-goggle.c.
-    // Revert: 0x4d=0xd0, 0x4e=0x07.
-    I2C_Write(ADDR_FPGA, 0x4d, 0x30);
+    // #64 540p60 vertical shift: output H-total 1500 (0x5dc) = exact 60fps
+    // at the 540-mode FPGA clock (67.5MHz / (1500*750)); the shipped 2000
+    // assumed a 563-line output raster and ran the 750-line output at 45fps,
+    // dragging the composite upward ~10%. See screen-goggle.c.
+    I2C_Write(ADDR_FPGA, 0x4d, 0xdc);
     I2C_Write(ADDR_FPGA, 0x4e, 0x05);
 
     I2C_Write(ADDR_FPGA, 0x4f, 0x00);

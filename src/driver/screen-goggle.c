@@ -278,13 +278,15 @@ static void MFPGA_Set540P60() {
     I2C_Write(ADDR_FPGA, 0x4b, 0x05);
     I2C_Write(ADDR_FPGA, 0x4c, 0x11);
 
-    // TEST (#64 540p60 vertical shift): output H-total 1328 (0x530) -- the
-    // working 540P90 value -- instead of 2000 (0x7d0). The no-VTX green
-    // screen and the OSD cut off in DVR recordings show the whole FPGA
-    // composite (video + OSD) is misplaced on its way out, i.e. the output
-    // raster. Pacing may stutter; placement is the readout.
-    // Revert: 0x4d=0xd0, 0x4e=0x07.
-    I2C_Write(ADDR_FPGA, 0x4d, 0x30);
+    // #64 540p60 vertical shift: output H-total 1500 (0x5dc) so the 720p
+    // output raster runs at exactly the input's 60fps (67.5MHz / (1500*750)
+    // = 60.000) -- the same H-total the 960x720P60 table uses at this clock.
+    // The shipped 2000 was solved for a 563-line output raster (67.5MHz /
+    // (2000*563) = 60) but the output raster is 750 lines, so the output ran
+    // at 45fps and dragged the whole composite (video + OSD, screen and DVR
+    // alike) upward ~10%; 1328 (540P90's value, 67.8fps) confirmed the lever
+    // by fixing placement while starving the last lines into a garbage band.
+    I2C_Write(ADDR_FPGA, 0x4d, 0xdc);
     I2C_Write(ADDR_FPGA, 0x4e, 0x05);
 
     I2C_Write(ADDR_FPGA, 0x4f, 0x00);
