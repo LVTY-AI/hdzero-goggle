@@ -548,6 +548,11 @@ void scan_core_idle_tick(void) {
         return;
     }
 
+    // Don't probe (or switch sources!) under the user while they are dialing
+    // channels -- same preview guard as the bw-reacquire watchdog.
+    if (channel_osd_mode & 0x80)
+        return;
+
     no_signal_ticks++;
     if (no_signal_ticks < CROSSOVER_NO_SIGNAL_THRESH) return;
 
@@ -600,6 +605,14 @@ void scan_core_hdz_bw_tick(void) {
         dark_ticks = 0;
         return;
     }
+
+    // Stay out of the user's way while they are dialing channels (the "To
+    // R5?" preview is showing): an attempt would overwrite the preview with
+    // the Detecting tag, retune the receiver mid-browse, and stall the dial
+    // for ~300ms. Freeze the countdown; attempts resume once the preview
+    // decays or the confirm commits a channel.
+    if (channel_osd_mode & 0x80)
+        return;
 
     dark_ticks++;
     if (dark_ticks < HDZ_BW_REACQUIRE_DARK_THRESH) return; // debounce the loss
