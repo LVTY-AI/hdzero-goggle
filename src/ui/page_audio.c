@@ -439,6 +439,15 @@ static void page_audio_enable_dac_playback(void) {
 
     snprintf(buf, sizeof(buf), "%s out_on", AUDIO_SEL_SH);
     system_exec(buf);
+#if defined(HDZGOGGLE)
+    // Replicate the Playback menu's codec state exactly -- the only playback
+    // route that is clean on the G1. It never enables the Output Mixer DAC
+    // path (out_dac_on): the DAC reaches LINEOUT through the LINEOUT mux
+    // alone. Every static-laden test playback since the first version had
+    // out_dac_on in common, across both the ALSA and the MPI transports.
+    dvr_mute_live_audio(); // cut LINEIN from the output mixer, like adec2ao
+    dvr_set_dvr_audio_volume(g_setting.record.dvr_audio_volume);
+#else
     snprintf(buf, sizeof(buf), "%s out_linein_off", AUDIO_SEL_SH);
     system_exec(buf);
     // Cut the remaining analog inputs to the output mixer too: a MIC boost
@@ -465,13 +474,18 @@ static void page_audio_enable_dac_playback(void) {
     // timeslot 1 silent while the test plays (the next real playback or test
     // restores it).
     system_exec("amixer cset name='AIF1 DAC timeslot 1 volume' 0,0");
+#endif
 }
 
 static void page_audio_disable_dac_playback(bool live_audio_was_enabled) {
     char buf[128];
 
+#if !defined(HDZGOGGLE)
+    // G1 never enabled the Output Mixer DAC path (see
+    // page_audio_enable_dac_playback), so there is nothing to switch off.
     snprintf(buf, sizeof(buf), "%s out_dac_off", AUDIO_SEL_SH);
     system_exec(buf);
+#endif
 
     if (live_audio_was_enabled) {
         dvr_restore_live_audio();
