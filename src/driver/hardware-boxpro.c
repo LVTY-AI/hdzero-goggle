@@ -531,9 +531,7 @@ void Display_HDZ_t(int mode, int is_43) {
         break;
     }
 
-    // TEST (#64 540p60 vertical shift): RX DM5680 deframes with its 540P90
-    // video mode. See hardware-goggle.c. Revert: pass mode through.
-    DM5680_SetFPS(mode == VR_540P60 ? VR_540P90 : mode);
+    DM5680_SetFPS(mode);
     MFPGA_HDZ_VTMG(mode, is_43);
 
     g_hw_stat.source_mode = SOURCE_MODE_HDZERO;

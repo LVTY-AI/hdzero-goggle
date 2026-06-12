@@ -615,9 +615,7 @@ void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
 
     I2C_Write(ADDR_FPGA, 0x80, (mode == VR_540P60) ? 0x01 : 0x00);
 
-    // TEST (#64 540p60 vertical shift): RX DM5680 deframes with its 540P90
-    // video mode. See hardware-goggle.c. Revert: pass mode through.
-    DM5680_SetFPS(mode == VR_540P60 ? VR_540P90 : mode);
+    DM5680_SetFPS(mode);
     if (mode == VR_540P60) {
         screen.mfpga.set540p60();
     } else {
