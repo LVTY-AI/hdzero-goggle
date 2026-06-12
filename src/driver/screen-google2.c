@@ -264,8 +264,11 @@ static void MFPGA_Set540P60() {
     I2C_Write(ADDR_FPGA, 0x4b, 0x05);
     I2C_Write(ADDR_FPGA, 0x4c, 0x11);
 
-    I2C_Write(ADDR_FPGA, 0x4d, 0xd0);
-    I2C_Write(ADDR_FPGA, 0x4e, 0x07);
+    // TEST (#64 540p60 vertical shift): output H-total 1328 (0x530), the
+    // working 540P90 value, instead of 2000 (0x7d0). See screen-goggle.c.
+    // Revert: 0x4d=0xd0, 0x4e=0x07.
+    I2C_Write(ADDR_FPGA, 0x4d, 0x30);
+    I2C_Write(ADDR_FPGA, 0x4e, 0x05);
 
     I2C_Write(ADDR_FPGA, 0x4f, 0x00);
     I2C_Write(ADDR_FPGA, 0x52, 0x48);
