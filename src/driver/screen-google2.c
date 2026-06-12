@@ -262,7 +262,9 @@ static void MFPGA_Set540P60() {
     I2C_Write(ADDR_FPGA, 0x49, 0x84);
     I2C_Write(ADDR_FPGA, 0x4a, 0x00);
     I2C_Write(ADDR_FPGA, 0x4b, 0x05);
-    I2C_Write(ADDR_FPGA, 0x4c, 0x11);
+    // TEST (#64 residual bottom band): input V-start 0 instead of 17.
+    // See screen-goggle.c. Revert: 0x4c=0x11.
+    I2C_Write(ADDR_FPGA, 0x4c, 0x00);
 
     // #64 540p60 vertical shift: output H-total 1500 (0x5dc) = exact 60fps
     // at the 540-mode FPGA clock (67.5MHz / (1500*750)); the shipped 2000

@@ -276,7 +276,12 @@ static void MFPGA_Set540P60() {
     I2C_Write(ADDR_FPGA, 0x49, 0x84);
     I2C_Write(ADDR_FPGA, 0x4a, 0x00);
     I2C_Write(ADDR_FPGA, 0x4b, 0x05);
-    I2C_Write(ADDR_FPGA, 0x4c, 0x11);
+    // TEST (#64 residual bottom band): input V-start 0 instead of 17 (the
+    // value shared with the 540P90 table). If the RX's 60-mode raster puts
+    // content right after vsync, a 17-line-late window cuts the top 17
+    // content lines (subtle) and scans ~20 junk lines past the end -- the
+    // bottom band. Revert: 0x4c=0x11.
+    I2C_Write(ADDR_FPGA, 0x4c, 0x00);
 
     // #64 540p60 vertical shift: output H-total 1500 (0x5dc) so the 720p
     // output raster runs at exactly the input's 60fps (67.5MHz / (1500*750)
