@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #define LOG_TAG "wav_test"
@@ -184,6 +185,9 @@ int wav_test_play(const char *path) {
     unsigned int seq = 0;
     uint64_t pts_us = 0;
 
+    struct timespec t0;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+
     fseek(fp, wav.data_offset, SEEK_SET);
     while (buf && left > 0) {
         size_t want = left < chunk ? left : chunk;
@@ -211,9 +215,21 @@ int wav_test_play(const char *path) {
     free(buf);
     fclose(fp);
 
-    // SendFrame returns with the last frames still queued; let the tail play
-    // out before tearing the channel down.
-    usleep(500 * 1000);
+    // SendFrame queues frames much faster than the DMA plays them, so by here
+    // almost the whole file can still be waiting in the AO. Tearing the
+    // channel down now cuts playback off after a fraction of a second. Signal
+    // EOF with the drain flag, then also wait out the file's real duration
+    // (pts_us counts every sample queued) in case the drain flag returns
+    // early; only then take the channel apart.
+    AW_MPI_AO_SetStreamEof(aoDev, aoChn, TRUE, TRUE);
+
+    struct timespec t1;
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    int64_t elapsed_us = (int64_t)(t1.tv_sec - t0.tv_sec) * 1000000 +
+                         (t1.tv_nsec - t0.tv_nsec) / 1000;
+    int64_t remain_us = (int64_t)pts_us + 200000 - elapsed_us;
+    if (remain_us > 0)
+        usleep((useconds_t)remain_us);
 
     AW_MPI_AO_StopChn(aoDev, aoChn);
     AW_MPI_AO_DisableChn(aoDev, aoChn);
