@@ -97,6 +97,9 @@ extern "C" {
 #define UI_AUDIO_TEST_BUTTON_WIDTH        122
 #define UI_AUDIO_TEST_BUTTON_HEIGHT       40
 #define UI_AUDIO_TEST_BUTTON_GAP          12
+// Idle test-button grey. Kept distinct from UI_STYLE_SELECT_BG_COLOR
+// (0x646464 here) so the boxes stay visible when the Run Test row is selected.
+#define UI_AUDIO_TEST_BTN_BG              0x404040
 #define UI_SOURCE_COLS                    160, 160, 160, 160, 160, 160, LV_GRID_TEMPLATE_LAST
 #define UI_SOURCE_ROWS                    60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
 #define UI_STORAGE_COLS                   160, 160, 160, 160, 160, 160, LV_GRID_TEMPLATE_LAST
@@ -245,6 +248,9 @@ static inline int UI_STATUS_BAR_LABEL_WIDTH() {
 #define UI_AUDIO_TEST_BUTTON_WIDTH        84
 #define UI_AUDIO_TEST_BUTTON_HEIGHT       28
 #define UI_AUDIO_TEST_BUTTON_GAP          8
+// Idle test-button grey. BoxPro's row highlight is 0x404040, so the boxes use
+// a lighter grey here to stay visible (read as raised) when Run Test is selected.
+#define UI_AUDIO_TEST_BTN_BG              0x646464
 #define UI_SOURCE_COLS                    106, 106, 106, 106, 106, 106, LV_GRID_TEMPLATE_LAST
 #define UI_SOURCE_ROWS                    40, 40, 40, 40, 40, 40, 40, 40, 40, 40, LV_GRID_TEMPLATE_LAST
 #define UI_STORAGE_COLS                   106, 106, 106, 106, 106, 106, LV_GRID_TEMPLATE_LAST

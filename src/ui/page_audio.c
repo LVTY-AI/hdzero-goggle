@@ -31,8 +31,9 @@
 #define AUDIO_TEST_COUNT 4
 #define AUDIO_TEST_SECONDS 5            // live stream / record length
 #define AUDIO_TEST_DVR_SAMPLE_MS 10000  // bundled test WAV length
-// content width inside the 3px button border, used by the progress fill
-#define AUDIO_TEST_FILL_MAX_W (UI_AUDIO_TEST_BUTTON_WIDTH - 6)
+// full button width: the solid-grey button has no border, so the progress
+// fill spans edge to edge (clipped to the rounded corners by the button).
+#define AUDIO_TEST_FILL_MAX_W (UI_AUDIO_TEST_BUTTON_WIDTH)
 
 static btn_group_t btn_group_record_audio;
 static btn_group_t btn_group_audio_source;
@@ -103,11 +104,17 @@ static void create_test_button(lv_obj_t *parent, audio_test_mode_t mode, const c
     test_btn[mode] = lv_btn_create(parent);
     lv_obj_set_size(test_btn[mode], UI_AUDIO_TEST_BUTTON_WIDTH, UI_AUDIO_TEST_BUTTON_HEIGHT);
     lv_obj_set_pos(test_btn[mode], mode * (UI_AUDIO_TEST_BUTTON_WIDTH + UI_AUDIO_TEST_BUTTON_GAP), 0);
-    lv_obj_set_style_bg_opa(test_btn[mode], LV_OPA_TRANSP, 0);
+    // Solid dark-grey base with rounded corners, matching the Scan Now mode
+    // buttons. The focus (green) / border state is applied per-frame in
+    // page_audio_update_test_indicator. clip_corner keeps the progress fill
+    // child inside the rounded outline.
+    lv_obj_set_style_bg_color(test_btn[mode], lv_color_hex(UI_AUDIO_TEST_BTN_BG), 0);
+    lv_obj_set_style_bg_opa(test_btn[mode], LV_OPA_100, 0);
     lv_obj_set_style_shadow_width(test_btn[mode], 0, 0);
-    lv_obj_set_style_border_width(test_btn[mode], 3, 0);
-    lv_obj_set_style_border_color(test_btn[mode], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
-    lv_obj_set_style_radius(test_btn[mode], 0, 0);
+    lv_obj_set_style_border_width(test_btn[mode], 0, 0);
+    lv_obj_set_style_border_color(test_btn[mode], lv_color_make(0xff, 0xff, 0xff), 0);
+    lv_obj_set_style_radius(test_btn[mode], 6, 0);
+    lv_obj_set_style_clip_corner(test_btn[mode], true, 0);
     lv_obj_set_style_pad_all(test_btn[mode], 0, 0);
 
     // Progress fill: grows left-to-right behind the label while a test runs
@@ -115,7 +122,7 @@ static void create_test_button(lv_obj_t *parent, audio_test_mode_t mode, const c
     // label so the text stays on top.
     test_fill[mode] = lv_obj_create(test_btn[mode]);
     lv_obj_remove_style_all(test_fill[mode]);
-    lv_obj_set_size(test_fill[mode], 0, UI_AUDIO_TEST_BUTTON_HEIGHT - 6);
+    lv_obj_set_size(test_fill[mode], 0, UI_AUDIO_TEST_BUTTON_HEIGHT);
     lv_obj_align(test_fill[mode], LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_set_style_bg_opa(test_fill[mode], LV_OPA_TRANSP, 0);
     lv_obj_clear_flag(test_fill[mode], LV_OBJ_FLAG_SCROLLABLE);
@@ -243,9 +250,9 @@ static void page_audio_update_test_indicator(uint32_t delta_ms) {
     bool blink_on;
     lv_color_t record_color = lv_color_make(0xff, 0x20, 0x20);
     lv_color_t play_color = lv_color_make(0, 0xc0, 0);
-    lv_color_t idle_color = lv_color_hex(TEXT_COLOR_DEFAULT);
-    lv_color_t selected_color = lv_color_make(0xff, 0xff, 0xff);
-    lv_color_t focused_color = lv_color_make(0xff, 0, 0);
+    lv_color_t idle_color = lv_color_hex(UI_AUDIO_TEST_BTN_BG);
+    lv_color_t focus_color = lv_color_make(0, 0xa0, 0);
+    lv_color_t white_color = lv_color_make(0xff, 0xff, 0xff);
 
     audio_test_update_ms += delta_ms;
     blink_on = (audio_test_update_ms / 250) % 2 == 0;
@@ -263,40 +270,43 @@ static void page_audio_update_test_indicator(uint32_t delta_ms) {
     }
 
     for (int i = 0; i < AUDIO_TEST_COUNT; i++) {
-        lv_color_t color = i == (int)selected_test_mode ? selected_color : idle_color;
-        lv_color_t border_color = color;
-        lv_opa_t bg_opa = i == (int)selected_test_mode ? LV_OPA_20 : LV_OPA_TRANSP;
+        // Focus highlight (green base + white border, Scan Now style) shows
+        // only while the Run Test row holds focus. Once a test is clicked
+        // (selected_test_active clears) or the page is left, every button
+        // falls back to idle grey -- so the last-tested button no longer
+        // stays highlighted.
+        bool is_focused = selected_test_active && i == (int)selected_test_mode;
+        bool is_running = running && i == (int)active_test_mode;
+        lv_color_t bg_color = is_focused ? focus_color : idle_color;
+        lv_coord_t border_w = is_focused ? 2 : 0;
         lv_coord_t fill_w = 0;
         lv_color_t fill_color = idle_color;
         lv_opa_t fill_opa = LV_OPA_TRANSP;
 
-        if (selected_test_active && i == (int)selected_test_mode)
-            border_color = focused_color;
-
-        if (running && i == (int)active_test_mode) {
-            color = selected_color;
+        if (is_running) {
             if (phase == AUDIO_TEST_PHASE_RECORDING || phase == AUDIO_TEST_PHASE_PLAYING) {
                 // Scan-bar style: red fills while recording, green while
                 // playing back, growing left-to-right over the phase length.
+                // Opaque so it reads cleanly over the grey button base.
                 uint32_t dur = audio_test_phase_duration_ms;
                 uint32_t el = (dur && phase_elapsed_ms > dur) ? dur : phase_elapsed_ms;
                 fill_color = (phase == AUDIO_TEST_PHASE_RECORDING) ? record_color : play_color;
-                fill_opa = LV_OPA_70;
+                fill_opa = LV_OPA_COVER;
                 fill_w = dur ? (lv_coord_t)((uint64_t)AUDIO_TEST_FILL_MAX_W * el / dur)
                              : AUDIO_TEST_FILL_MAX_W;
-                border_color = fill_color;
             } else {
                 // Setting up (audio routing before the first phase starts,
                 // noticeable on the Mic test): pulse a dim full-width fill so
                 // the wait reads as activity, not a hang.
-                fill_color = selected_color;
-                fill_opa = blink_on ? LV_OPA_30 : LV_OPA_10;
+                fill_color = white_color;
+                fill_opa = blink_on ? LV_OPA_40 : LV_OPA_20;
                 fill_w = AUDIO_TEST_FILL_MAX_W;
             }
         }
-        lv_obj_set_style_text_color(test_label[i], color, 0);
-        lv_obj_set_style_border_color(test_btn[i], border_color, 0);
-        lv_obj_set_style_bg_opa(test_btn[i], bg_opa, 0);
+        lv_obj_set_style_text_color(test_label[i], white_color, 0);
+        lv_obj_set_style_bg_color(test_btn[i], bg_color, 0);
+        lv_obj_set_style_bg_opa(test_btn[i], LV_OPA_100, 0);
+        lv_obj_set_style_border_width(test_btn[i], border_w, 0);
         if (test_fill[i]) {
             lv_obj_set_width(test_fill[i], fill_w);
             lv_obj_set_style_bg_color(test_fill[i], fill_color, 0);
