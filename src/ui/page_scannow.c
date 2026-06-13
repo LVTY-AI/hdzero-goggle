@@ -1013,13 +1013,12 @@ void autoscan_exit(void) {
         if (auto_scaned_cnt > 1) {
             app_state_push(APP_STATE_SUBMENU);
         } else {
-            app_state_push(APP_STATE_MAINMENU);
-            // A dial-cancel lands in the main menu without running the page's
-            // exit handler, so drop the focused presentation here too --
-            // otherwise the scanned protocol's button stays green whenever
-            // Scan Now is merely hovered in the sidebar afterwards.
-            page_focused = false;
-            update_mode_btn_focus();
+            // A dial-cancel lands in the main menu; run the page's full exit
+            // (not just an app-state push) so the sidebar red arrow, the tab
+            // highlight and the green mode button are all cleared -- they
+            // otherwise linger until Scan Now is re-entered and backed out.
+            // submenu_exit() pushes APP_STATE_MAINMENU itself.
+            submenu_exit();
         }
     }
 }
