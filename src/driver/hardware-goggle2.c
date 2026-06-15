@@ -1201,7 +1201,10 @@ void Analog_Module_Power(bool ForceSet) {
         // Power state 0 = expansion module ON, 1 = OFF (see DM5680_ExternalAnalog_Power).
         // Both modes require Expansion to be selected; with Built-in selected the
         // internal rtc6715 is used instead, so the expansion module stays off.
-        if (g_setting.source.analog_module != SETTING_SOURCES_ANALOG_MODULE_EXTERNAL) {
+        // Dual (auto_protocol_detect) always uses the Built-in receiver, so the
+        // expansion module stays off there too regardless of the setting.
+        if (g_setting.source.analog_module != SETTING_SOURCES_ANALOG_MODULE_EXTERNAL ||
+            g_setting.source.auto_protocol_detect) {
             Analog_Module_Power_State = 1;
         } else if (g_setting.power.power_ana == 0) {
             // "On": power the expansion module as soon as Expansion is selected

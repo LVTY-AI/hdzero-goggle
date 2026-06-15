@@ -109,7 +109,13 @@ void app_switch_to_analog(bool is_av_in) {
         // module -- the cause of "External is ignored, always uses Built-in".
         // Keep the internal receiver powered down; Analog_Module_Power() keeps
         // the expansion module powered while it is the active source.
-        if (g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_EXTERNAL) {
+        //
+        // Dual (auto_protocol_detect) always uses the Built-in receiver -- it
+        // probes and tunes the internal rtc6715 and cannot use the Expansion
+        // module -- so it falls through to the Built-in branch regardless of
+        // the Analog Module setting.
+        if (g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_EXTERNAL &&
+            !g_setting.source.auto_protocol_detect) {
             rtc6715.init(0, 0);
             scan_core_notify_analog_powered_off();
         } else
