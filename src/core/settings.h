@@ -60,7 +60,8 @@ typedef enum {
 typedef enum {
     SETTING_POWER_WARNING_TYPE_BEEP = 0,
     SETTING_POWER_WARNING_TYPE_VISUAL = 1,
-    SETTING_POWER_WARNING_TYPE_BOTH = 2
+    SETTING_POWER_WARNING_TYPE_BOTH = 2,
+    SETTING_POWER_WARNING_TYPE_GRADUAL = 3
 } setting_power_warning_type_t;
 
 typedef enum {
@@ -77,6 +78,7 @@ typedef enum {
 
 typedef struct {
     int voltage;
+    int warning_voltage_gradual; // top of gradual range, mV/cell
     bool display_voltage;
     setting_power_warning_type_t warning_type;
     setting_power_cell_count_mode_t cell_count_mode;

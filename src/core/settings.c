@@ -46,6 +46,7 @@ const setting_t g_setting_defaults = {
     },
     .power = {
         .voltage = 3500,
+        .warning_voltage_gradual = 3700,
         .display_voltage = true,
         .warning_type = SETTING_POWER_WARNING_TYPE_BOTH,
         .cell_count_mode = SETTING_POWER_CELL_COUNT_MODE_AUTO,
@@ -483,6 +484,7 @@ void settings_load(void) {
 
     // power
     g_setting.power.voltage = ini_getl("power", "voltage_mv", g_setting_defaults.power.voltage, SETTING_INI);
+    g_setting.power.warning_voltage_gradual = ini_getl("power", "voltage_gradual_mv", g_setting_defaults.power.warning_voltage_gradual, SETTING_INI);
     g_setting.power.warning_type = ini_getl("power", "warning_type", g_setting_defaults.power.warning_type, SETTING_INI);
     g_setting.power.cell_count_mode = ini_getl("power", "cell_count_mode", g_setting_defaults.power.cell_count_mode, SETTING_INI);
     g_setting.power.cell_count = ini_getl("power", "cell_count", g_setting_defaults.power.cell_count, SETTING_INI);

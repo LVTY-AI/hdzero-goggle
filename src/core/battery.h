@@ -18,10 +18,18 @@ typedef struct {
 
 extern sys_battery_t g_battery;
 
+typedef enum {
+    BATTERY_WARN_NONE = 0, // no warning
+    BATTERY_WARN_SUBTLE,   // amber text, no beep, no icon
+    BATTERY_WARN_SLOW,     // red + icon, slow beep
+    BATTERY_WARN_RAPID,    // red + icon, rapid beep
+} battery_warn_level_t;
+
 void battery_init();
 void battery_update();
 
 bool battery_is_low();
+battery_warn_level_t battery_warn_level(void);
 int battery_get_millivolts(bool per_cell);
 void battery_get_voltage_str(char *buf);
 
