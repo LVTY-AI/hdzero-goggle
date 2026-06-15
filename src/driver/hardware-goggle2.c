@@ -1198,14 +1198,19 @@ void Analog_Module_Power(bool ForceSet) {
     if (getHwRevision() >= HW_REV_2) {
         static bool Analog_Module_Power_State = 0;
         static bool Analog_Module_Power_State_Last = 0;
-        if (g_setting.power.power_ana == 0) {
+        // Power state 0 = expansion module ON, 1 = OFF (see DM5680_ExternalAnalog_Power).
+        // Both modes require Expansion to be selected; with Built-in selected the
+        // internal rtc6715 is used instead, so the expansion module stays off.
+        if (g_setting.source.analog_module != SETTING_SOURCES_ANALOG_MODULE_EXTERNAL) {
+            Analog_Module_Power_State = 1;
+        } else if (g_setting.power.power_ana == 0) {
+            // "On": power the expansion module as soon as Expansion is selected
+            // and keep it powered regardless of source (warm for fast re-entry).
             Analog_Module_Power_State = 0;
         } else {
-            if (g_source_info.source != SOURCE_AV_MODULE) {
-                Analog_Module_Power_State = 1;
-            } else {
-                Analog_Module_Power_State = 0;
-            }
+            // "Auto": power the expansion module only while Analog is the active
+            // source; power it off on other sources (HDZero/HDMI).
+            Analog_Module_Power_State = (g_source_info.source == SOURCE_AV_MODULE) ? 0 : 1;
         }
         if ((Analog_Module_Power_State_Last != Analog_Module_Power_State) || (ForceSet == 1)) {
             Analog_Module_Power_State_Last = Analog_Module_Power_State;

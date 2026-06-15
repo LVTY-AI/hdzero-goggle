@@ -51,7 +51,7 @@ const setting_t g_setting_defaults = {
         .cell_count_mode = SETTING_POWER_CELL_COUNT_MODE_AUTO,
         .cell_count = 2,
         .osd_display_mode = SETTING_POWER_OSD_DISPLAY_MODE_TOTAL,
-        .power_ana = false,
+        .power_ana = true, // AnalogRX Power: true = "Auto" (power the analog module only while it is the active source); false = "On" (always powered)
         .calibration_offset = 0,
     },
     .record = {
