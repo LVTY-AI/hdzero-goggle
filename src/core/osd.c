@@ -202,7 +202,13 @@ void osd_battery_low_show() {
         return;
     }
 
-    if (battery_is_low() && g_setting.osd.element[OSD_GOGGLE_BATTERY_LOW].show) {
+    bool show_gif;
+    if (g_setting.power.warning_type == SETTING_POWER_WARNING_TYPE_GRADUAL)
+        show_gif = battery_warn_level() >= BATTERY_WARN_SLOW;
+    else
+        show_gif = battery_is_low();
+
+    if (show_gif && g_setting.osd.element[OSD_GOGGLE_BATTERY_LOW].show) {
         osd_resource_path(buf, "%s", is_fhd, lowBattery_gif);
         lv_gif_set_src(g_osd_hdzero.battery_low[is_fhd], buf);
         lv_obj_clear_flag(g_osd_hdzero.battery_low[is_fhd], LV_OBJ_FLAG_HIDDEN);
@@ -220,10 +226,19 @@ void osd_battery_voltage_show(bool bShow) {
     battery_get_voltage_str(buf);
     lv_label_set_text(g_osd_hdzero.battery_voltage[is_fhd], buf);
 
-    if (battery_is_low())
+    if (g_setting.power.warning_type == SETTING_POWER_WARNING_TYPE_GRADUAL) {
+        const battery_warn_level_t lvl = battery_warn_level();
+        if (lvl == BATTERY_WARN_SUBTLE)
+            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 191, 0), 0); // amber
+        else if (lvl >= BATTERY_WARN_SLOW)
+            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 0, 0), 0);
+        else
+            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 255, 255), 0);
+    } else if (battery_is_low()) {
         lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 0, 0), 0);
-    else
+    } else {
         lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 255, 255), 0);
+    }
 
     lv_obj_clear_flag(g_osd_hdzero.battery_voltage[is_fhd], LV_OBJ_FLAG_HIDDEN);
 }

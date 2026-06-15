@@ -213,6 +213,8 @@ void statubar_update(void) {
 
     {
 #define BEEP_INTERVAL 20
+#define BEEP_INTERVAL_SLOW 40
+#define BEEP_INTERVAL_RAPID 10
         static uint8_t beep_gap = 0;
 
         const bool low = battery_is_low();
@@ -249,6 +251,40 @@ void statubar_update(void) {
             } else
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
             break;
+        case SETTING_POWER_WARNING_TYPE_GRADUAL: {
+            const battery_warn_level_t lvl = battery_warn_level();
+
+            // icon: low-battery from the slow stage onward, normal otherwise
+            if (lvl >= BATTERY_WARN_SLOW)
+                lv_img_set_src(img_battery, &img_lowBattery);
+            else
+                lv_img_set_src(img_battery, &img_bat);
+
+            // text color
+            if (lvl == BATTERY_WARN_SUBTLE)
+                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 191, 0), 0); // amber
+            else if (lvl >= BATTERY_WARN_SLOW)
+                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 0, 0), 0);
+            else
+                lv_obj_set_style_text_color(label[STS_BATT], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
+
+            // beep cadence
+            int interval = 0;
+            if (lvl == BATTERY_WARN_SLOW)
+                interval = BEEP_INTERVAL_SLOW;
+            else if (lvl == BATTERY_WARN_RAPID)
+                interval = BEEP_INTERVAL_RAPID;
+
+            if (interval) {
+                // >= (not == like the other cases) so a level change mid-run
+                // still fires once beep_gap passes the new, possibly smaller, interval
+                if (beep_gap++ >= interval) {
+                    beep();
+                    beep_gap = 0;
+                }
+            }
+            break;
+        }
         default:
             break;
         }
