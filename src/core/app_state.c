@@ -101,11 +101,26 @@ void app_switch_to_analog(bool is_av_in) {
         scan_core_notify_analog_powered_off();
 #endif
     } else {
-        rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
-        rtc6715.set_ch(g_setting.source.analog_channel - 1);
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-        scan_core_notify_analog_powered_on();
+#if defined(HDZGOGGLE2)
+        // Analog "Module" source. The Built-in receiver (rtc6715) and the
+        // Expansion module share the bay's analog input, so only one may drive
+        // it. When the user picks Expansion, powering and tuning the internal
+        // receiver here drives that shared input and overrides the external
+        // module -- the cause of "External is ignored, always uses Built-in".
+        // Keep the internal receiver powered down; Analog_Module_Power() keeps
+        // the expansion module powered while it is the active source.
+        if (g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_EXTERNAL) {
+            rtc6715.init(0, 0);
+            scan_core_notify_analog_powered_off();
+        } else
 #endif
+        {
+            rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
+            rtc6715.set_ch(g_setting.source.analog_channel - 1);
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+            scan_core_notify_analog_powered_on();
+#endif
+        }
     }
 
     g_setting.autoscan.last_source = is_av_in ? SETTING_AUTOSCAN_SOURCE_AV_IN : SETTING_AUTOSCAN_SOURCE_AV_MODULE;
