@@ -30,6 +30,7 @@ enum {
     ROW_CALIBRATION_OFFSET,
     ROW_OSD_DISPLAY_MODE,
     ROW_WARN_TYPE,
+    ROW_WARNING_VOLTAGE_GRADUAL,
     ROW_POWER_ANA,
     ROW_BACK,
 
@@ -37,6 +38,7 @@ enum {
 };
 
 static slider_group_t slider_group_cell_voltage;
+static slider_group_t slider_group_gradual_voltage;
 static btn_group_t btn_group_cell_count_mode;
 static slider_group_t slider_group_cell_count;
 static slider_group_t slider_group_calibration_offset;
@@ -86,6 +88,16 @@ static void page_power_update_calibration_offset() {
     lv_label_set_text(slider_group_calibration_offset.label, buf);
 }
 
+static void page_power_update_gradual_enable() {
+    const bool isGradual = btn_group_warn_type.current == SETTING_POWER_WARNING_TYPE_GRADUAL;
+    slider_enable(&slider_group_gradual_voltage, isGradual);
+    if (isGradual) {
+        lv_obj_add_flag(pp_power.p_arr.panel[ROW_WARNING_VOLTAGE_GRADUAL], FLAG_SELECTABLE);
+    } else {
+        lv_obj_clear_flag(pp_power.p_arr.panel[ROW_WARNING_VOLTAGE_GRADUAL], FLAG_SELECTABLE);
+    }
+}
+
 static lv_obj_t *page_power_create(lv_obj_t *parent, panel_arr_t *arr) {
     char buf[128];
 
@@ -122,7 +134,8 @@ static lv_obj_t *page_power_create(lv_obj_t *parent, panel_arr_t *arr) {
     create_slider_item(&slider_group_cell_voltage, cont, _lang("Warning Cell Voltage"), WARNING_CELL_VOLTAGE_MAX, g_setting.power.voltage, ROW_WARNING_CELL_VOLTAGE);
     create_slider_item(&slider_group_calibration_offset, cont, _lang("Voltage Calibration"), 0, g_setting.power.calibration_offset, ROW_CALIBRATION_OFFSET);
     create_btn_group_item(&btn_group_osd_display_mode, cont, 2, _lang("Display Mode"), _lang("Total"), _lang("Cell Avg."), "", "", ROW_OSD_DISPLAY_MODE);
-    create_btn_group_item(&btn_group_warn_type, cont, 3, _lang("Warning Type"), _lang("Beep"), _lang("Visual"), _lang("Both"), "", ROW_WARN_TYPE);
+    create_btn_group_item(&btn_group_warn_type, cont, 4, _lang("Warning Type"), _lang("Beep"), _lang("Visual"), _lang("Both"), _lang("Gradual"), ROW_WARN_TYPE);
+    create_slider_item(&slider_group_gradual_voltage, cont, _lang("Gradual Start Voltage"), WARNING_CELL_VOLTAGE_MAX, g_setting.power.warning_voltage_gradual, ROW_WARNING_VOLTAGE_GRADUAL);
 
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
     if (getHwRevision() >= HW_REV_2) {
@@ -145,6 +158,12 @@ static lv_obj_t *page_power_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_slider_set_range(slider_group_cell_voltage.slider, WARNING_CELL_VOLTAGE_MIN, WARNING_CELL_VOLTAGE_MAX);
     lv_label_set_text(slider_group_cell_voltage.label, str);
 
+    char str_g[6];
+    snprintf(str_g, sizeof(str_g), "%.2f", g_setting.power.warning_voltage_gradual / 1000.0);
+    lv_slider_set_range(slider_group_gradual_voltage.slider, WARNING_CELL_VOLTAGE_MIN, WARNING_CELL_VOLTAGE_MAX);
+    lv_slider_set_value(slider_group_gradual_voltage.slider, g_setting.power.warning_voltage_gradual, LV_ANIM_OFF);
+    lv_label_set_text(slider_group_gradual_voltage.label, str_g);
+
     snprintf(str, sizeof(buf), "%d", g_setting.power.cell_count);
     lv_slider_set_range(slider_group_cell_count.slider, CELL_MIN_COUNT, CELL_MAX_COUNT);
     lv_label_set_text(slider_group_cell_count.label, str);
@@ -164,6 +183,7 @@ static lv_obj_t *page_power_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     page_power_update_cell_count();
     page_power_update_calibration_offset();
+    page_power_update_gradual_enable();
 
     return page;
 }
@@ -226,6 +246,40 @@ static void power_warning_voltage_dec(void) {
     ini_putl("power", "voltage_mv", g_setting.power.voltage, SETTING_INI);
 }
 
+static void power_gradual_voltage_inc(void) {
+    int32_t value = 0;
+
+    value = lv_slider_get_value(slider_group_gradual_voltage.slider);
+    if (value < WARNING_CELL_VOLTAGE_MAX)
+        value += 10;
+
+    lv_slider_set_value(slider_group_gradual_voltage.slider, value, LV_ANIM_OFF);
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%.2f", value / 1000.0);
+    lv_label_set_text(slider_group_gradual_voltage.label, buf);
+
+    g_setting.power.warning_voltage_gradual = value;
+    LOGI("vol_gradual:%d", g_setting.power.warning_voltage_gradual);
+    ini_putl("power", "voltage_gradual_mv", g_setting.power.warning_voltage_gradual, SETTING_INI);
+}
+
+static void power_gradual_voltage_dec(void) {
+    int32_t value = 0;
+
+    value = lv_slider_get_value(slider_group_gradual_voltage.slider);
+    if (value > WARNING_CELL_VOLTAGE_MIN)
+        value -= 10;
+
+    lv_slider_set_value(slider_group_gradual_voltage.slider, value, LV_ANIM_OFF);
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%.2f", value / 1000.0);
+    lv_label_set_text(slider_group_gradual_voltage.label, buf);
+
+    g_setting.power.warning_voltage_gradual = value;
+    LOGI("vol_gradual:%d", g_setting.power.warning_voltage_gradual);
+    ini_putl("power", "voltage_gradual_mv", g_setting.power.warning_voltage_gradual, SETTING_INI);
+}
+
 static void power_calibration_offset_inc(void) {
     int32_t value = 0;
 
@@ -270,6 +324,8 @@ static void page_power_on_roller(uint8_t key) {
     if (key == DIAL_KEY_UP) {
         if (selected_slider_group == &slider_group_cell_voltage) {
             power_warning_voltage_dec();
+        } else if (selected_slider_group == &slider_group_gradual_voltage) {
+            power_gradual_voltage_dec();
         } else if (selected_slider_group == &slider_group_cell_count) {
             power_cell_count_dec();
         } else if (selected_slider_group == &slider_group_calibration_offset) {
@@ -278,6 +334,8 @@ static void page_power_on_roller(uint8_t key) {
     } else if (key == DIAL_KEY_DOWN) {
         if (selected_slider_group == &slider_group_cell_voltage) {
             power_warning_voltage_inc();
+        } else if (selected_slider_group == &slider_group_gradual_voltage) {
+            power_gradual_voltage_inc();
         } else if (selected_slider_group == &slider_group_cell_count) {
             power_cell_count_inc();
         } else if (selected_slider_group == &slider_group_calibration_offset) {
@@ -317,6 +375,14 @@ static void page_power_on_click(uint8_t key, int sel) {
         selected_slider_group = &slider_group_cell_voltage;
         break;
 
+    case ROW_WARNING_VOLTAGE_GRADUAL:
+        if (g_setting.power.warning_type != SETTING_POWER_WARNING_TYPE_GRADUAL)
+            break;
+        app_state_push(APP_STATE_SUBMENU_ITEM_FOCUSED);
+        lv_obj_add_style(slider_group_gradual_voltage.slider, &style_silder_select, LV_PART_MAIN);
+        selected_slider_group = &slider_group_gradual_voltage;
+        break;
+
     case ROW_CALIBRATION_OFFSET:
         app_state_push(APP_STATE_SUBMENU_ITEM_FOCUSED);
         lv_obj_add_style(slider_group_calibration_offset.slider, &style_silder_select, LV_PART_MAIN);
@@ -333,6 +399,7 @@ static void page_power_on_click(uint8_t key, int sel) {
         btn_group_toggle_sel(&btn_group_warn_type);
         g_setting.power.warning_type = btn_group_get_sel(&btn_group_warn_type);
         ini_putl("power", "warning_type", g_setting.power.warning_type, SETTING_INI);
+        page_power_update_gradual_enable();
         break;
 
     case ROW_POWER_ANA:

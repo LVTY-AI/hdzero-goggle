@@ -437,7 +437,7 @@ void create_btn_group_item_compact(btn_group_t *btn_group, lv_obj_t *parent, int
 }
 
 void create_btn_group_item(btn_group_t *btn_group, lv_obj_t *parent, int count, const char *name, const char *name0, const char *name1, const char *name2, const char *name3, int row) {
-    if (count > 3)
+    if (count > 4)
         return;
     btn_group->valid = count;
     btn_group->current = 0;
@@ -461,6 +461,10 @@ void create_btn_group_item(btn_group_t *btn_group, lv_obj_t *parent, int count, 
 
     if (count >= 3) {
         create_btn_with_arrow(parent, &btn_group->btn_a[2], name2, row, 4);
+    }
+
+    if (count >= 4) {
+        create_btn_with_arrow(parent, &btn_group->btn_a[3], name3, row, 5);
     }
 
     btn_group_set_sel(btn_group, 0);
