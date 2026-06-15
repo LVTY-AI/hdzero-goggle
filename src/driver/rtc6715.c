@@ -114,7 +114,11 @@ static void rtc6715_set_ch(int ch) {
 void *thread_rtc6715_rssi(void *ptr) {
     for (;;) {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-        if (g_app_state == APP_STATE_VIDEO && g_source_info.source == SOURCE_AV_MODULE && g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_INTERNAL) {
+        // Poll the Built-in receiver's RSSI whenever it is the active analog
+        // module -- Built-in selected, or Dual (which always uses Built-in).
+        if (g_app_state == APP_STATE_VIDEO && g_source_info.source == SOURCE_AV_MODULE &&
+            (g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_INTERNAL ||
+             g_setting.source.auto_protocol_detect)) {
             rtc6715.rssi = rtc6715_get_rssi();
         }
 #endif

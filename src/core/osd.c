@@ -867,9 +867,12 @@ void osd_hdzero_update(void) {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     // The RSSI bar reflects the Built-in receiver (rtc6715.rssi); it is
     // meaningless for the Expansion module (whose RSSI we don't read), so hide
-    // it unless the Built-in module is the active analog source.
+    // it unless the Built-in module is the active analog receiver. Dual
+    // (auto_protocol_detect) always uses the Built-in receiver, so show it
+    // there too.
     osd_analog_rssi_show(showRXOSD && source_is_analog &&
-                         g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_INTERNAL);
+                         (g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_INTERNAL ||
+                          g_setting.source.auto_protocol_detect));
 #elif defined(HDZGOGGLE)
 
 #endif
