@@ -865,7 +865,11 @@ void osd_hdzero_update(void) {
     osd_vlq_show(showRXOSD && source_is_hdzero);
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-    osd_analog_rssi_show(showRXOSD && source_is_analog);
+    // The RSSI bar reflects the Built-in receiver (rtc6715.rssi); it is
+    // meaningless for the Expansion module (whose RSSI we don't read), so hide
+    // it unless the Built-in module is the active analog source.
+    osd_analog_rssi_show(showRXOSD && source_is_analog &&
+                         g_setting.source.analog_module == SETTING_SOURCES_ANALOG_MODULE_INTERNAL);
 #elif defined(HDZGOGGLE)
 
 #endif
