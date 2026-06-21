@@ -20,16 +20,6 @@ media.tar.gz
 utilities/font/out
 *.bz2
 
-# local work artifacts
-/.claude/
-/AGENTS.md
-/CLAUDE.md
-/DVR-sample-audio/
-/RTC-Test/
-/pal-ntsc-fix/
-/port-9.5.2/
-/port-antenna-tracker/
-
 # nix related
 result
 result-*
