@@ -88,7 +88,7 @@ extern "C" {
 #define UI_OSD_TEXT_FONT                  &lv_font_montserrat_20
 #define UI_PLAYBACK_COLS                  320, 320, 320, LV_GRID_TEMPLATE_LAST
 #define UI_PLAYBACK_ROWS                  150, 30, 150, 30, 150, 30, 30, LV_GRID_TEMPLATE_LAST
-#define UI_POWER_COLS                     160, 160, 160, 160, 120, 160, LV_GRID_TEMPLATE_LAST
+#define UI_POWER_COLS                     160, 160, 160, 160, 120, 210, LV_GRID_TEMPLATE_LAST
 #define UI_POWER_ROWS                     60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
 #define UI_RECORD_COLS                    160, 200, 200, 160, 120, 120, LV_GRID_TEMPLATE_LAST
 #define UI_RECORD_ROWS                    60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
@@ -239,7 +239,7 @@ static inline int UI_STATUS_BAR_LABEL_WIDTH() {
 #define UI_OSD_TEXT_FONT                  &lv_font_montserrat_14
 #define UI_PLAYBACK_COLS                  210, 210, 210, LV_GRID_TEMPLATE_LAST
 #define UI_PLAYBACK_ROWS                  100, 20, 100, 20, 100, 20, 20, LV_GRID_TEMPLATE_LAST
-#define UI_POWER_COLS                     106, 132, 106, 106, 80, 106, LV_GRID_TEMPLATE_LAST
+#define UI_POWER_COLS                     106, 132, 106, 106, 80, 170, LV_GRID_TEMPLATE_LAST
 #define UI_POWER_ROWS                     40, 40, 40, 40, 40, 40, 40, 40, 40, 40, LV_GRID_TEMPLATE_LAST
 #define UI_RECORD_COLS                    106, 132, 132, 106, 80, 80, LV_GRID_TEMPLATE_LAST
 #define UI_RECORD_ROWS                    40, 40, 40, 40, 40, 40, 40, 40, 40, 40, LV_GRID_TEMPLATE_LAST
