@@ -230,8 +230,10 @@ void osd_battery_voltage_show(bool bShow) {
         const battery_warn_level_t lvl = battery_warn_level();
         if (lvl == BATTERY_WARN_SUBTLE)
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 191, 0), 0); // amber
-        else if (lvl >= BATTERY_WARN_SLOW)
-            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 0, 0), 0);
+        else if (lvl == BATTERY_WARN_SLOW)
+            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 128, 0), 0); // orange
+        else if (lvl == BATTERY_WARN_RAPID)
+            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 0, 0), 0); // red
         else
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 255, 255), 0);
     } else if (battery_is_low()) {

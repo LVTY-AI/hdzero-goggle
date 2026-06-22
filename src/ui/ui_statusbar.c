@@ -213,8 +213,9 @@ void statubar_update(void) {
 
     {
 #define BEEP_INTERVAL 20
-#define BEEP_INTERVAL_SLOW 40
 #define BEEP_INTERVAL_RAPID 10
+#define GRADUAL_SLOW_BEEP_MS 30000
+#define GRADUAL_BLINK_MS 400
         static uint8_t beep_gap = 0;
 
         const bool low = battery_is_low();
@@ -222,6 +223,9 @@ void statubar_update(void) {
             lv_img_set_src(img_battery, &img_lowBattery);
         else
             lv_img_set_src(img_battery, &img_bat);
+        // default to visible; the gradual RAPID stage hides it on alternate
+        // phases to blink the icon
+        lv_obj_clear_flag(img_battery, LV_OBJ_FLAG_HIDDEN);
 
         switch (g_setting.power.warning_type) {
         case SETTING_POWER_WARNING_TYPE_BEEP:
@@ -260,25 +264,32 @@ void statubar_update(void) {
             else
                 lv_img_set_src(img_battery, &img_bat);
 
-            // text color
+            // blink the icon at the rapid stage to grab attention (it was made
+            // visible before the switch; hide it on alternate phases)
+            if (lvl == BATTERY_WARN_RAPID && (lv_tick_get() / GRADUAL_BLINK_MS) % 2)
+                lv_obj_add_flag(img_battery, LV_OBJ_FLAG_HIDDEN);
+
+            // text color: amber (subtle) -> orange (slow) -> red (rapid)
             if (lvl == BATTERY_WARN_SUBTLE)
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 191, 0), 0); // amber
-            else if (lvl >= BATTERY_WARN_SLOW)
-                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 0, 0), 0);
+            else if (lvl == BATTERY_WARN_SLOW)
+                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 128, 0), 0); // orange
+            else if (lvl == BATTERY_WARN_RAPID)
+                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 0, 0), 0); // red
             else
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
 
-            // beep cadence
-            int interval = 0;
-            if (lvl == BATTERY_WARN_SLOW)
-                interval = BEEP_INTERVAL_SLOW;
-            else if (lvl == BATTERY_WARN_RAPID)
-                interval = BEEP_INTERVAL_RAPID;
-
-            if (interval) {
-                // >= (not == like the other cases) so a level change mid-run
-                // still fires once beep_gap passes the new, possibly smaller, interval
-                if (beep_gap++ >= interval) {
+            // beep: slow stage = one short beep every 30 s (wall-clock so it is
+            // independent of loop rate); rapid stage keeps the fast tick cadence
+            if (lvl == BATTERY_WARN_SLOW) {
+                static uint32_t last_slow_beep = 0;
+                uint32_t now = lv_tick_get();
+                if (now - last_slow_beep >= GRADUAL_SLOW_BEEP_MS) {
+                    beep();
+                    last_slow_beep = now;
+                }
+            } else if (lvl == BATTERY_WARN_RAPID) {
+                if (beep_gap++ >= BEEP_INTERVAL_RAPID) {
                     beep();
                     beep_gap = 0;
                 }
