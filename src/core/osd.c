@@ -221,7 +221,13 @@ void osd_battery_low_show() {
 }
 
 void osd_battery_voltage_show(bool bShow) {
-    if (!bShow || !g_setting.osd.element[OSD_GOGGLE_BATTERY_VOLTAGE].show) {
+    const bool is_gradual = (g_setting.power.warning_type == SETTING_POWER_WARNING_TYPE_GRADUAL);
+    const battery_warn_level_t lvl = is_gradual ? battery_warn_level() : BATTERY_WARN_NONE;
+    // The critical stage flashes the voltage and overrides a center-press OSD-off
+    // (is_visible) so a dying pack still warns visually; it never overrides the
+    // per-element OSD show setting.
+    if (!g_setting.osd.element[OSD_GOGGLE_BATTERY_VOLTAGE].show ||
+        (!bShow && lvl != BATTERY_WARN_CRITICAL)) {
         lv_obj_add_flag(g_osd_hdzero.battery_voltage[is_fhd], LV_OBJ_FLAG_HIDDEN);
         return;
     }
@@ -231,8 +237,7 @@ void osd_battery_voltage_show(bool bShow) {
     lv_label_set_text(g_osd_hdzero.battery_voltage[is_fhd], buf);
 
     bool crit_blink = false;
-    if (g_setting.power.warning_type == SETTING_POWER_WARNING_TYPE_GRADUAL) {
-        const battery_warn_level_t lvl = battery_warn_level();
+    if (is_gradual) {
         if (lvl == BATTERY_WARN_SUBTLE)
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 191, 0), 0); // amber
         else if (lvl == BATTERY_WARN_SLOW)
