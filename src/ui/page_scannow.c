@@ -390,7 +390,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_set_style_border_width(cont_mode, 0, 0);
         lv_obj_set_style_pad_all(cont_mode, 0, 0);
 
-        static const char *mode_names[3] = {"HDZero", "Analog", "Dual"};
+        static const char *mode_names[3] = {"HDZero", "Analog", "Auto"};
         for (int i = 0; i < SCAN_MODE_COUNT; i++) {
             mode_btns[i] = lv_btn_create(cont_mode);
             lv_obj_set_size(mode_btns[i], 220, 44);
