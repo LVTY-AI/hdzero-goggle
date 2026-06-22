@@ -214,7 +214,8 @@ void statubar_update(void) {
     {
 #define BEEP_INTERVAL 20
 #define BEEP_INTERVAL_RAPID 10
-#define GRADUAL_SLOW_BEEP_MS 30000
+#define GRADUAL_SLOW_BEEP_MS 20000
+#define GRADUAL_SLOW_CONFIRM_MS 3000
 #define GRADUAL_BLINK_MS 400
         static uint8_t beep_gap = 0;
 
@@ -279,12 +280,25 @@ void statubar_update(void) {
             else
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
 
-            // beep: slow stage = one short beep every 30 s (wall-clock so it is
-            // independent of loop rate); rapid stage keeps the fast tick cadence
+            // beep: slow stage = one short beep every 20 s; rapid stage keeps the
+            // fast tick cadence. The voltage is sampled ~2 Hz unsmoothed, so it
+            // jitters across the subtle/slow boundary; require the level to hold
+            // at slow+ for GRADUAL_SLOW_CONFIRM_MS before beeping so brief dips
+            // don't beep while effectively in the subtle stage. Wall-clock timing
+            // (lv_tick_get) keeps it independent of loop rate.
+            static uint32_t warn_since = 0;   // tick the level first reached slow+
+            static uint32_t last_slow_beep = 0;
+            uint32_t now = lv_tick_get();
+            if (lvl >= BATTERY_WARN_SLOW) {
+                if (warn_since == 0)
+                    warn_since = now;
+            } else {
+                warn_since = 0;
+            }
+
             if (lvl == BATTERY_WARN_SLOW) {
-                static uint32_t last_slow_beep = 0;
-                uint32_t now = lv_tick_get();
-                if (now - last_slow_beep >= GRADUAL_SLOW_BEEP_MS) {
+                if (warn_since && (now - warn_since) >= GRADUAL_SLOW_CONFIRM_MS &&
+                    (now - last_slow_beep) >= GRADUAL_SLOW_BEEP_MS) {
                     beep();
                     last_slow_beep = now;
                 }
