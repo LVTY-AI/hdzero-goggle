@@ -216,6 +216,7 @@ void statubar_update(void) {
 #define BEEP_INTERVAL_RAPID 10
 #define GRADUAL_SLOW_BEEP_MS 20000
 #define GRADUAL_SLOW_CONFIRM_MS 3000
+#define GRADUAL_RAPID_BEEP_MS 1000
 #define GRADUAL_BLINK_MS 400
         static uint8_t beep_gap = 0;
 
@@ -224,9 +225,10 @@ void statubar_update(void) {
             lv_img_set_src(img_battery, &img_lowBattery);
         else
             lv_img_set_src(img_battery, &img_bat);
-        // default to visible; the gradual RAPID stage hides it on alternate
-        // phases to blink the icon
+        // default both the icon and the voltage text to visible; the gradual
+        // rapid/critical stages hide them on alternate phases to blink them
         lv_obj_clear_flag(img_battery, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(label[STS_BATT], LV_OBJ_FLAG_HIDDEN);
 
         switch (g_setting.power.warning_type) {
         case SETTING_POWER_WARNING_TYPE_BEEP:
@@ -258,6 +260,7 @@ void statubar_update(void) {
             break;
         case SETTING_POWER_WARNING_TYPE_GRADUAL: {
             const battery_warn_level_t lvl = battery_warn_level();
+            const bool blink_off = (lv_tick_get() / GRADUAL_BLINK_MS) % 2;
 
             // icon: low-battery from the slow stage onward, normal otherwise
             if (lvl >= BATTERY_WARN_SLOW)
@@ -265,29 +268,40 @@ void statubar_update(void) {
             else
                 lv_img_set_src(img_battery, &img_bat);
 
-            // blink the icon at the rapid stage to grab attention (it was made
+            // blink the icon at the rapid and critical stages (it was made
             // visible before the switch; hide it on alternate phases)
-            if (lvl == BATTERY_WARN_RAPID && (lv_tick_get() / GRADUAL_BLINK_MS) % 2)
+            if (lvl >= BATTERY_WARN_RAPID && blink_off)
                 lv_obj_add_flag(img_battery, LV_OBJ_FLAG_HIDDEN);
 
-            // text color: amber (subtle) -> orange (slow) -> red (rapid)
+            // text color: amber (subtle) -> orange (slow) -> red (rapid) ->
+            // dark red (critical, below the warning voltage)
             if (lvl == BATTERY_WARN_SUBTLE)
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 191, 0), 0); // amber
             else if (lvl == BATTERY_WARN_SLOW)
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 128, 0), 0); // orange
             else if (lvl == BATTERY_WARN_RAPID)
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 0, 0), 0); // red
+            else if (lvl == BATTERY_WARN_CRITICAL)
+                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(160, 0, 0), 0); // dark red
             else
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
 
-            // beep: slow stage = one short beep every 20 s; rapid stage keeps the
-            // fast tick cadence. The voltage is sampled ~2 Hz unsmoothed, so it
-            // jitters across the subtle/slow boundary; require the level to hold
-            // at slow+ for GRADUAL_SLOW_CONFIRM_MS before beeping so brief dips
-            // don't beep while effectively in the subtle stage. Wall-clock timing
-            // (lv_tick_get) keeps it independent of loop rate.
-            static uint32_t warn_since = 0;   // tick the level first reached slow+
+            // critical also blinks the voltage text, in sync with the icon
+            if (lvl == BATTERY_WARN_CRITICAL && blink_off)
+                lv_obj_add_flag(label[STS_BATT], LV_OBJ_FLAG_HIDDEN);
+
+            // beep cadence per stage:
+            //   slow     - one short beep every 20 s
+            //   rapid    - one beep every 1 s
+            //   critical - fast tick cadence (below the warning voltage)
+            // The voltage is sampled ~2 Hz unsmoothed, so it jitters across the
+            // subtle/slow boundary; require the level to hold at slow+ for
+            // GRADUAL_SLOW_CONFIRM_MS before the slow beep so brief dips don't
+            // beep while effectively in the subtle stage. Wall-clock timing
+            // (lv_tick_get) keeps the slow/rapid cadences independent of loop rate.
+            static uint32_t warn_since = 0;     // tick the level first reached slow+
             static uint32_t last_slow_beep = 0;
+            static uint32_t last_rapid_beep = 0;
             uint32_t now = lv_tick_get();
             if (lvl >= BATTERY_WARN_SLOW) {
                 if (warn_since == 0)
@@ -303,6 +317,11 @@ void statubar_update(void) {
                     last_slow_beep = now;
                 }
             } else if (lvl == BATTERY_WARN_RAPID) {
+                if (now - last_rapid_beep >= GRADUAL_RAPID_BEEP_MS) {
+                    beep();
+                    last_rapid_beep = now;
+                }
+            } else if (lvl == BATTERY_WARN_CRITICAL) {
                 if (beep_gap++ >= BEEP_INTERVAL_RAPID) {
                     beep();
                     beep_gap = 0;

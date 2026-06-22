@@ -207,8 +207,8 @@ void osd_battery_low_show() {
     if (g_setting.power.warning_type == SETTING_POWER_WARNING_TYPE_GRADUAL) {
         battery_warn_level_t lvl = battery_warn_level();
         show_gif = lvl >= BATTERY_WARN_SLOW;
-        // blink at the rapid stage to mirror the menu battery icon (400 ms phase)
-        blink = (lvl == BATTERY_WARN_RAPID) && ((lv_tick_get() / 400) % 2);
+        // blink at the rapid/critical stages to mirror the menu battery icon (400 ms phase)
+        blink = (lvl >= BATTERY_WARN_RAPID) && ((lv_tick_get() / 400) % 2);
     } else
         show_gif = battery_is_low();
 
@@ -230,6 +230,7 @@ void osd_battery_voltage_show(bool bShow) {
     battery_get_voltage_str(buf);
     lv_label_set_text(g_osd_hdzero.battery_voltage[is_fhd], buf);
 
+    bool crit_blink = false;
     if (g_setting.power.warning_type == SETTING_POWER_WARNING_TYPE_GRADUAL) {
         const battery_warn_level_t lvl = battery_warn_level();
         if (lvl == BATTERY_WARN_SUBTLE)
@@ -238,15 +239,22 @@ void osd_battery_voltage_show(bool bShow) {
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 128, 0), 0); // orange
         else if (lvl == BATTERY_WARN_RAPID)
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 0, 0), 0); // red
+        else if (lvl == BATTERY_WARN_CRITICAL)
+            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(160, 0, 0), 0); // dark red
         else
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 255, 255), 0);
+        // critical blinks the voltage text to mirror the menu (400 ms phase)
+        crit_blink = (lvl == BATTERY_WARN_CRITICAL) && ((lv_tick_get() / 400) % 2);
     } else if (battery_is_low()) {
         lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 0, 0), 0);
     } else {
         lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 255, 255), 0);
     }
 
-    lv_obj_clear_flag(g_osd_hdzero.battery_voltage[is_fhd], LV_OBJ_FLAG_HIDDEN);
+    if (crit_blink)
+        lv_obj_add_flag(g_osd_hdzero.battery_voltage[is_fhd], LV_OBJ_FLAG_HIDDEN);
+    else
+        lv_obj_clear_flag(g_osd_hdzero.battery_voltage[is_fhd], LV_OBJ_FLAG_HIDDEN);
 }
 
 void osd_clock_date_show(bool bShow) {

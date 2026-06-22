@@ -21,8 +21,9 @@ extern sys_battery_t g_battery;
 typedef enum {
     BATTERY_WARN_NONE = 0, // no warning
     BATTERY_WARN_SUBTLE,   // amber text, no beep, no icon
-    BATTERY_WARN_SLOW,     // red + icon, slow beep
-    BATTERY_WARN_RAPID,    // red + icon, rapid beep
+    BATTERY_WARN_SLOW,     // orange text + icon, 20s beep
+    BATTERY_WARN_RAPID,    // red text + blinking icon, 1s beep
+    BATTERY_WARN_CRITICAL, // below warning voltage: dark-red blinking text + icon, fast beep
 } battery_warn_level_t;
 
 void battery_init();

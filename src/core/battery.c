@@ -41,24 +41,26 @@ bool battery_is_low() {
 
 battery_warn_level_t battery_warn_level(void) {
     if (g_battery.type == 0) {
-        return BATTERY_WARN_RAPID;
+        return BATTERY_WARN_CRITICAL;
     }
 
     int cell = battery_get_millivolts(true);
     int bottom = g_setting.power.voltage;
     int top = g_setting.power.warning_voltage_gradual;
 
-    if (cell > top) {
+    // At or below the Warning Cell Voltage is the critical tier (worst).
+    if (cell <= bottom) {
+        return BATTERY_WARN_CRITICAL;
+    }
+    // Above the gradual range (or a degenerate range) is no warning. The
+    // top <= bottom guard also keeps `third` below from being <= 0.
+    if (cell > top || top <= bottom) {
         return BATTERY_WARN_NONE;
     }
-    if (top <= bottom || cell <= bottom) {
-        return BATTERY_WARN_RAPID;
-    }
 
-    // Split (bottom, top] into equal thirds. cell == top yields SUBTLE (top is
-    // where the gradual warning begins). With the 10 mV-stepped UI the range is
-    // always >= 10 mV, so third >= 3; if a hand-edited range made third == 0 the
-    // SLOW/RAPID tiers collapse to SUBTLE, which is acceptable (no crash/UB).
+    // Split (bottom, top] into equal thirds: bottom third = rapid, middle =
+    // slow, top third = subtle. cell == top yields SUBTLE (top is where the
+    // gradual warning begins).
     int third = (top - bottom) / 3;
     if (cell <= bottom + third) {
         return BATTERY_WARN_RAPID;
