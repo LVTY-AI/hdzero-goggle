@@ -282,7 +282,7 @@ void statubar_update(void) {
             else if (lvl == BATTERY_WARN_RAPID)
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(255, 0, 0), 0); // red
             else if (lvl == BATTERY_WARN_CRITICAL)
-                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(160, 0, 0), 0); // dark red
+                lv_obj_set_style_text_color(label[STS_BATT], lv_color_make(220, 0, 0), 0); // dark red
             else
                 lv_obj_set_style_text_color(label[STS_BATT], lv_color_hex(TEXT_COLOR_DEFAULT), 0);
 

@@ -240,7 +240,7 @@ void osd_battery_voltage_show(bool bShow) {
         else if (lvl == BATTERY_WARN_RAPID)
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 0, 0), 0); // red
         else if (lvl == BATTERY_WARN_CRITICAL)
-            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(160, 0, 0), 0); // dark red
+            lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(220, 0, 0), 0); // dark red
         else
             lv_obj_set_style_text_color(g_osd_hdzero.battery_voltage[is_fhd], lv_color_make(255, 255, 255), 0);
         // critical blinks the voltage text to mirror the menu (400 ms phase)

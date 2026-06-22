@@ -135,6 +135,12 @@ static lv_obj_t *page_power_create(lv_obj_t *parent, panel_arr_t *arr) {
     create_slider_item(&slider_group_calibration_offset, cont, _lang("Voltage Calibration"), 0, g_setting.power.calibration_offset, ROW_CALIBRATION_OFFSET);
     create_btn_group_item(&btn_group_osd_display_mode, cont, 2, _lang("Display Mode"), _lang("Total"), _lang("Cell Avg."), "", "", ROW_OSD_DISPLAY_MODE);
     create_btn_group_item(&btn_group_warn_type, cont, 4, _lang("Warning Type"), _lang("Beep"), _lang("Visual"), _lang("Both"), _lang("Gradual"), ROW_WARN_TYPE);
+#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
+    // Four options is one more than this row was sized for, so the default 24px
+    // font clips "Gradual" at the panel edge. Drop these buttons to 20px so it fits.
+    for (int wt = 0; wt < 4; wt++)
+        lv_obj_set_style_text_font(btn_group_warn_type.btn_a[wt].btn, &lv_font_montserrat_20, 0);
+#endif
     create_slider_item(&slider_group_gradual_voltage, cont, _lang("Gradual Start Voltage"), WARNING_CELL_VOLTAGE_MAX, g_setting.power.warning_voltage_gradual, ROW_WARNING_VOLTAGE_GRADUAL);
 
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
