@@ -23,6 +23,7 @@
 #include "ui/ui_style.h"
 #include "util/filesystem.h"
 #include "util/math.h"
+#include "util/sdcard.h"
 #include "util/system.h"
 #define MEDIA_FILES_DIR REC_diskPATH REC_packPATH // "/mnt/extsd/movies" --> "/mnt/extsd" "/movies/"
 // #define MEDIA_FILES_DIR "/mnt/extsd/movies/"--Useful for testing playback page
@@ -412,6 +413,7 @@ static void delete_video_file(int seq) {
 
     if (system_exec(cmd) != -1) {
         walk_sdcard();
+        sdcard_update_free_size(); // refresh cached free space shown in the status bar
         media_db.cur_sel = constrain(seq, 0, (media_db.count - 1));
         update_page();
         LOGD("delete_video_file successful.");
