@@ -1,5 +1,5 @@
 # ripples' Custom HDZero Goggles Firmware
-Since many of you have asked, if you'd like to support the work I'm doing here, you can send a donation here: https://www.paypal.com/paypalme/ripleyjb 
+  
 
 As a perk, your feature requests will get priority and I'll let you preview upcoming beta features if you'd like (there's some really cool stuff to come). Drop your Discord username/Github username in the donation description so I know who you are if you'd like access to priority feature requests and beta firmwares. It is not a requirement to donate. Firmware releases will continue to be free.
 
