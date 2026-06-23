@@ -8,6 +8,7 @@
 
 #include "../conf/ui.h"
 #include "common.hh"
+#include "driver/hardware.h"
 #include "player/media.h"
 #include "record/record_definitions.h"
 #include "ui/ui_style.h"
@@ -25,6 +26,10 @@ player_cmd_t cmd;
 LV_IMG_DECLARE(img_Play_0);
 LV_IMG_DECLARE(img_Stop_0);
 LV_IMG_DECLARE(img_star);
+
+// true while playback has switched the panel to a clip-matched refresh, so
+// mplayer_exit() knows to restore the default UI mode.
+static bool panel_switched = false;
 
 static bool stars_positioned_on_timeline = false;
 static size_t stars_count = 0;
@@ -363,6 +368,8 @@ void mplayer_file(char *fname) {
     load_stars(fname);
     init_mplayer();
     media_init(fname);
+    if (media)
+        panel_switched = Display_Playback(media->fps); // match panel refresh to clip
     media_start();
     update_mplayer();
 }
@@ -375,4 +382,8 @@ void mplayer_exit() {
     }
     pthread_mutex_lock(&lvgl_mutex);
     free_mplayer();
+    if (panel_switched) {
+        Display_UI(); // restore default UI panel refresh
+        panel_switched = false;
+    }
 }

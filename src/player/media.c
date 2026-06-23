@@ -237,6 +237,7 @@ media_t *media_instantiate(char *filename, notify_cb_t notify) {
         LOGE("open demux failed");
         goto failed;
     } else {
+        media->fps = playCtx->dmx->fps;
         Vdec2VoParams_t vvParams;
         memset(&vvParams, 0, sizeof(vvParams));
 
