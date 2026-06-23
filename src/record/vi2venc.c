@@ -250,7 +250,10 @@ ERRORTYPE vi2venc_getSpsPpsInfo(Vi2Venc_t* vv, VencSpspps_t* spsppsInfo, bool pa
 
                 memset(spsppsData, 0, nLength);
                 memcpy(spsppsData, veHeader.pBuffer, veHeader.nLength);
-                nLength = H264_Modify_SPS(spsppsData, veHeader.nLength-1, vv->veParams.fps);
+                // pass the full length: the final byte is the PPS rbsp_stop_one_bit (0x80).
+                // Dropping it produces a non-conformant PPS that macOS/VideoToolbox rejects,
+                // making the recording unplayable in QuickTime (ffmpeg tolerates it).
+                nLength = H264_Modify_SPS(spsppsData, veHeader.nLength, vv->veParams.fps);
                 if( nLength < 0 ) {
                     nLength = veHeader.nLength;
                     spsppsData = veHeader.pBuffer;
