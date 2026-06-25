@@ -603,63 +603,6 @@ void Display_UI() {
     pthread_mutex_unlock(&hardware_mutex);
 }
 
-bool Display_Playback(int fps) {
-    // Pick a panel refresh that matches the clip so playback isn't judder-capped
-    // by the 1080p50 UI mode. Keeps the UI/SoC source path (Display_VO_SWITCH(0)).
-    vdpo_tmg_t target;
-    if (fps >= 85)
-        target = VDPO_TMG_720P90; // 90fps clips
-    else if (fps >= 55)
-        target = VDPO_TMG_1080P60; // 60fps clips
-    else
-        target = VDPO_TMG_1080P50; // 50fps and below -> UI default
-
-    pthread_mutex_lock(&hardware_mutex);
-    if (g_hw_stat.vdpo_tmg == target) {
-        pthread_mutex_unlock(&hardware_mutex);
-        return false; // already optimal, nothing to do
-    }
-
-    screen.display(0);
-    g_hw_stat.source_mode = SOURCE_MODE_UI;
-    I2C_Write(ADDR_FPGA, 0x8C, 0x00);
-
-    if (target == VDPO_TMG_720P90) {
-        system_exec("dispw -s vdpo 720p90");
-        g_hw_stat.vdpo_tmg = VDPO_TMG_720P90;
-    } else if (target == VDPO_TMG_1080P60) {
-        system_exec("dispw -s vdpo 1080p60");
-        g_hw_stat.vdpo_tmg = VDPO_TMG_1080P60;
-    } else {
-        system_exec("dispw -s vdpo 1080p50");
-        g_hw_stat.vdpo_tmg = VDPO_TMG_1080P50;
-    }
-    system_exec("aww 0x0300b340 0x00000008");
-    Display_VO_SWITCH(0);
-
-    if (target == VDPO_TMG_720P90) {
-        vclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P90, 0);
-        pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P90);
-    } else if (target == VDPO_TMG_1080P60) {
-        vclk_phase_set(VIDEO_SOURCE_HDZERO_IN_1080P30, 0);
-        pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_1080P30);
-    } else {
-        vclk_phase_set(VIDEO_SOURCE_MENU_UI, 0);
-        pclk_phase_set(VIDEO_SOURCE_MENU_UI);
-    }
-    I2C_Write(ADDR_FPGA, 0x80, 0x00);
-    I2C_Write(ADDR_FPGA, 0x84, 0x11);
-
-    screen.vtmg(target == VDPO_TMG_720P90 ? 1 : 0);
-    system_exec("aww 0x0300b084 0x00002aaa"); // vdpo clock driver strength
-    I2C_Write(ADDR_FPGA, 0xa7, target == VDPO_TMG_720P90 ? 0x01 : 0x00);
-    system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
-
-    screen.display(1);
-    pthread_mutex_unlock(&hardware_mutex);
-    return true;
-}
-
 void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
 {
     screen.display(0);

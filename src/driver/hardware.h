@@ -95,11 +95,6 @@ void Source_AV_retime(void);
 void Display_UI_init();
 void Display_UI();
 
-// Set the panel refresh during DVR playback to match the clip's frame rate
-// (keeps the UI/SoC source path). Returns true if the panel mode was changed
-// (caller restores with Display_UI() on exit), false if already optimal.
-bool Display_Playback(int fps);
-
 void Display_720P90(int mode);
 void Display_720P60_50(int mode, uint8_t is_43);
 void Display_1080P30(int mode);

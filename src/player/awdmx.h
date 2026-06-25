@@ -30,7 +30,6 @@ typedef struct
     int videoNum;
     uint16_t width;
     uint16_t height;
-    uint16_t fps; // video frame rate, rounded to whole fps
     PAYLOAD_TYPE_E codecType;
 
     int audioNum;

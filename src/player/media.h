@@ -34,7 +34,6 @@ typedef struct {
     notify_cb_t notify;
     pthread_t pid;
     bool is_media_thread_exit;
-    int fps; // video frame rate of the opened clip
 } media_t;
 
 media_t *media_instantiate(char *filename, notify_cb_t notify);
