@@ -623,10 +623,15 @@ void scan_core_idle_tick(void) {
 }
 #endif
 
-// HDZ bandwidth re-acquire watchdog (all targets). When viewing the HDZero
-// source with BW=Auto and the signal has been lost for ~1.5s (e.g. the VTX
-// bandwidth changed Wide<->Narrow), switch to the OTHER bandwidth and, if it
-// locks, stay there -- the picture returns without re-selecting the source.
+// HDZ re-acquire watchdog (all targets). When viewing the HDZero source and the
+// signal has been lost for ~1.5s, refresh the baseband so the picture returns
+// without re-selecting the source. In BW=Auto (e.g. the VTX bandwidth changed
+// Wide<->Narrow) it switches to the OTHER bandwidth and, if it locks, stays
+// there. In fixed Wide/Narrow there is no other bandwidth to try, but the
+// baseband can still be left locked-on-garbage after an Auto analog probe
+// (Bug 3) -- a state a plain retune never clears; a same-bandwidth forced reset
+// (Close+reopen) does. Both paths run only while dark, so the reset's brief
+// flash is masked and the dial path (channel-change speed) is untouched.
 // Losing lock means the signal moved to the opposite bandwidth, so trying that
 // one first (instead of a fixed Wide->Narrow sweep that re-opens to settle)
 // makes either direction a single brief reset. HDZ-only (no analog), so it runs
@@ -652,9 +657,19 @@ void scan_core_idle_tick(void) {
 void scan_core_hdz_bw_tick(void) {
     static int dark_ticks = 0;
 
+    // Bug 3 (fixed-BW baseband left locked-on-garbage by an Auto analog probe)
+    // only occurs where the analog receiver exists, so the fixed-BW reset below
+    // is BoxPro/G2 only; G1 keeps the original BW=Auto-only watchdog.
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    const bool recover_all_bw = true;
+#else
+    const bool recover_all_bw = false;
+#endif
+
     if (g_app_state != APP_STATE_VIDEO ||
         g_source_info.source != SOURCE_HDZERO ||
-        g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH) {
+        (!recover_all_bw &&
+         g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH)) {
         dark_ticks = 0;
         return;
     }
@@ -695,47 +710,68 @@ void scan_core_hdz_bw_tick(void) {
     // lock and bail if a signal arrived or we are no longer the dark HDZ viewer.
     if (g_app_state != APP_STATE_VIDEO ||
         g_source_info.source != SOURCE_HDZERO ||
-        g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH ||
+        (!recover_all_bw &&
+         g_setting.source.hdzero_bw != SETTING_SOURCES_HDZERO_BW_BOTH) ||
         (rx_status[0].rx_valid | rx_status[1].rx_valid) != 0) {
         pthread_mutex_unlock(&lvgl_mutex);
         return;
     }
 
-    // Hop to the bandwidth opposite the last-locked one and check for a lock
-    // there; return home on a miss (see the header comment).
-    uint8_t band  = (uint8_t)g_setting.source.hdzero_band;
-    uint8_t ch    = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
-    uint8_t home  = g_hdz_detected_bw;
-    uint8_t other = (home == SETTING_SOURCES_HDZERO_BW_WIDE)
-                        ? SETTING_SOURCES_HDZERO_BW_NARROW
-                        : SETTING_SOURCES_HDZERO_BW_WIDE;
-    uint8_t gain = 0;
-    bool found = false;
+    uint8_t band = (uint8_t)g_setting.source.hdzero_band;
+    uint8_t ch   = (uint8_t)((g_setting.scan.channel - 1) & 0x7F);
 
-    // Tag the channel OSD "Detecting..." so the user sees the bandwidth settle
+    // Tag the channel OSD "Detecting..." so the user sees the reacquire settle
     // (and the baseband resets' brief flashes) explained instead of a silent
     // black screen. Runs on thread_peripheral, but we hold lvgl_mutex here, so
     // the synchronous paint is serialized with the main UI.
     osd_detecting_show(true);
-    HDZero_open(other);
-    usleep(200000); // settle at the new bandwidth before checking the lock
-    scan_probe_hdzero(band, ch, &gain, &found);
-    if (found) {
-        g_hdz_detected_bw = other; // locked on the opposite bandwidth; stay here
+
+    if (g_setting.source.hdzero_bw == SETTING_SOURCES_HDZERO_BW_BOTH) {
+        // BW=Auto: hop to the bandwidth opposite the last-locked one and check
+        // for a lock there; return home on a miss (see the header comment).
+        uint8_t home  = g_hdz_detected_bw;
+        uint8_t other = (home == SETTING_SOURCES_HDZERO_BW_WIDE)
+                            ? SETTING_SOURCES_HDZERO_BW_NARROW
+                            : SETTING_SOURCES_HDZERO_BW_WIDE;
+        uint8_t gain = 0;
+        bool found = false;
+
+        HDZero_open(other);
+        usleep(200000); // settle at the new bandwidth before checking the lock
+        scan_probe_hdzero(band, ch, &gain, &found);
+        if (found) {
+            g_hdz_detected_bw = other; // locked on the opposite bandwidth; stay here
+        } else {
+            // Nothing there: park back HOME (the last-locked bandwidth), retune
+            // and re-arm the lock flags so a VTX appearing at home locks without
+            // any further reset -- and a dial back onto the signal the user just
+            // left probes at the right bandwidth immediately.
+            HDZero_open(home);
+            DM6302_SetChannel(band, ch);
+            DM5680_clear_vldflg();
+            DM5680_req_vldflg();
+        }
+        LOGI("HDZ BW reacquire: tried bw=%u found=%d (home=%u) band=%u ch=%u",
+             other, found, home, band, ch);
     } else {
-        // Nothing there: park back HOME (the last-locked bandwidth), retune
-        // and re-arm the lock flags so a VTX appearing at home locks without
-        // any further reset -- and a dial back onto the signal the user just
-        // left probes at the right bandwidth immediately.
-        HDZero_open(home);
+        // Fixed Wide/Narrow: no opposite bandwidth to hop to. But after an Auto
+        // analog probe the baseband can be left locked-on-garbage (Bug 3) -- a
+        // state DM6302_SetChannel alone never clears; only a full DM6302/DM5680
+        // reset does. HDZero_open() no-ops when the bandwidth is unchanged, so
+        // force the reset with an explicit Close first, then retune and re-arm
+        // the lock flags so the picture returns (or a dial back onto the signal
+        // locks cleanly). Dark-only, so the reset flash is masked.
+        HDZero_Close();
+        HDZero_open(g_setting.source.hdzero_bw);
         DM6302_SetChannel(band, ch);
         DM5680_clear_vldflg();
         DM5680_req_vldflg();
+        LOGI("HDZ fixed-bw reacquire reset: bw=%u band=%u ch=%u",
+             g_setting.source.hdzero_bw, band, ch);
     }
+
     osd_detecting_show(false);
     pthread_mutex_unlock(&lvgl_mutex);
-    LOGI("HDZ BW reacquire: tried bw=%u found=%d (home=%u) band=%u ch=%u",
-         other, found, home, band, ch);
 }
 
 void scan_core_self_check(void) {
