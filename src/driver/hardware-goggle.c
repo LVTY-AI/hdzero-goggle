@@ -597,6 +597,57 @@ void Display_UI() {
     pthread_mutex_unlock(&hardware_mutex);
 }
 
+bool Display_Playback(int fps) {
+    // Match the panel refresh to the clip so playback isn't judder-capped by the
+    // 1080p50 UI mode. The FPGA stays on the UI input (source unchanged); only the
+    // vdpo output timing / clock phases / OLED mode change, reusing the settings
+    // proven by the live paths:
+    //    60fps -> 1080p60 (same 148.5MHz pixel clock; the 1080p OLED/FPGA config
+    //             from Display_UI_init stays valid, so vtmg/phases are untouched)
+    //    90fps -> 720p90  (live 720p90 timing)
+    //   100fps -> 720p100 (live 720p100 timing; the dispw mode label is "720p30")
+    // Returns true if it switched (caller restores with Display_UI() on exit).
+    vdpo_tmg_t target;
+    if (fps >= 95)
+        target = VDPO_TMG_720P100;
+    else if (fps >= 80)
+        target = VDPO_TMG_720P90;
+    else if (fps >= 55)
+        target = VDPO_TMG_1080P60;
+    else
+        return false; // 50fps and below already match the 1080p50 UI
+
+    pthread_mutex_lock(&hardware_mutex);
+    if (g_hw_stat.source_mode != SOURCE_MODE_UI || g_hw_stat.vdpo_tmg == target) {
+        pthread_mutex_unlock(&hardware_mutex);
+        return false;
+    }
+
+    screen.display(0);
+    if (target == VDPO_TMG_720P100) {
+        system_exec("dispw -s vdpo 720p30"); // 100fps actually
+        g_hw_stat.vdpo_tmg = VDPO_TMG_720P100;
+        vclk_phase_set(VIDEO_SOURCE_HDMI_IN_720P100, 0);
+        pclk_phase_set(VIDEO_SOURCE_HDMI_IN_720P100);
+        screen.vtmg(1);
+    } else if (target == VDPO_TMG_720P90) {
+        system_exec("dispw -s vdpo 720p90");
+        g_hw_stat.vdpo_tmg = VDPO_TMG_720P90;
+        vclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P90, 0);
+        pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P90);
+        screen.vtmg(1);
+    } else { // VDPO_TMG_1080P60
+        system_exec("dispw -s vdpo 1080p60");
+        g_hw_stat.vdpo_tmg = VDPO_TMG_1080P60;
+    }
+    system_exec("aww 0x0300b084 0x00001565"); // vdpo clock driver strength, level 2. Refer datasheet 12.7.5.11
+    system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
+    screen.display(1);
+
+    pthread_mutex_unlock(&hardware_mutex);
+    return true;
+}
+
 void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
 {
     screen.display(0);
