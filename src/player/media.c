@@ -248,14 +248,6 @@ media_t *media_instantiate(char *filename, notify_cb_t notify) {
         // Match the panel refresh to the clip so playback isn't judder-capped by
         // the UI panel mode; Display_UI() restores it on exit.
         int fps = playCtx->dmx->fps;
-#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
-        // 90/100fps play on a 720p panel; drop the VO canvas to match so the frame
-        // isn't stretched across the 1080p overlay.
-        if (fps >= 80) {
-            voWidth = 1280;
-            voHeight = 720;
-        }
-#endif
         playCtx->retimed = Display_Playback(fps);
 #endif
 
