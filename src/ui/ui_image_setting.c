@@ -145,7 +145,7 @@ static void show_ims_slider(uint8_t index) {
         label_dsc.color = LIGHT_WHITE;
         line_dsc.color = LIGHT_WHITE;
     } else {
-        label_dsc.color = LIGHT_WHITE;
+        label_dsc.color = p_slider->type == 0 ? LIGHT_GREEN : LIGHT_WHITE;
         line_dsc.color = LIGHT_GREEN;
     }
 
