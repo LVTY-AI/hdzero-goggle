@@ -42,6 +42,7 @@ enum {
 };
 
 #define APP_VERSION_DISPLAY_PREFIX "ripples-"
+#define APP_VERSION_IDENTITY_SUFFIX "-ripples"
 
 enum {
     ROW_BOXPRO_UPDATE_VTX = -1,
@@ -392,9 +393,18 @@ int generate_current_version(sys_version_t *sys_ver) {
                                 &sys_ver->app_patch);
     char display_app_version[32] = {0};
     if (version_fields == 3) {
-        snprintf(display_app_version, sizeof(display_app_version), "%s%s",
-                 APP_VERSION_DISPLAY_PREFIX,
-                 numeric_version);
+        const char *identity_suffix = strstr(numeric_version, APP_VERSION_IDENTITY_SUFFIX);
+        if (identity_suffix) {
+            snprintf(display_app_version, sizeof(display_app_version), "%s%.*s%s",
+                     APP_VERSION_DISPLAY_PREFIX,
+                     (int)(identity_suffix - numeric_version),
+                     numeric_version,
+                     identity_suffix + strlen(APP_VERSION_IDENTITY_SUFFIX));
+        } else {
+            snprintf(display_app_version, sizeof(display_app_version), "%s%s",
+                     APP_VERSION_DISPLAY_PREFIX,
+                     numeric_version);
+        }
     } else {
         snprintf(display_app_version, sizeof(display_app_version), "%s", app_version);
     }
