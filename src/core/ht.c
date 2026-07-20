@@ -406,6 +406,18 @@ static void calculate_orientation() {
     ht_data.tiltAngle = getPitch() - ht_data.tiltAngleHome;
     ht_data.rollAngle = getRoll() - ht_data.rollAngleHome;
 
+    // One-time auto-center after startup. The home offsets boot as 0, so
+    // until the user re-centers, the angles are absolute fusion output; on
+    // mountings whose worn pose sits far from the fusion's zero (BoxPro
+    // rests at roll ~-80 deg) every axis starts pegged. Wait out the
+    // Madgwick convergence from the boot quaternion (beta 0.1 closes ~80
+    // deg in ~15 s), then adopt the current pose as center once.
+    static int settle_cnt = 0;
+    if (settle_cnt >= 0 && ++settle_cnt == AHRS_UPDATE_FREQUENCY * 20) {
+        ht_set_center_position();
+        settle_cnt = -1;
+    }
+
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
     tmp = normalize(ht_data.panAngle, -180.0, 180.0) * ht_data.panInverse * ht_data.panFactor + 0.5;
     ht_data.htChannels[0] = constrain(tmp, ppmMinPulse, ppmMaxPulse) + ppmCenter;
