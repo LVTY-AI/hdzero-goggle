@@ -13,6 +13,7 @@
 #include <linux/rtc.h>
 #include <memory.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
@@ -39,6 +40,19 @@ static const unsigned char RTC_DAYS_PER_MONTH[] = {
  *  Globals
  */
 static int g_rtc_has_battery = 0;
+
+// A goggle can expose more than one RTC (e.g. the SoC's internal RTC,
+// which loses time at power-off, alongside a battery-backed external
+// chip on a different /dev/rtcN). Writes go to every device; reads prefer
+// whichever holds the most plausible time - so if any RTC actually keeps
+// time on battery, the clock follows it.
+#define RTC_DEV_MAX 4
+
+static int rtc_open_dev(int idx, int flags) {
+    char path[16];
+    snprintf(path, sizeof(path), "/dev/rtc%d", idx);
+    return open(path, flags);
+}
 
 #ifdef EMULATOR_BUILD
 static struct rtc_date g_rtc_date = {1970, 1, 1, 0, 0, 0};
@@ -179,6 +193,38 @@ void rtc_tv2rd(const struct timeval *tv, struct rtc_date *rd) {
  */
 void rtc_init() {
     struct rtc_date rd;
+
+#ifndef EMULATOR_BUILD
+    // Boot diagnostics: enumerate every RTC device with its driver name
+    // and current time, so a field log shows exactly which RTC exists and
+    // which one (if any) kept time across power-off.
+    for (int i = 0; i < RTC_DEV_MAX; ++i) {
+        char path[32], name[32] = "?";
+        snprintf(path, sizeof(path), "/sys/class/rtc/rtc%d/name", i);
+        FILE *fp = fopen(path, "r");
+        if (fp) {
+            if (fgets(name, sizeof(name), fp)) {
+                name[strcspn(name, "\n")] = 0;
+            }
+            fclose(fp);
+        }
+
+        int fd = rtc_open_dev(i, O_RDONLY);
+        if (fd < 0) {
+            continue;
+        }
+        struct rtc_time rt;
+        if (ioctl(fd, RTC_RD_TIME, &rt) == 0) {
+            LOGI("rtc_init: /dev/rtc%d (%s) reads %04d-%02d-%02d %02d:%02d:%02d",
+                 i, name, rt.tm_year + 1900, rt.tm_mon + 1, rt.tm_mday,
+                 rt.tm_hour, rt.tm_min, rt.tm_sec);
+        } else {
+            LOGI("rtc_init: /dev/rtc%d (%s) read failed errno(%d)", i, name, errno);
+        }
+        close(fd);
+    }
+#endif
+
     rtc_get_clock(&rd);
 
     // Has time accumulated since the
@@ -206,6 +252,55 @@ void rtc_init() {
 }
 
 /**
+ * Periodically persist the running clock to settings. On hardware whose
+ * RTC loses time at power-off (no working coin cell), the boot-time seed
+ * then restores "when the goggles were last running" instead of the last
+ * manually-set time - stale only by the powered-off duration. Call from
+ * the main loop; writes at most once per 5 minutes.
+ */
+void rtc_persist_tick() {
+    static time_t last_persist = 0;
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+
+    if (last_persist != 0 && now.tv_sec - last_persist < 300) {
+        return;
+    }
+    last_persist = now.tv_sec;
+
+    struct rtc_date rd;
+    rtc_get_clock(&rd);
+    if (rd.year <= 1970 || rtc_has_valid_date(&rd) != 0) {
+        return; // never persist an unset clock
+    }
+
+    // Write only keys whose value changed (each ini_putl rewrites the whole
+    // settings file): minutes every persist, hour/day/month/year only when
+    // they roll over. Seconds are not persisted - the seed is already stale
+    // by the powered-off duration, so that precision is meaningless.
+    if (g_setting.clock.year != rd.year) {
+        g_setting.clock.year = rd.year;
+        ini_putl("clock", "year", rd.year, SETTING_INI);
+    }
+    if (g_setting.clock.month != rd.month) {
+        g_setting.clock.month = rd.month;
+        ini_putl("clock", "month", rd.month, SETTING_INI);
+    }
+    if (g_setting.clock.day != rd.day) {
+        g_setting.clock.day = rd.day;
+        ini_putl("clock", "day", rd.day, SETTING_INI);
+    }
+    if (g_setting.clock.hour != rd.hour) {
+        g_setting.clock.hour = rd.hour;
+        ini_putl("clock", "hour", rd.hour, SETTING_INI);
+    }
+    if (g_setting.clock.min != rd.min) {
+        g_setting.clock.min = rd.min;
+        ini_putl("clock", "min", rd.min, SETTING_INI);
+    }
+}
+
+/**
  *  Log current time to disk.
  */
 void rtc_timestamp() {
@@ -221,22 +316,53 @@ void rtc_set_clock(const struct rtc_date *rd) {
 #ifdef EMULATOR_BUILD
     g_rtc_date = *rd;
 #else
-    int fd = open(RTC_DEV, O_WRONLY);
-    if (fd >= 0) {
-        struct rtc_time rt;
-        struct timeval tv;
-        rtc_rd2rt(rd, &rt);
-        rtc_rd2tv(rd, &tv);
+    struct rtc_time rt;
+    struct timeval tv;
+    int written = 0;
+    rtc_rd2rt(rd, &rt);
+    rtc_rd2tv(rd, &tv);
 
-        if (settimeofday(&tv, NULL) != 0) {
-            LOGE("settimeofday(&tv, NULL) failed with errno(%d)", errno);
+    if (settimeofday(&tv, NULL) != 0) {
+        LOGE("settimeofday(&tv, NULL) failed with errno(%d)", errno);
+    }
+
+    // Write every RTC device present: if the hardware has a battery-backed
+    // RTC alongside the SoC's volatile one, both end up set and the next
+    // boot reads whichever kept time.
+    for (int i = 0; i < RTC_DEV_MAX; ++i) {
+        int fd = rtc_open_dev(i, O_WRONLY);
+        if (fd < 0) {
+            continue;
         }
         if (ioctl(fd, RTC_SET_TIME, &rt) != 0) {
-            LOGE("ioctl(%d,RTC_SET_TIME,&rt) failed with errno(%d)", fd, errno);
+            LOGE("rtc_set_clock: RTC_SET_TIME on /dev/rtc%d failed with errno(%d)", i, errno);
+        } else {
+            LOGI("rtc_set_clock: /dev/rtc%d set", i);
+            written++;
         }
         close(fd);
-    } else {
-        LOGE("rtc_set_clock failed to open(%s, O_RDWR)", RTC_DEV);
+    }
+
+    if (written == 0) {
+        // No /dev/rtcN nodes - fall back to the legacy /dev/rtc path
+        int fd = open(RTC_DEV, O_WRONLY);
+        if (fd >= 0) {
+            if (ioctl(fd, RTC_SET_TIME, &rt) != 0) {
+                LOGE("ioctl(%d,RTC_SET_TIME,&rt) failed with errno(%d)", fd, errno);
+            } else {
+                written++;
+            }
+            close(fd);
+        } else {
+            LOGE("rtc_set_clock failed to open(%s, O_RDWR)", RTC_DEV);
+        }
+    }
+
+    if (written > 0) {
+        // The clock is now configured; whether the battery preserves it
+        // is re-evaluated on next boot. Clears the "battery not installed
+        // or clock not configured" state immediately.
+        g_rtc_has_battery = 1;
     }
 #endif
 }
@@ -248,17 +374,52 @@ void rtc_get_clock(struct rtc_date *rd) {
 #ifdef EMULATOR_BUILD
     *rd = g_rtc_date;
 #else
-    int fd = open(RTC_DEV, O_RDONLY);
-    if (fd >= 0) {
+    // Deterministic epoch on any failure, so a total read failure (e.g.
+    // first boot after battery insertion, RTC_RD_TIME returns -EINVAL)
+    // yields 1970 - which rtc_init relies on to trigger the settings-clock
+    // repair path - rather than uninitialized stack garbage.
+    *rd = (struct rtc_date){.year = 1970, .month = 1, .day = 1, .hour = 0, .min = 0, .sec = 0};
+
+    // Read every RTC device present and keep the most plausible (latest
+    // valid) time - a battery-backed chip that kept ticking beats the
+    // SoC's volatile RTC that reset at power-off.
+    uint64_t best = 0;
+    int found = 0;
+    for (int i = 0; i < RTC_DEV_MAX; ++i) {
+        int fd = rtc_open_dev(i, O_RDONLY);
+        if (fd < 0) {
+            continue;
+        }
+        found++;
         struct rtc_time rt;
         if (ioctl(fd, RTC_RD_TIME, &rt) == 0) {
-            rtc_rt2rd(&rt, rd);
+            struct rtc_date cand;
+            rtc_rt2rd(&rt, &cand);
+            uint64_t secs = rtc_mktime(&cand);
+            if (rtc_has_valid_date(&cand) == 0 && secs > best) {
+                best = secs;
+                *rd = cand;
+            }
         } else {
-            LOGE("ioctl(%d,RTC_RD_TIME,rt) failed with errno(%d)", fd, errno);
+            LOGE("rtc_get_clock: RTC_RD_TIME on /dev/rtc%d failed with errno(%d)", i, errno);
         }
         close(fd);
-    } else {
-        LOGE("rtc_get_clock failed to open(%s, O_RDWR)", RTC_DEV);
+    }
+
+    if (found == 0) {
+        // No /dev/rtcN nodes - fall back to the legacy /dev/rtc path
+        int fd = open(RTC_DEV, O_RDONLY);
+        if (fd >= 0) {
+            struct rtc_time rt;
+            if (ioctl(fd, RTC_RD_TIME, &rt) == 0) {
+                rtc_rt2rd(&rt, rd);
+            } else {
+                LOGE("ioctl(%d,RTC_RD_TIME,rt) failed with errno(%d)", fd, errno);
+            }
+            close(fd);
+        } else {
+            LOGE("rtc_get_clock failed to open(%s, O_RDWR)", RTC_DEV);
+        }
     }
 #endif
 }

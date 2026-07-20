@@ -61,6 +61,12 @@ void rtc_init();
 void rtc_timestamp();
 
 /**
+ *  Persist the running clock to settings (rate-limited); call from the
+ *  main loop so RTCs without battery backup reboot close to real time.
+ */
+void rtc_persist_tick();
+
+/**
  *  Set Hardware Clock and synchronize OS Clock in UTC.
  */
 void rtc_set_clock(const struct rtc_date *rd);
