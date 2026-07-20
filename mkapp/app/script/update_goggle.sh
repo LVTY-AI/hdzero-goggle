@@ -109,6 +109,11 @@ function connect_fpga_flash()
 # eg: check_mtd_write /dev/mtdX required-size bin-file
 function check_mtd_write()
 {
+	if [ ! -s "$3" ]; then
+		echo "ERROR: $3 missing or empty - not erasing $1"
+		beep_failure
+		return 1
+	fi
 	filesize=`ls -l $3 | awk '{print $5}'`
 	mtd_info=`mtd_debug info $1`
 	echo "$mtd_info"
@@ -196,10 +201,25 @@ fi
 
 if [ ! -z "$HDZ_BIN" ]; then
 	echo "Flashing $HDZ_BIN"
+	# A corrupt or truncated firmware file used to erase the RX and VA
+	# flash with nothing to write back, bricking the goggles. Refuse to
+	# touch any flash unless the whole archive reads back intact.
+	if ! tar tf "$HDZ_BIN" > /dev/null 2>&1; then
+		echo "ERROR: firmware file is corrupt or truncated - not flashing"
+		beep_failure
+		echo "100" > /tmp/progress_goggle
+		exit 1
+	fi
 	echo "0" > /tmp/progress_goggle
 	echo "0"
 	untar_file "$HDZ_BIN"
 	mv ${TMP_DIR}/hdzgoggle_app_ota*.tar ${TMP_DIR}/hdzgoggle_app_ota.tar
+	if [ ! -s ${TMP_DIR}/hdzgoggle_app_ota.tar ] || [ ! -s ${TMP_RX_BIN} ] || [ ! -s ${TMP_VA_BIN} ]; then
+		echo "ERROR: firmware archive is missing components - not flashing"
+		beep_failure
+		echo "100" > /tmp/progress_goggle
+		exit 1
+	fi
 	cp -f /mnt/app/setting.ini /mnt/UDISK/
 	#disable it66021
 	i2cset -y 3 0x49 0x10 0xff
