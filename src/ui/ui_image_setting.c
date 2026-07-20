@@ -8,6 +8,7 @@
 #include <minIni.h>
 
 #include "../conf/ui.h"
+#include "core/app_state.h"
 #include "core/common.hh"
 #include "core/osd.h"
 #include "driver/hardware.h"
@@ -24,6 +25,7 @@ static lv_draw_label_dsc_t label_dsc;
 static ims_page_t ims_page;
 static uint8_t ims_state;
 static setting_image_source_t ims_source = SETTING_IMAGE_SOURCE_HDZERO;
+static bool ims_analog_is_av_in;
 // global
 bool g_bShowIMS = false;
 
@@ -207,6 +209,10 @@ void image_settings_apply(setting_image_source_t source) {
 }
 
 void ims_set_source(setting_image_source_t source) {
+    if (source == SETTING_IMAGE_SOURCE_ANALOG &&
+        (g_source_info.source == SOURCE_AV_IN || g_source_info.source == SOURCE_AV_MODULE))
+        ims_analog_is_av_in = g_source_info.source == SOURCE_AV_IN;
+
     ims_source = source;
     ims_state = 0;
     ims_page_init(source);
@@ -244,11 +250,28 @@ static void save_image_source(setting_image_source_t source, const setting_image
     ini_putl("image", "contrast", video->contrast, SETTING_INI);
 }
 
+static void ims_switch_input(setting_image_source_t source) {
+    switch (source) {
+    case SETTING_IMAGE_SOURCE_ANALOG:
+        app_switch_to_analog(ims_analog_is_av_in);
+        g_source_info.source = ims_analog_is_av_in ? SOURCE_AV_IN : SOURCE_AV_MODULE;
+        break;
+    case SETTING_IMAGE_SOURCE_HDZERO:
+    default:
+        app_switch_to_hdzero(true);
+        g_source_info.source = SOURCE_HDZERO;
+        break;
+    }
+
+    app_state_push(APP_STATE_IMS);
+}
+
 void ims_switch_source(setting_image_source_t source) {
     if (source == ims_source)
         return;
 
     ims_save();
+    ims_switch_input(source);
     ims_set_source(source);
     ims_state = 2;
     ims_page.items[IMS_SOURCE].state = 2;
