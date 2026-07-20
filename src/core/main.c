@@ -309,6 +309,7 @@ int main(int argc, char *argv[]) {
     for (;;) {
         pthread_mutex_lock(&lvgl_mutex);
         main_menu_update();
+        rtc_persist_tick();
         sleep_reminder();
         statubar_update();
         osd_hdzero_update();
