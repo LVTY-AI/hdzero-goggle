@@ -634,9 +634,12 @@ void scan_core_idle_tick(void) {
 // flash is masked and the dial path (channel-change speed) is untouched.
 // Losing lock means the signal moved to the opposite bandwidth, so trying that
 // one first (instead of a fixed Wide->Narrow sweep that re-opens to settle)
-// makes either direction a single brief reset. HDZ-only (no analog), so it runs
-// on every target, and it is independent of auto_protocol_detect (that setting
-// drives the separate protocol crossover in scan_core_idle_tick).
+// makes either direction a single brief reset. The BW=Auto bandwidth-hop is
+// HDZ-only (no analog) and runs on every target regardless of
+// auto_protocol_detect. The fixed-BW reset, in contrast, exists only to undo an
+// Auto analog probe (Bug 3), so it is gated on auto_protocol_detect below (the
+// same setting that drives the separate protocol crossover in
+// scan_core_idle_tick).
 //
 // While dark it keeps CHECKING the other bandwidth on a slow period rather
 // than acting once (the old behavior swept exactly once per dark spell, so a
@@ -658,10 +661,14 @@ void scan_core_hdz_bw_tick(void) {
     static int dark_ticks = 0;
 
     // Bug 3 (fixed-BW baseband left locked-on-garbage by an Auto analog probe)
-    // only occurs where the analog receiver exists, so the fixed-BW reset below
-    // is BoxPro/G2 only; G1 keeps the original BW=Auto-only watchdog.
+    // only occurs where the analog receiver exists AND the Auto analog probe
+    // actually runs -- i.e. auto_protocol_detect is on. The plain HDZero source
+    // never powers the analog module, so it can never hit Bug 3; running the
+    // fixed-BW reset there just flashes "Detecting..." on a normal dark screen
+    // for nothing. So the fixed-BW reset below is BoxPro/G2 AND Auto-detect only;
+    // plain HDZero (fixed BW) and G1 keep the original BW=Auto-only watchdog.
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-    const bool recover_all_bw = true;
+    const bool recover_all_bw = g_setting.source.auto_protocol_detect;
 #else
     const bool recover_all_bw = false;
 #endif
