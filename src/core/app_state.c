@@ -52,6 +52,7 @@ void app_switch_to_menu() {
 #endif
 
     Display_UI();
+    image_settings_apply(SETTING_IMAGE_SOURCE_HDZERO);
     lvgl_switch_to_1080p();
     exit_tune_channel();
     osd_show(false);
@@ -90,6 +91,7 @@ void app_switch_to_analog(bool is_av_in) {
     Display_Osd(g_setting.record.osd);
 
     Source_AV(is_av_in);
+    image_settings_apply(SETTING_IMAGE_SOURCE_ANALOG);
 
     if (is_av_in) {
         rtc6715.init(0, 0);
@@ -144,12 +146,6 @@ void app_switch_to_analog(bool is_av_in) {
 }
 
 void app_switch_to_hdmi_in() {
-#if defined HDZBOXPRO
-    // Restore image settings from av module
-    screen.brightness(g_setting.image.oled);
-    Set_Contrast(g_setting.image.contrast);
-#endif
-
 #if defined HDZGOGGLE2
     system_exec("aww 0x0300b084 0x0001555");
 #endif
@@ -191,12 +187,6 @@ void app_switch_to_hdmi_in() {
 //    false = user selected from auto scan page
 void app_switch_to_hdzero(bool is_default) {
     int ch;
-
-#if defined HDZBOXPRO
-    // Restore image settings from av module
-    screen.brightness(g_setting.image.oled);
-    Set_Contrast(g_setting.image.contrast);
-#endif
 
 #if defined HDZGOGGLE2
     system_exec("aww 0x0300b084 0x0001555");
@@ -268,6 +258,7 @@ void app_switch_to_hdzero(bool is_default) {
     LOGI("lvgl_switch_to_720p");
 #endif
 
+    image_settings_apply(SETTING_IMAGE_SOURCE_HDZERO);
     osd_clear();
     osd_show(true);
     lv_timer_handler();

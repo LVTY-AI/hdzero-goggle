@@ -120,12 +120,22 @@ typedef struct {
     uint8_t stop_delay_seconds; // auto record: grace period after signal loss before stopping (0 = off)
 } setting_record_t;
 
+typedef enum {
+    SETTING_IMAGE_SOURCE_ANALOG = 0,
+    SETTING_IMAGE_SOURCE_HDZERO,
+} setting_image_source_t;
+
 typedef struct {
-    uint8_t oled;
     uint8_t brightness;
     uint8_t saturation;
     uint8_t contrast;
+} setting_image_video_t;
+
+typedef struct {
+    uint8_t oled;
     uint8_t auto_off; // 0=1min,1=3min,2=4min,3=5min,4=never,
+    setting_image_video_t analog;
+    setting_image_video_t hdzero;
 } setting_image_t;
 
 typedef struct {
@@ -333,6 +343,9 @@ typedef struct {
 
 extern setting_t g_setting;
 extern const setting_t g_setting_defaults;
+
+setting_image_video_t *settings_image_video(setting_image_source_t source);
+const setting_image_video_t *settings_image_video_defaults(setting_image_source_t source);
 
 // Runtime (non-persisted) record of the HDZ bandwidth that last locked a
 // signal. Only consulted when source.hdzero_bw == BOTH, to choose a concrete

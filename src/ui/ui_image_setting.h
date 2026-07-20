@@ -10,7 +10,7 @@ extern "C" {
 #include "core/settings.h"
 
 #define IMS_CANVAS_WIDTH  430
-#define IMS_CANVAS_HEIGHT 175
+#define IMS_CANVAS_HEIGHT 190
 #define SLIDER_XSTART     170
 #define SLIDER_XEND       350
 #define SLIDER_WIDTH      5
@@ -21,7 +21,7 @@ extern "C" {
 #define LIGHT_WHITE lv_color_make(254, 254, 254)
 #define LIGHT_GREEN lv_color_make(0, 255, 0)
 
-#define IMS_ITEM_COUNT 7
+#define IMS_ITEM_COUNT 8
 
 typedef struct {
     int16_t x; // start pos
@@ -44,6 +44,10 @@ void ims_init(void);
 uint8_t ims_key(uint8_t key);
 void ims_update();
 void ims_save();
+void ims_set_source(setting_image_source_t source);
+void ims_switch_source(setting_image_source_t source);
+setting_image_source_t ims_get_source(void);
+void image_settings_apply(setting_image_source_t source);
 
 void change_oled_brightness(uint8_t key);
 

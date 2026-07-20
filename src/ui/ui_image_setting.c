@@ -1,6 +1,7 @@
 #include "ui/ui_image_setting.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include <log/log.h>
 #include <lvgl/lvgl.h>
@@ -22,80 +23,111 @@ static lv_draw_line_dsc_t line_dsc;
 static lv_draw_label_dsc_t label_dsc;
 static ims_page_t ims_page;
 static uint8_t ims_state;
+static setting_image_source_t ims_source = SETTING_IMAGE_SOURCE_HDZERO;
 // global
 bool g_bShowIMS = false;
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-static void ims_page_init(uint8_t *val) {
+enum {
+    IMS_SOURCE,
+    IMS_PANEL,
+    IMS_BRIGHTNESS,
+    IMS_SATURATION,
+    IMS_CONTRAST,
+    IMS_AUTO_OFF,
+    IMS_BACK,
+    IMS_RESET,
+};
+
+static const char *ims_source_name(setting_image_source_t source) {
+    switch (source) {
+    case SETTING_IMAGE_SOURCE_ANALOG:
+        return _lang("Analog");
+    case SETTING_IMAGE_SOURCE_HDZERO:
+    default:
+        return _lang("HDZero");
+    }
+}
+
+static void ims_page_init(setting_image_source_t source) {
     int16_t x = 30;
-    int16_t y = 15;
+    int16_t y = 5;
     char buf[64];
+    const setting_image_video_t *video = settings_image_video(source);
 
-    ims_page.items[0].x = x;
-    ims_page.items[0].y = y;
-    ims_page.items[0].type = 1;
+    ims_page.items[IMS_SOURCE].x = x;
+    ims_page.items[IMS_SOURCE].y = y;
+    ims_page.items[IMS_SOURCE].type = 0;
+    snprintf(buf, sizeof(buf), "%s: %s", _lang("Source"), ims_source_name(source));
+    strcpy(ims_page.items[IMS_SOURCE].title, buf);
+    ims_page.items[IMS_SOURCE].state = 1;
+
+    ims_page.items[IMS_PANEL].x = x;
+    ims_page.items[IMS_PANEL].y = y + 25;
+    ims_page.items[IMS_PANEL].type = 1;
     snprintf(buf, sizeof(buf), "%s:", _lang("Panel"));
-    strcpy(ims_page.items[0].title, buf);
-    ims_page.items[0].range[0] = 0;
-    ims_page.items[0].range[1] = 12;
-    ims_page.items[0].value = val[0];
-    ims_page.items[0].state = 1;
-    ims_page.selection = 0;
+    strcpy(ims_page.items[IMS_PANEL].title, buf);
+    ims_page.items[IMS_PANEL].range[0] = 0;
+    ims_page.items[IMS_PANEL].range[1] = 12;
+    ims_page.items[IMS_PANEL].value = g_setting.image.oled;
+    ims_page.items[IMS_PANEL].state = 0;
 
-    ims_page.items[1].x = x;
-    ims_page.items[1].y = y + 25;
-    ims_page.items[1].type = 1;
+    ims_page.items[IMS_BRIGHTNESS].x = x;
+    ims_page.items[IMS_BRIGHTNESS].y = y + 50;
+    ims_page.items[IMS_BRIGHTNESS].type = 1;
     snprintf(buf, sizeof(buf), "%s:", _lang("Brightness"));
-    strcpy(ims_page.items[1].title, buf);
-    ims_page.items[1].range[0] = 0;
-    ims_page.items[1].range[1] = 78;
-    ims_page.items[1].value = val[1];
-    ims_page.items[1].state = 0;
+    strcpy(ims_page.items[IMS_BRIGHTNESS].title, buf);
+    ims_page.items[IMS_BRIGHTNESS].range[0] = 0;
+    ims_page.items[IMS_BRIGHTNESS].range[1] = 78;
+    ims_page.items[IMS_BRIGHTNESS].value = video->brightness;
+    ims_page.items[IMS_BRIGHTNESS].state = 0;
 
-    ims_page.items[2].x = x;
-    ims_page.items[2].y = y + 50;
-    ims_page.items[2].type = 1;
+    ims_page.items[IMS_SATURATION].x = x;
+    ims_page.items[IMS_SATURATION].y = y + 75;
+    ims_page.items[IMS_SATURATION].type = 1;
     snprintf(buf, sizeof(buf), "%s:", _lang("Saturation"));
-    strcpy(ims_page.items[2].title, buf);
-    ims_page.items[2].range[0] = 0;
-    ims_page.items[2].range[1] = 47;
-    ims_page.items[2].value = val[2];
-    ims_page.items[2].state = 0;
+    strcpy(ims_page.items[IMS_SATURATION].title, buf);
+    ims_page.items[IMS_SATURATION].range[0] = 0;
+    ims_page.items[IMS_SATURATION].range[1] = 47;
+    ims_page.items[IMS_SATURATION].value = video->saturation;
+    ims_page.items[IMS_SATURATION].state = 0;
 
-    ims_page.items[3].x = x;
-    ims_page.items[3].y = y + 75;
-    ims_page.items[3].type = 1;
+    ims_page.items[IMS_CONTRAST].x = x;
+    ims_page.items[IMS_CONTRAST].y = y + 100;
+    ims_page.items[IMS_CONTRAST].type = 1;
     snprintf(buf, sizeof(buf), "%s:", _lang("Contrast"));
-    strcpy(ims_page.items[3].title, buf);
-    ims_page.items[3].range[0] = 0;
-    ims_page.items[3].range[1] = 47;
-    ims_page.items[3].value = val[3];
-    ims_page.items[3].state = 0;
+    strcpy(ims_page.items[IMS_CONTRAST].title, buf);
+    ims_page.items[IMS_CONTRAST].range[0] = 0;
+    ims_page.items[IMS_CONTRAST].range[1] = 47;
+    ims_page.items[IMS_CONTRAST].value = video->contrast;
+    ims_page.items[IMS_CONTRAST].state = 0;
 
-    ims_page.items[4].x = x;
-    ims_page.items[4].y = y + 100;
-    ims_page.items[4].type = 1;
+    ims_page.items[IMS_AUTO_OFF].x = x;
+    ims_page.items[IMS_AUTO_OFF].y = y + 125;
+    ims_page.items[IMS_AUTO_OFF].type = 1;
     snprintf(buf, sizeof(buf), "Panel %s:", _lang("Auto Off"));
-    strcpy(ims_page.items[4].title, buf);
-    ims_page.items[4].range[0] = 0;
-    ims_page.items[4].range[1] = 4;
-    ims_page.items[4].value = val[4];
-    ims_page.items[4].state = 0;
+    strcpy(ims_page.items[IMS_AUTO_OFF].title, buf);
+    ims_page.items[IMS_AUTO_OFF].range[0] = 0;
+    ims_page.items[IMS_AUTO_OFF].range[1] = 4;
+    ims_page.items[IMS_AUTO_OFF].value = g_setting.image.auto_off;
+    ims_page.items[IMS_AUTO_OFF].state = 0;
 
-    ims_page.items[5].x = x;
-    ims_page.items[5].y = y + 125;
-    ims_page.items[5].type = 0;
+    ims_page.items[IMS_BACK].x = x;
+    ims_page.items[IMS_BACK].y = y + 150;
+    ims_page.items[IMS_BACK].type = 0;
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
-    strcpy(ims_page.items[5].title, buf);
-    ims_page.items[5].state = 0;
+    strcpy(ims_page.items[IMS_BACK].title, buf);
+    ims_page.items[IMS_BACK].state = 0;
 
-    ims_page.items[6].x = x + 200;
-    ims_page.items[6].y = y + 125;
-    ims_page.items[6].type = 0;
+    ims_page.items[IMS_RESET].x = x + 200;
+    ims_page.items[IMS_RESET].y = y + 150;
+    ims_page.items[IMS_RESET].type = 0;
     snprintf(buf, sizeof(buf), "%s", _lang("Reset All"));
-    strcpy(ims_page.items[6].title, buf);
-    ims_page.items[6].state = 0;
+    strcpy(ims_page.items[IMS_RESET].title, buf);
+    ims_page.items[IMS_RESET].state = 0;
+
+    ims_page.selection = IMS_SOURCE;
 }
 
 static void show_ims_slider(uint8_t index) {
@@ -121,7 +153,7 @@ static void show_ims_slider(uint8_t index) {
     }
 
     switch (index) {
-    case 4: { // auto off
+    case IMS_AUTO_OFF: { // auto off
         if (p_slider->value == 4)
             snprintf(buf, sizeof(buf), "%s", _lang("Never"));
         else
@@ -165,15 +197,64 @@ void ims_update() {
     }
 }
 
+void image_settings_apply(setting_image_source_t source) {
+    const setting_image_video_t *video = settings_image_video(source);
+
+    screen.brightness(g_setting.image.oled);
+    Set_Brightness(video->brightness);
+    Set_Saturation(video->saturation);
+    Set_Contrast(video->contrast);
+}
+
+void ims_set_source(setting_image_source_t source) {
+    ims_source = source;
+    ims_state = 0;
+    ims_page_init(source);
+    image_settings_apply(source);
+}
+
+setting_image_source_t ims_get_source(void) {
+    return ims_source;
+}
+
+static void save_image_source(setting_image_source_t source, const setting_image_video_t *video) {
+    const char *prefix;
+    char key[32];
+
+    switch (source) {
+    case SETTING_IMAGE_SOURCE_ANALOG:
+        prefix = "analog_";
+        break;
+    case SETTING_IMAGE_SOURCE_HDZERO:
+    default:
+        prefix = "hdzero_";
+        break;
+    }
+
+    snprintf(key, sizeof(key), "%sbrightness", prefix);
+    ini_putl("image", key, video->brightness, SETTING_INI);
+    snprintf(key, sizeof(key), "%ssaturation", prefix);
+    ini_putl("image", key, video->saturation, SETTING_INI);
+    snprintf(key, sizeof(key), "%scontrast", prefix);
+    ini_putl("image", key, video->contrast, SETTING_INI);
+
+    // Keep the legacy values current for older firmware versions.
+    ini_putl("image", "brightness", video->brightness, SETTING_INI);
+    ini_putl("image", "saturation", video->saturation, SETTING_INI);
+    ini_putl("image", "contrast", video->contrast, SETTING_INI);
+}
+
+void ims_switch_source(setting_image_source_t source) {
+    if (source == ims_source)
+        return;
+
+    ims_save();
+    ims_set_source(source);
+    ims_state = 2;
+    ims_page.items[IMS_SOURCE].state = 2;
+}
+
 void ims_init(void) {
-    uint8_t defs[5];
-
-    defs[0] = g_setting.image.oled;
-    defs[1] = g_setting.image.brightness;
-    defs[2] = g_setting.image.saturation;
-    defs[3] = g_setting.image.contrast;
-    defs[4] = g_setting.image.auto_off;
-
     canvas_ims = lv_canvas_create(lv_scr_act());
     lv_obj_clear_flag(canvas_ims, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -183,34 +264,23 @@ void ims_init(void) {
     lv_draw_line_dsc_init(&line_dsc);
     lv_draw_label_dsc_init(&label_dsc);
     label_dsc.font = UI_MENU_LABEL_FONT;
-    ims_page_init(defs);
     g_bShowIMS = false;
-
-    screen.brightness(defs[0]);
-    Set_Brightness(defs[1]);
-    Set_Saturation(defs[2]);
-    Set_Contrast(defs[3]);
+    ims_set_source(SETTING_IMAGE_SOURCE_HDZERO);
 }
 
 void ims_save() {
-    g_setting.image.oled = ims_page.items[0].value;
+    setting_image_video_t *video = settings_image_video(ims_source);
+
+    g_setting.image.oled = ims_page.items[IMS_PANEL].value;
     ini_putl("image", "oled", g_setting.image.oled, SETTING_INI);
-    screen.brightness(g_setting.image.oled);
-
-    g_setting.image.brightness = ims_page.items[1].value;
-    ini_putl("image", "brightness", g_setting.image.brightness, SETTING_INI);
-    Set_Brightness(g_setting.image.brightness);
-
-    g_setting.image.saturation = ims_page.items[2].value;
-    ini_putl("image", "saturation", g_setting.image.saturation, SETTING_INI);
-    Set_Saturation(g_setting.image.saturation);
-
-    g_setting.image.contrast = ims_page.items[3].value;
-    ini_putl("image", "contrast", g_setting.image.contrast, SETTING_INI);
-    Set_Contrast(g_setting.image.contrast);
-
-    g_setting.image.auto_off = ims_page.items[4].value;
+    g_setting.image.auto_off = ims_page.items[IMS_AUTO_OFF].value;
     ini_putl("image", "auto_off", g_setting.image.auto_off, SETTING_INI);
+
+    video->brightness = ims_page.items[IMS_BRIGHTNESS].value;
+    video->saturation = ims_page.items[IMS_SATURATION].value;
+    video->contrast = ims_page.items[IMS_CONTRAST].value;
+    save_image_source(ims_source, video);
+    image_settings_apply(ims_source);
 
     osd_update_element_positions();
 }
@@ -273,17 +343,21 @@ uint8_t ims_key(uint8_t key) {
             break;
 
         case DIAL_KEY_CLICK:
-            if (ims_page.selection == 5) { //"<Back"
+            if (ims_page.selection == IMS_BACK) { //"<Back"
                 ims_state = 0;
                 g_bShowIMS = false;
                 ims_save();
                 ret = 1;
-            } else if (ims_page.selection == 6) { //"Reset All"
-                ims_page.items[0].value = g_setting_defaults.image.oled;
-                ims_page.items[1].value = g_setting_defaults.image.brightness;
-                ims_page.items[2].value = g_setting_defaults.image.saturation;
-                ims_page.items[3].value = g_setting_defaults.image.contrast;
-                ims_page.items[4].value = g_setting_defaults.image.auto_off;
+            } else if (ims_page.selection == IMS_RESET) { //"Reset All"
+                g_setting.image.analog = g_setting_defaults.image.analog;
+                g_setting.image.hdzero = g_setting_defaults.image.hdzero;
+                save_image_source(SETTING_IMAGE_SOURCE_ANALOG, &g_setting.image.analog);
+                save_image_source(SETTING_IMAGE_SOURCE_HDZERO, &g_setting.image.hdzero);
+                ims_page.items[IMS_PANEL].value = g_setting_defaults.image.oled;
+                ims_page.items[IMS_BRIGHTNESS].value = settings_image_video_defaults(ims_source)->brightness;
+                ims_page.items[IMS_SATURATION].value = settings_image_video_defaults(ims_source)->saturation;
+                ims_page.items[IMS_CONTRAST].value = settings_image_video_defaults(ims_source)->contrast;
+                ims_page.items[IMS_AUTO_OFF].value = g_setting_defaults.image.auto_off;
                 ims_save();
             } else {
                 ims_page.items[ims_page.selection].state = 2;
@@ -299,6 +373,26 @@ uint8_t ims_key(uint8_t key) {
     } else if (ims_state == 2) { // tune up/down values
         g_bShowIMS = true;
         value = 0;
+
+        if (ims_page.selection == IMS_SOURCE) {
+            if (key == DIAL_KEY_DOWN) {
+                if (ims_source == SETTING_IMAGE_SOURCE_HDZERO)
+                    ims_switch_source(SETTING_IMAGE_SOURCE_ANALOG);
+                else
+                    ims_switch_source((setting_image_source_t)(ims_source + 1));
+                ims_page.items[IMS_SOURCE].state = 2;
+            } else if (key == DIAL_KEY_UP) {
+                if (ims_source == SETTING_IMAGE_SOURCE_ANALOG)
+                    ims_switch_source(SETTING_IMAGE_SOURCE_HDZERO);
+                else
+                    ims_switch_source((setting_image_source_t)(ims_source - 1));
+                ims_page.items[IMS_SOURCE].state = 2;
+            } else if (key == DIAL_KEY_CLICK) {
+                ims_page.items[IMS_SOURCE].state = 1;
+                ims_state = 1;
+            }
+            return ret;
+        }
 
         switch (key) {
         case DIAL_KEY_DOWN:
@@ -328,24 +422,24 @@ uint8_t ims_key(uint8_t key) {
         }
 
         switch (ims_page.selection) {
-        case 0:
+        case IMS_PANEL:
             screen.brightness(value);
             break;
 
-        case 1:
+        case IMS_BRIGHTNESS:
             Set_Brightness(value);
             break;
 
-        case 2:
+        case IMS_SATURATION:
             Set_Saturation(value);
             break;
 
-        case 3:
+        case IMS_CONTRAST:
             Set_Contrast(value);
             break;
 
-        case 4:
-            g_setting.image.auto_off = ims_page.items[4].value;
+        case IMS_AUTO_OFF:
+            g_setting.image.auto_off = ims_page.items[IMS_AUTO_OFF].value;
             ini_putl("image", "auto_off", g_setting.image.auto_off, SETTING_INI);
             break;
 
