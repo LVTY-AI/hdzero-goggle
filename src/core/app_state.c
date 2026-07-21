@@ -261,6 +261,8 @@ void app_switch_to_hdzero(bool is_default) {
     image_settings_apply(SETTING_IMAGE_SOURCE_HDZERO);
     osd_clear();
     osd_show(true);
+    if (g_bShowIMS)
+        ims_update();
     lv_timer_handler();
     Display_Osd(g_setting.record.osd);
 
