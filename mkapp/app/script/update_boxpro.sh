@@ -232,6 +232,12 @@ if [ ! -z "$HDZ_BIN" ]; then
  	echo "45"
 	echo "45" > /tmp/progress_goggle
 	hdz_upgrade_app.sh
+	if [ $? -ne 0 ]; then
+		echo "ERROR: app partition update failed"
+		beep_failure
+		echo "100" > /tmp/progress_goggle
+		exit 1
+	fi
 	echo "100"
 	echo "100" > /tmp/progress_goggle
 	echo "all done"
