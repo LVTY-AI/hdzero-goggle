@@ -16,6 +16,9 @@
 #include "lang/language.h"
 #include "ui/page_common.h"
 
+#define IMS_LOADING_LETTER_MS 200
+#define IMS_LOADING_LETTER_COUNT 7
+
 ///////////////////////////////////////////////////////////////////////////////
 // locals
 static lv_obj_t *canvas_ims;
@@ -140,6 +143,21 @@ static void ims_set_hdzero_loading(bool loading) {
     lv_timer_handler();
 }
 
+static void ims_draw_loading_status(int16_t x, int16_t y) {
+    static const char loading[] = "Loading...";
+    lv_draw_label_dsc_t status_dsc = label_dsc;
+    char lit[IMS_LOADING_LETTER_COUNT + 1];
+    uint8_t lit_count = (lv_tick_get() / IMS_LOADING_LETTER_MS) % IMS_LOADING_LETTER_COUNT + 1;
+
+    status_dsc.color = LIGHT_WHITE;
+    lv_canvas_draw_text(canvas_ims, x, y, 200, &status_dsc, loading);
+
+    memcpy(lit, loading, lit_count);
+    lit[lit_count] = '\0';
+    status_dsc.color = LIGHT_GREEN;
+    lv_canvas_draw_text(canvas_ims, x, y, 200, &status_dsc, lit);
+}
+
 static void show_ims_slider(uint8_t index) {
     ims_slider_t *p_slider = &ims_page.items[index];
 
@@ -150,9 +168,6 @@ static void show_ims_slider(uint8_t index) {
     if (p_slider->state == 0) { // 0=not selected, 1=selected, 2=slider bar selected
         label_dsc.color = DARK_GRAY;
         line_dsc.color = DARK_GRAY;
-    } else if (source_loading) {
-        label_dsc.color = ((lv_tick_get() / 400) % 2) ? LIGHT_WHITE : LIGHT_GREEN;
-        line_dsc.color = label_dsc.color;
     } else if (p_slider->state == 1) {
         label_dsc.color = LIGHT_WHITE;
         line_dsc.color = LIGHT_WHITE;
@@ -164,7 +179,7 @@ static void show_ims_slider(uint8_t index) {
     lv_canvas_draw_text(canvas_ims, p_slider->x, p_slider->y, 200, &label_dsc, p_slider->title);
     if (p_slider->type == 0) {
         if (source_loading)
-            lv_canvas_draw_text(canvas_ims, p_slider->x + 190, p_slider->y, 200, &label_dsc, "Loading...");
+            ims_draw_loading_status(p_slider->x + 190, p_slider->y);
         return;
     }
 
