@@ -25,6 +25,7 @@ static lv_draw_label_dsc_t label_dsc;
 static ims_page_t ims_page;
 static uint8_t ims_state;
 static setting_image_source_t ims_source = SETTING_IMAGE_SOURCE_HDZERO;
+static setting_image_source_t ims_active_source = SETTING_IMAGE_SOURCE_HDZERO;
 static bool ims_analog_is_av_in;
 // global
 bool g_bShowIMS = false;
@@ -214,6 +215,7 @@ void ims_set_source(setting_image_source_t source) {
         ims_analog_is_av_in = g_source_info.source == SOURCE_AV_IN;
 
     ims_source = source;
+    ims_active_source = source;
     ims_state = 0;
     ims_page_init(source);
     image_settings_apply(source);
@@ -270,11 +272,23 @@ void ims_switch_source(setting_image_source_t source) {
     if (source == ims_source)
         return;
 
-    ims_save();
-    ims_switch_input(source);
-    ims_set_source(source);
+    if (ims_source == ims_active_source)
+        ims_save();
+
+    ims_source = source;
+    ims_page_init(source);
     ims_state = 2;
     ims_page.items[IMS_SOURCE].state = 2;
+}
+
+static void ims_confirm_source(void) {
+    if (ims_source != ims_active_source) {
+        ims_switch_input(ims_source);
+        ims_set_source(ims_source);
+    }
+
+    ims_page.items[IMS_SOURCE].state = 1;
+    ims_state = 1;
 }
 
 void ims_init(void) {
@@ -411,8 +425,7 @@ uint8_t ims_key(uint8_t key) {
                     ims_switch_source((setting_image_source_t)(ims_source - 1));
                 ims_page.items[IMS_SOURCE].state = 2;
             } else if (key == DIAL_KEY_CLICK) {
-                ims_page.items[IMS_SOURCE].state = 1;
-                ims_state = 1;
+                ims_confirm_source();
             }
             return ret;
         }
