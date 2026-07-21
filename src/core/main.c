@@ -58,7 +58,18 @@ SDL_mutex *global_sdl_mutex;
 
 int gif_cnt = 0;
 
+// See the ELRS backpack readiness gate in main()'s loop.
+#define ELRS_ENABLE_MIN_DELAY_SEC 5
+#define ELRS_ENABLE_MAX_DELAY_SEC 15
+
+// Set for the lifetime of the boot-time auto-scan menu loop below, so the
+// ELRS backpack readiness gate (main()) can wait it out instead of firing
+// on a fixed delay while the scan is still actively driving the UI/app
+// state.
+static volatile bool g_boot_autoscan_running = false;
+
 static void *thread_autoscan(void *ptr) {
+    g_boot_autoscan_running = true;
     for (;;) {
         pthread_mutex_lock(&lvgl_mutex);
         main_menu_show(true);
@@ -76,6 +87,7 @@ static void *thread_autoscan(void *ptr) {
     }
 
 a_exit:
+    g_boot_autoscan_running = false;
     pthread_exit(NULL);
     return NULL;
 }
@@ -299,11 +311,15 @@ int main(int argc, char *argv[]) {
     // 10. Execute main loop
     g_init_done = 1;
 
-    // Defer ELRS backpack power-on until boot has settled. Enabling the ESP
-    // backpack during the busy HDZero bring-up wedges it; a clean post-init
-    // power-on matches the reliable manual "toggle Backpack off/on" recovery.
-    // (The analog path settles before this point, so it is unaffected.)
-    time_t elrs_enable_at = time(NULL) + 3;
+    // Bring the ELRS backpack up once boot has genuinely settled, not just
+    // after a fixed delay: enabling it during the busy HDZero bring-up (or
+    // while the boot-time auto-scan menu loop is still actively driving the
+    // UI/app state) wedges the ESP. ELRS_ENABLE_MIN_DELAY_SEC gives the
+    // synchronous HDZero switch time to finish; ELRS_ENABLE_MAX_DELAY_SEC
+    // caps how long an idle boot-scan screen can hold the backpack off.
+    // (The analog path settles well before the floor, so it is unaffected.)
+    // A watchdog (elrs_watchdog_start) backstops whatever this gate misses.
+    time_t boot_time = time(NULL);
     bool elrs_backpack_started = false;
 
     for (;;) {
@@ -320,10 +336,16 @@ int main(int argc, char *argv[]) {
         source_status_timer();
         pthread_mutex_unlock(&lvgl_mutex);
 
-        if (!elrs_backpack_started && time(NULL) >= elrs_enable_at) {
-            elrs_backpack_started = true;
-            if (g_setting.elrs.enable)
-                enable_esp32();
+        if (!elrs_backpack_started) {
+            time_t elapsed = time(NULL) - boot_time;
+            bool settled = !g_boot_autoscan_running && elapsed >= ELRS_ENABLE_MIN_DELAY_SEC;
+            if (settled || elapsed >= ELRS_ENABLE_MAX_DELAY_SEC) {
+                elrs_backpack_started = true;
+                if (g_setting.elrs.enable) {
+                    enable_esp32();
+                    elrs_watchdog_start();
+                }
+            }
         }
 
         usleep(5000);

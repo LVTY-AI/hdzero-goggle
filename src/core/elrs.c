@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <log/log.h>
@@ -30,6 +31,7 @@
 #include "driver/beep.h"
 #include "driver/dm5680.h"
 #include "driver/dm6302.h"
+#include "driver/esp32.h"
 #include "driver/hardware.h"
 #include "driver/rtc.h"
 #include "driver/uart.h"
@@ -620,6 +622,50 @@ void elrs_clear_osd() {
             elrs_osd_overlay[i][j] = 0x20;
         }
     }
+}
+
+// A boot-time bring-up race can still occasionally leave the backpack ESP
+// wedged (see the readiness-gated power-on in main.c). This is a background
+// backstop: if the backpack stops answering a basic MSP heartbeat, power-
+// cycle it once. Capped at one recovery per session -- the backpack's own
+// EEPROM boot counter enters WiFi/bind mode after 3 boots within 30s (its
+// "triple tap" binding feature), and one initial boot plus one recovery boot
+// stays safely under that.
+#define ELRS_WATCHDOG_TICK_MS    2000
+#define ELRS_WATCHDOG_MISS_LIMIT 5 // ~10s of silence before recovering
+
+volatile time_t g_elrs_msp_busy_until = 0;
+static uint8_t watchdog_misses = 0;
+static bool watchdog_recovered = false;
+
+static void elrs_watchdog_timer(struct _lv_timer_t *timer) {
+    uint8_t version[32] = {0};
+    uint16_t size = sizeof(version) - 1;
+
+    if (!g_setting.elrs.enable || watchdog_recovered) {
+        lv_timer_del(timer);
+        return;
+    }
+
+    if (time(NULL) < g_elrs_msp_busy_until)
+        return; // a UI flow (Bind, WiFi start, version/UID lookup) owns the response slot right now
+
+    if (msp_read_resposne(MSP_GET_BP_VERSION, &size, version)) {
+        watchdog_misses = 0;
+        return;
+    }
+
+    msp_send_packet(MSP_GET_BP_VERSION, MSP_PACKET_COMMAND, 0, NULL);
+    if (++watchdog_misses >= ELRS_WATCHDOG_MISS_LIMIT) {
+        LOGE("[ELRS] backpack heartbeat lost, power-cycling once");
+        watchdog_recovered = true;
+        disable_esp32();
+        enable_esp32();
+    }
+}
+
+void elrs_watchdog_start() {
+    lv_timer_create(elrs_watchdog_timer, ELRS_WATCHDOG_TICK_MS, NULL);
 }
 
 static void handle_osd(uint8_t payload[], uint8_t size) {
