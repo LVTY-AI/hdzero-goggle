@@ -27,6 +27,7 @@ static uint8_t ims_state;
 static setting_image_source_t ims_source = SETTING_IMAGE_SOURCE_HDZERO;
 static setting_image_source_t ims_active_source = SETTING_IMAGE_SOURCE_HDZERO;
 static bool ims_analog_is_av_in;
+static bool ims_hdzero_loading;
 // global
 bool g_bShowIMS = false;
 
@@ -133,15 +134,25 @@ static void ims_page_init(setting_image_source_t source) {
     ims_page.selection = IMS_SOURCE;
 }
 
+static void ims_set_hdzero_loading(bool loading) {
+    ims_hdzero_loading = loading;
+    ims_update();
+    lv_timer_handler();
+}
+
 static void show_ims_slider(uint8_t index) {
     ims_slider_t *p_slider = &ims_page.items[index];
 
     char buf[32];
     lv_point_t points[2];
+    bool source_loading = index == IMS_SOURCE && ims_hdzero_loading;
 
     if (p_slider->state == 0) { // 0=not selected, 1=selected, 2=slider bar selected
         label_dsc.color = DARK_GRAY;
         line_dsc.color = DARK_GRAY;
+    } else if (source_loading) {
+        label_dsc.color = ((lv_tick_get() / 400) % 2) ? LIGHT_WHITE : LIGHT_GREEN;
+        line_dsc.color = label_dsc.color;
     } else if (p_slider->state == 1) {
         label_dsc.color = LIGHT_WHITE;
         line_dsc.color = LIGHT_WHITE;
@@ -152,6 +163,8 @@ static void show_ims_slider(uint8_t index) {
 
     lv_canvas_draw_text(canvas_ims, p_slider->x, p_slider->y, 200, &label_dsc, p_slider->title);
     if (p_slider->type == 0) {
+        if (source_loading)
+            lv_canvas_draw_text(canvas_ims, p_slider->x + 190, p_slider->y, 200, &label_dsc, "Loading...");
         return;
     }
 
@@ -283,8 +296,14 @@ void ims_switch_source(setting_image_source_t source) {
 
 static void ims_confirm_source(void) {
     if (ims_source != ims_active_source) {
+        bool hdzero_loading = ims_source == SETTING_IMAGE_SOURCE_HDZERO;
+
+        if (hdzero_loading)
+            ims_set_hdzero_loading(true);
         ims_switch_input(ims_source);
         ims_set_source(ims_source);
+        if (hdzero_loading)
+            ims_set_hdzero_loading(false);
     }
 
     ims_page.items[IMS_SOURCE].state = 1;
