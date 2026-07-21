@@ -658,6 +658,19 @@ void settings_load(void) {
     // analog rssi
     g_setting.analog_rssi.calib_min = ini_getl("analog_rssi", "calib_min", g_setting_defaults.analog_rssi.calib_min, SETTING_INI);
     g_setting.analog_rssi.calib_max = ini_getl("analog_rssi", "calib_max", g_setting_defaults.analog_rssi.calib_max, SETTING_INI);
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    if (g_setting.analog_rssi.calib_max <= g_setting.analog_rssi.calib_min) {
+        uint16_t old_min = g_setting.analog_rssi.calib_min;
+        uint16_t old_max = g_setting.analog_rssi.calib_max;
+        g_setting.analog_rssi.calib_min = g_setting_defaults.analog_rssi.calib_min;
+        g_setting.analog_rssi.calib_max = g_setting_defaults.analog_rssi.calib_max;
+        ini_putl("analog_rssi", "calib_min", g_setting.analog_rssi.calib_min, SETTING_INI);
+        ini_putl("analog_rssi", "calib_max", g_setting.analog_rssi.calib_max, SETTING_INI);
+        LOGW("restored invalid analog_rssi calibration %u-%u to %u-%u mV",
+             old_min, old_max, g_setting.analog_rssi.calib_min,
+             g_setting.analog_rssi.calib_max);
+    }
+#endif
 
     // language
     if (!language_config()) {

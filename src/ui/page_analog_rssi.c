@@ -95,6 +95,23 @@ static void on_enter() {
     rtc6715.set_ch(33); // R1
 }
 
+static int capture_rssi_mv() {
+    int total_mv = 0;
+
+    // The background RSSI thread only updates rtc6715.rssi during video.
+    // Read the GPADC here so calibration cannot capture a stale value eight
+    // times and save an invalid min/max pair.
+    for (int i = 0; i < 8; i++) {
+        int sample_mv = rtc6715_get_rssi();
+        if (sample_mv < 0)
+            sample_mv = 0;
+        rtc6715.rssi = sample_mv;
+        total_mv += sample_mv;
+    }
+
+    return total_mv >> 3;
+}
+
 static void on_exit() {
     rtc6715.init(0, 0);
 }
@@ -112,17 +129,12 @@ static void on_roller(uint8_t key) {
 
 static void on_click(uint8_t key, int sel) {
     char buf[128];
-    int volt_mv = 0;
+    int volt_mv;
 
     switch (sel) {
     case ROW_CALIBRATE_RSSI_MIN:
         LOGI("capture rssi voltage");
-
-        for (int i = 0; i < 8; i++) {
-            volt_mv += rtc6715.rssi;
-        }
-
-        volt_mv = volt_mv >> 3;
+        volt_mv = capture_rssi_mv();
         ini_putl("analog_rssi", "calib_min", (uint16_t)volt_mv, SETTING_INI);
         g_setting.analog_rssi.calib_min = ini_getl("analog_rssi", "calib_min", g_setting_defaults.analog_rssi.calib_max, SETTING_INI);
 
@@ -134,12 +146,7 @@ static void on_click(uint8_t key, int sel) {
 
     case ROW_CALIBRATE_RSSI_MAX:
         LOGI("capture rssi voltage");
-
-        for (int i = 0; i < 8; i++) {
-            volt_mv += rtc6715.rssi;
-        }
-
-        volt_mv = volt_mv >> 3;
+        volt_mv = capture_rssi_mv();
         ini_putl("analog_rssi", "calib_max", (uint16_t)volt_mv, SETTING_INI);
         g_setting.analog_rssi.calib_max = ini_getl("analog_rssi", "calib_max", g_setting_defaults.analog_rssi.calib_max, SETTING_INI);
 
