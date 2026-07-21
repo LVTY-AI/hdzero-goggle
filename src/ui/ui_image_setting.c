@@ -16,9 +16,6 @@
 #include "lang/language.h"
 #include "ui/page_common.h"
 
-#define IMS_LOADING_LETTER_MS 200
-#define IMS_LOADING_LETTER_COUNT 7
-
 ///////////////////////////////////////////////////////////////////////////////
 // locals
 static lv_obj_t *canvas_ims;
@@ -144,18 +141,10 @@ static void ims_set_hdzero_loading(bool loading) {
 }
 
 static void ims_draw_loading_status(int16_t x, int16_t y) {
-    static const char loading[] = "Loading...";
     lv_draw_label_dsc_t status_dsc = label_dsc;
-    char lit[IMS_LOADING_LETTER_COUNT + 1];
-    uint8_t lit_count = (lv_tick_get() / IMS_LOADING_LETTER_MS) % IMS_LOADING_LETTER_COUNT + 1;
 
-    status_dsc.color = LIGHT_WHITE;
-    lv_canvas_draw_text(canvas_ims, x, y, 200, &status_dsc, loading);
-
-    memcpy(lit, loading, lit_count);
-    lit[lit_count] = '\0';
     status_dsc.color = LIGHT_GREEN;
-    lv_canvas_draw_text(canvas_ims, x, y, 200, &status_dsc, lit);
+    lv_canvas_draw_text(canvas_ims, x, y, 200, &status_dsc, "Loading...");
 }
 
 static void show_ims_slider(uint8_t index) {
