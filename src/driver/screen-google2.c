@@ -182,11 +182,17 @@ static void screen_pattern(bool enable, uint8_t mode, uint8_t speed) {
     screen_display(1);
 }
 
-static void screen_vtmg(int mode) {
-    static int last_mode = 0;
+// G2 mirror of screen-goggle.c's screen_vtmg_invalidate(): force the next
+// screen_vtmg() to reprogram the OLED even if the mode arg is unchanged.
+static int screen_vtmg_last_mode = 0;
 
-    if (last_mode != mode) {
-        last_mode = mode;
+void screen_vtmg_invalidate(void) {
+    screen_vtmg_last_mode = -1;
+}
+
+static void screen_vtmg(int mode) {
+    if (screen_vtmg_last_mode != mode) {
+        screen_vtmg_last_mode = mode;
         switch (mode) {
         case 0:
             oled_write(0x8001, 0x00E0, 2);
