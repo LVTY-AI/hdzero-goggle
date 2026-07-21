@@ -6,6 +6,7 @@ extern "C" {
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "core/msp_displayport.h"
 
@@ -75,9 +76,17 @@ typedef enum {
 
 extern uint16_t elrs_osd[HD_VMAX][HD_HMAX];
 
+// Suppresses the backpack watchdog heartbeat while a UI flow (Bind, WiFi
+// start, version/UID lookup) is driving its own MSP request/response
+// exchange, so the two don't steal each other's response off the single
+// shared response slot. Set to time(NULL) + <expected duration> before such
+// a flow starts.
+extern volatile time_t g_elrs_msp_busy_until;
+
 void elrs_init();
 bool elrs_headtracking_enabled();
 void elrs_clear_osd();
+void elrs_watchdog_start();
 
 void msp_send_packet(uint16_t function, mspPacketType_e type, uint16_t payload_size, uint8_t *payload);
 bool msp_read_resposne(uint16_t function, uint16_t *payload_size, uint8_t *payload);

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <log/log.h>
@@ -191,6 +192,9 @@ static esp_loader_error_t flash_esp32_file(char *path, uint32_t offset) {
 }
 
 static esp_loader_error_t flash_esp32() {
+    // Keep the watchdog from "recovering" a chip that's intentionally
+    // offline for flashing (or freshly re-booted right after).
+    g_elrs_msp_busy_until = time(NULL) + 120;
     disable_esp32();
 
     esp_loader_connect_args_t config = ESP_LOADER_CONNECT_DEFAULT();
@@ -1046,6 +1050,7 @@ static void page_version_enter() {
 
     if (ROW_UPDATE_ESP32 > 0) {
         lv_label_set_text(label_esp, "");
+        g_elrs_msp_busy_until = time(NULL) + 6; // covers the ~5s version poll burst below
         msp_send_packet(MSP_GET_BP_VERSION, MSP_PACKET_COMMAND, 0, NULL);
         lv_timer_t *timer = lv_timer_create(elrs_version_timer, 250, NULL);
         lv_timer_set_repeat_count(timer, 20);

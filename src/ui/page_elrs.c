@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <log/log.h>
@@ -148,6 +149,7 @@ static void elrs_status_timer(struct _lv_timer_t *timer) {
 }
 
 static void request_uid() {
+    g_elrs_msp_busy_until = time(NULL) + 6; // covers the ~5s status poll burst below
     msp_send_packet(MSP_GET_BP_STATUS, MSP_PACKET_COMMAND, 0, NULL);
     lv_timer_t *timer = lv_timer_create(elrs_status_timer, 250, NULL);
     lv_timer_set_repeat_count(timer, 20);
@@ -190,6 +192,7 @@ static void page_elrs_on_click(uint8_t key, int sel) {
     {
         snprintf(buf, sizeof(buf), "%s...", _lang("Starting"));
         lv_label_set_text(label_wifi_status, buf);
+        g_elrs_msp_busy_until = time(NULL) + 2;
         msp_send_packet(MSP_SET_MODE, MSP_PACKET_COMMAND, 1, (uint8_t *)"W");
         lv_timer_handler();
         if (msp_await_resposne(MSP_SET_MODE, 1, (uint8_t *)"P", 1000) != AWAIT_SUCCESS) {
@@ -203,6 +206,7 @@ static void page_elrs_on_click(uint8_t key, int sel) {
     {
         snprintf(buf, sizeof(buf), "%s...", _lang("Starting"));
         lv_label_set_text(label_bind_status, buf);
+        g_elrs_msp_busy_until = time(NULL) + 125; // covers the start ack + up to 120s bind wait
         msp_send_packet(MSP_SET_MODE, MSP_PACKET_COMMAND, 1, (uint8_t *)"B");
         lv_timer_handler();
         if (msp_await_resposne(MSP_SET_MODE, 1, (uint8_t *)"P", 1000) != AWAIT_SUCCESS) {
