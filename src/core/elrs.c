@@ -505,6 +505,11 @@ void msp_process_packet() {
                 rtc_set_clock(&rd);
             }
             break;
+        case MSP_SET_DVR_NAME:
+            // A race timer naming the next DVR recording, e.g. "WinterCup-Qual1-H2".
+            // dvr_set_race_label ignores it unless the ELRS naming scheme is active.
+            dvr_set_race_label(packet.payload, packet.payload_size);
+            break;
         }
     } else if (packet.type == MSP_PACKET_RESPONSE) {
         memcpy(&response_packet, &packet, sizeof(response_packet));

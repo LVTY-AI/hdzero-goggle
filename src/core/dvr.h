@@ -32,6 +32,8 @@ void dvr_cmd(osd_dvr_cmd_t cmd);
 void dvr_update_vi_conf(video_resolution_t fmt);
 void dvr_toggle();
 void dvr_star();
+void dvr_set_race_label(const uint8_t *label, uint16_t len);
+void dvr_clear_race_label(void);
 
 #ifdef __cplusplus
 }

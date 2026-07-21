@@ -125,7 +125,9 @@ void record_dumpParams(RecordParams_t *params) {
     LOGD("full: %d MB", params->minDiskSize);
     LOGD("duration: %d minutes", params->packDuration / (60 * 1000));
     LOGD("audio   : %s", params->enableAudio ? "yes" : "no");
-    LOGD("naming  : %s", params->fileNaming == NAMING_DATE ? "Date" : "Contiguous");
+    const char *naming = params->fileNaming == NAMING_DATE ? "Date" :
+                         params->fileNaming == NAMING_ELRS ? "ELRS" : "Contiguous";
+    LOGD("naming  : %s", naming);
 }
 
 void record_dumpVeParams(VencParams_t *params) {
@@ -328,7 +330,12 @@ int record_start(RecordContext_t *recCtx) {
     char sFile[256];
     switch (recCtx->params.fileNaming) {
     case NAMING_CONTIGUOUS:
-        REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.packType);
+    case NAMING_ELRS:
+        if (recCtx->params.fileNaming == NAMING_ELRS && recCtx->params.label[0]) {
+            REC_labelPathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.label, recCtx->params.packType);
+        } else {
+            REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.packType);
+        }
         break;
     case NAMING_DATE: {
         const time_t t = time(0);
@@ -436,7 +443,12 @@ int record_start(RecordContext_t *recCtx) {
 
     switch (recCtx->params.fileNaming) {
     case NAMING_CONTIGUOUS:
-        REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, REC_packSnapTYPE);
+    case NAMING_ELRS:
+        if (recCtx->params.fileNaming == NAMING_ELRS && recCtx->params.label[0]) {
+            REC_labelPathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.label, REC_packSnapTYPE);
+        } else {
+            REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, REC_packSnapTYPE);
+        }
         break;
     case NAMING_DATE:
         snprintf(sFile, sizeof(sFile), "%s%s.%s", recCtx->params.packPath, dateString, REC_packSnapTYPE);
@@ -495,7 +507,12 @@ bool record_pack(RecordContext_t *recCtx) {
     char sFile[256];
     switch (recCtx->params.fileNaming) {
     case NAMING_CONTIGUOUS:
-        REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.packType);
+    case NAMING_ELRS:
+        if (recCtx->params.fileNaming == NAMING_ELRS && recCtx->params.label[0]) {
+            REC_labelPathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.label, recCtx->params.packType);
+        } else {
+            REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.packType);
+        }
         break;
     case NAMING_DATE: {
         const time_t t = time(0);
@@ -564,7 +581,12 @@ bool record_pack(RecordContext_t *recCtx) {
 
     switch (recCtx->params.fileNaming) {
     case NAMING_CONTIGUOUS:
-        REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, REC_packSnapTYPE);
+    case NAMING_ELRS:
+        if (recCtx->params.fileNaming == NAMING_ELRS && recCtx->params.label[0]) {
+            REC_labelPathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, recCtx->params.label, REC_packSnapTYPE);
+        } else {
+            REC_filePathGet(sFile, sizeof(sFile), recCtx->params.packPath, REC_packPREFIX, nbFileIndex, REC_packSnapTYPE);
+        }
         break;
     case NAMING_DATE:
         snprintf(sFile, sizeof(sFile), "%s%s.%s", recCtx->params.packPath, dateString, REC_packSnapTYPE);

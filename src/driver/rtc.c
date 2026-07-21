@@ -234,7 +234,7 @@ void rtc_init() {
     LOGI("rtc_init %s detected a battery",
          (g_rtc_has_battery ? "has" : "has NOT"));
 
-    if (!g_rtc_has_battery) {
+    if (!g_rtc_has_battery && g_setting.record.naming == SETTING_NAMING_DATE) {
         g_setting.record.naming = SETTING_NAMING_CONTIGUOUS;
         ini_putl("record", "naming", g_setting.record.naming, SETTING_INI);
     }

@@ -561,6 +561,10 @@ void settings_load(void) {
     else if (g_setting.record.linein_gain > 7)
         g_setting.record.linein_gain = 7;
     g_setting.record.naming = ini_getl("record", "naming", g_setting_defaults.record.naming, SETTING_INI);
+    if (g_setting.record.naming < SETTING_NAMING_CONTIGUOUS ||
+        g_setting.record.naming > SETTING_NAMING_ELRS) {
+        g_setting.record.naming = g_setting_defaults.record.naming;
+    }
     g_setting.record.stop_delay_seconds = ini_getl("record", "stop_delay_seconds", g_setting_defaults.record.stop_delay_seconds, SETTING_INI);
     if (g_setting.record.stop_delay_seconds > 30)
         g_setting.record.stop_delay_seconds = 30;

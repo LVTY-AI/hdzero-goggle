@@ -102,7 +102,8 @@ typedef enum {
 
 typedef enum {
     SETTING_NAMING_CONTIGUOUS,
-    SETTING_NAMING_DATE
+    SETTING_NAMING_DATE,
+    SETTING_NAMING_ELRS
 } setting_record_naming_t;
 
 typedef struct {

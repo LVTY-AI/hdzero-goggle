@@ -9,6 +9,7 @@
 
 #include "../core/common.hh"
 #include "core/app_state.h"
+#include "core/dvr.h"
 #include "driver/rtc.h"
 #include "lang/language.h"
 #include "page_common.h"
@@ -93,7 +94,7 @@ static lv_obj_t *page_record_create(lv_obj_t *parent, panel_arr_t *arr) {
     create_btn_group_item(&btn_group_format, cont, 2, _lang("Record Format"), "MP4", "TS", "", "", ROW_RECORD_FORMAT);
     create_btn_group_item(&btn_group_bitrate_scale, cont, 3, _lang("Record Bitrate"), _lang("Normal"), "1/2", "1/4", "", ROW_RECORD_BITRATE);
     create_btn_group_item(&btn_group_record_osd, cont, 2, _lang("Record OSD"), _lang("Yes"), _lang("No"), "", "", ROW_RECORD_OSD);
-    create_btn_group_item(&btn_group_file_naming, cont, 2, _lang("Naming Scheme"), _lang("Digits"), _lang("Date"), "", "", ROW_NAMING_SCHEME);
+    create_btn_group_item(&btn_group_file_naming, cont, 3, _lang("Naming Scheme"), _lang("Digits"), _lang("Date"), "ELRS", "", ROW_NAMING_SCHEME);
     create_slider_item(&slider_group_stop_delay, cont, _lang("Auto DVR Stop Delay"), STOP_DELAY_MAX, g_setting.record.stop_delay_seconds, ROW_STOP_DELAY);
     snprintf(buf, sizeof(buf), "< %s", _lang("Back"));
     create_label_item(cont, buf, 1, ROW_BACK, 1);
@@ -180,6 +181,9 @@ static void page_record_on_click(uint8_t key, int sel) {
             btn_group_toggle_sel(&btn_group_file_naming);
             g_setting.record.naming = btn_group_get_sel(&btn_group_file_naming);
             ini_putl("record", "naming", g_setting.record.naming, SETTING_INI);
+            if (g_setting.record.naming != SETTING_NAMING_ELRS) {
+                dvr_clear_race_label();
+            }
         }
     } else if (sel == ROW_STOP_DELAY) {
         stop_delay_focused = true;

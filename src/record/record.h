@@ -43,7 +43,8 @@ typedef enum
 
 typedef enum {
     NAMING_CONTIGUOUS,
-    NAMING_DATE
+    NAMING_DATE,
+    NAMING_ELRS
 } FileNaming_t;
 
 typedef struct
@@ -56,6 +57,7 @@ typedef struct
     uint64_t    packSize;
     bool        enableAudio;
     FileNaming_t fileNaming;
+    char        label[REC_labelMAXLEN];
 } RecordParams_t;
 
 typedef struct
