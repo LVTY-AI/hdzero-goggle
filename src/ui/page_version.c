@@ -991,7 +991,6 @@ static void page_version_on_update(uint32_t delta_ms) {
 uint8_t command_monitor(char *cmd) {
     FILE *stream;
     char buf[128];
-    size_t rsize = 0;
     uint8_t ret;
 
     stream = popen(cmd, "r");
@@ -1000,8 +999,12 @@ uint8_t command_monitor(char *cmd) {
 
     LOGI("---%s---", cmd);
     ret = 0;
-    do {
-        rsize = fread(buf, sizeof(char), sizeof(buf), stream);
+    // Read the script's output a line at a time. fgets always
+    // NUL-terminates and never splits a status token across reads, so the
+    // final "all done" is detected reliably. The old fixed-size fread()
+    // chopped output into 128-byte chunks and could straddle "all done"
+    // across a boundary, reporting FAILED on a successful update.
+    while (fgets(buf, sizeof(buf), stream)) {
         LOGI("%s", buf);
         if (strstr(buf, "all done")) {
             ret = 1;
@@ -1013,7 +1016,7 @@ uint8_t command_monitor(char *cmd) {
             ret = 3;
             break;
         }
-    } while (rsize == sizeof(buf));
+    }
     pclose(stream);
     LOGI("");
     return ret;
