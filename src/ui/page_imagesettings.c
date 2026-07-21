@@ -27,6 +27,18 @@ static slider_group_t slider_group3;
 static slider_group_t slider_group4;
 static slider_group_t slider_group5;
 
+static setting_image_source_t image_source_from_source(source_t source) {
+    switch (source) {
+    case SOURCE_AV_IN:
+    case SOURCE_AV_MODULE:
+        return SETTING_IMAGE_SOURCE_ANALOG;
+    case SOURCE_HDMI_IN:
+    case SOURCE_HDZERO:
+    default:
+        return SETTING_IMAGE_SOURCE_HDZERO;
+    }
+}
+
 static lv_obj_t *page_imagesettings_create(lv_obj_t *parent, panel_arr_t *arr) {
     char buf[288];
     lv_obj_t *page = lv_menu_page_create(parent, NULL);
@@ -53,10 +65,11 @@ static lv_obj_t *page_imagesettings_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     create_select_item(arr, cont);
 
+    const setting_image_video_t *video = settings_image_video(SETTING_IMAGE_SOURCE_HDZERO);
     create_slider_item(&slider_group, cont, "Panel", 12, g_setting.image.oled, 0);
-    create_slider_item(&slider_group1, cont, _lang("Brightness"), 78, g_setting.image.brightness, 1);
-    create_slider_item(&slider_group2, cont, _lang("Saturation"), 47, g_setting.image.saturation, 2);
-    create_slider_item(&slider_group3, cont, _lang("Contrast"), 47, g_setting.image.contrast, 3);
+    create_slider_item(&slider_group1, cont, _lang("Brightness"), 78, video->brightness, 1);
+    create_slider_item(&slider_group2, cont, _lang("Saturation"), 47, video->saturation, 2);
+    create_slider_item(&slider_group3, cont, _lang("Contrast"), 47, video->contrast, 3);
     snprintf(buf, sizeof(buf), "Panel %s", _lang("Auto Off"));
     create_slider_item(&slider_group4, cont, buf, 3, g_setting.image.auto_off, 4);
 
@@ -66,7 +79,7 @@ static lv_obj_t *page_imagesettings_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_t *label2 = lv_label_create(cont);
     snprintf(buf, sizeof(buf), "%s.\n %s.",
              _lang("To change image settings, click the Enter button to enter video mode"),
-             _lang("Make sure a HDZero VTX or analog VTX is powered on for live video"));
+             _lang("Make sure a HDZero VTX or analog VTX is active for live video"));
     lv_label_set_text(label2, buf);
     lv_obj_set_style_text_font(label2, UI_PAGE_LABEL_FONT, 0);
     lv_obj_set_style_text_align(label2, LV_TEXT_ALIGN_LEFT, 0);
@@ -83,24 +96,22 @@ static lv_obj_t *page_imagesettings_create(lv_obj_t *parent, panel_arr_t *arr) {
 
 void set_slider_value() {
     char buf[32];
-    //	LOGI("set_slider_value %d %d %d %d.",g_setting.image.oled,g_setting.image.brightness,
-    //											 g_setting.image.saturation,g_setting.image.contrast);
-
+    const setting_image_video_t *video = settings_image_video(SETTING_IMAGE_SOURCE_HDZERO);
     snprintf(buf, sizeof(buf), "%d", g_setting.image.oled);
     lv_label_set_text(slider_group.label, buf);
     lv_slider_set_value(slider_group.slider, g_setting.image.oled, LV_ANIM_OFF);
 
-    snprintf(buf, sizeof(buf), "%d", g_setting.image.brightness);
+    snprintf(buf, sizeof(buf), "%d", video->brightness);
     lv_label_set_text(slider_group1.label, buf);
-    lv_slider_set_value(slider_group1.slider, g_setting.image.brightness, LV_ANIM_OFF);
+    lv_slider_set_value(slider_group1.slider, video->brightness, LV_ANIM_OFF);
 
-    snprintf(buf, sizeof(buf), "%d", g_setting.image.saturation);
+    snprintf(buf, sizeof(buf), "%d", video->saturation);
     lv_label_set_text(slider_group2.label, buf);
-    lv_slider_set_value(slider_group2.slider, g_setting.image.saturation, LV_ANIM_OFF);
+    lv_slider_set_value(slider_group2.slider, video->saturation, LV_ANIM_OFF);
 
-    snprintf(buf, sizeof(buf), "%d", g_setting.image.contrast);
+    snprintf(buf, sizeof(buf), "%d", video->contrast);
     lv_label_set_text(slider_group3.label, buf);
-    lv_slider_set_value(slider_group3.slider, g_setting.image.contrast, LV_ANIM_OFF);
+    lv_slider_set_value(slider_group3.slider, video->contrast, LV_ANIM_OFF);
 
     if (g_setting.image.auto_off == 4)
         strcpy(buf, _lang("Never"));
@@ -111,19 +122,23 @@ void set_slider_value() {
 }
 
 static void page_imagesettings_enter() {
-    app_state_push(APP_STATE_IMS);
+    setting_image_source_t image_source = image_source_from_source(g_source_info.source);
+
     if (SOURCE_HDZERO == g_source_info.source) {
         progress_bar.start = 1;
         HDZero_open(hdzero_effective_bw());
         app_switch_to_hdzero(true);
-        g_bShowIMS = true;
     } else if (SOURCE_HDMI_IN == g_source_info.source) {
-        app_state_push(APP_STATE_SUBMENU);
         g_bShowIMS = false;
+        return;
     } else {
         app_switch_to_analog(g_source_info.source == SOURCE_AV_IN);
-        g_bShowIMS = true;
     }
+
+    app_state_push(APP_STATE_IMS);
+    ims_set_source(image_source);
+    set_slider_value();
+    g_bShowIMS = true;
 }
 
 page_pack_t pp_imagesettings = {

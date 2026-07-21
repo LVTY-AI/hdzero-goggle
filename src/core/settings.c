@@ -72,15 +72,30 @@ const setting_t g_setting_defaults = {
     .image = {
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
         .oled = 8,
-        .saturation = 28,
-        .contrast = 25,
 #elif defined(HDZBOXPRO)
         .oled = 12,
-        .saturation = 47,
-        .contrast = 30,
 #endif
-        .brightness = 39,
         .auto_off = 1,
+        .analog = {
+            .brightness = 39,
+#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
+            .saturation = 28,
+            .contrast = 25,
+#elif defined(HDZBOXPRO)
+            .saturation = 47,
+            .contrast = 30,
+#endif
+        },
+        .hdzero = {
+            .brightness = 39,
+#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
+            .saturation = 28,
+            .contrast = 25,
+#elif defined(HDZBOXPRO)
+            .saturation = 47,
+            .contrast = 30,
+#endif
+        },
     },
     .ht = {
         .enable = false,
@@ -264,6 +279,26 @@ const setting_t g_setting_defaults = {
     },
     .has_all_features = true,
 };
+
+setting_image_video_t *settings_image_video(setting_image_source_t source) {
+    switch (source) {
+    case SETTING_IMAGE_SOURCE_ANALOG:
+        return &g_setting.image.analog;
+    case SETTING_IMAGE_SOURCE_HDZERO:
+    default:
+        return &g_setting.image.hdzero;
+    }
+}
+
+const setting_image_video_t *settings_image_video_defaults(setting_image_source_t source) {
+    switch (source) {
+    case SETTING_IMAGE_SOURCE_ANALOG:
+        return &g_setting_defaults.image.analog;
+    case SETTING_IMAGE_SOURCE_HDZERO:
+    default:
+        return &g_setting_defaults.image.hdzero;
+    }
+}
 
 int settings_put_osd_element_shown(bool show, char *config_name) {
     char setting_key[128];
@@ -532,11 +567,19 @@ void settings_load(void) {
 
     // image
     g_setting.image.oled = ini_getl("image", "oled", g_setting_defaults.image.oled, SETTING_INI);
-    g_setting.image.brightness = ini_getl("image", "brightness", g_setting_defaults.image.brightness, SETTING_INI);
-    g_setting.image.saturation = ini_getl("image", "saturation", g_setting_defaults.image.saturation, SETTING_INI);
-    g_setting.image.contrast = ini_getl("image", "contrast", g_setting_defaults.image.contrast, SETTING_INI);
     g_setting.image.auto_off = ini_getl("image", "auto_off", g_setting_defaults.image.auto_off, SETTING_INI);
 
+    // Keep the old image keys as the migration fallback for both source profiles.
+    int brightness = ini_getl("image", "brightness", g_setting_defaults.image.hdzero.brightness, SETTING_INI);
+    int saturation = ini_getl("image", "saturation", g_setting_defaults.image.hdzero.saturation, SETTING_INI);
+    int contrast = ini_getl("image", "contrast", g_setting_defaults.image.hdzero.contrast, SETTING_INI);
+
+    g_setting.image.analog.brightness = ini_getl("image", "analog_brightness", brightness, SETTING_INI);
+    g_setting.image.analog.saturation = ini_getl("image", "analog_saturation", saturation, SETTING_INI);
+    g_setting.image.analog.contrast = ini_getl("image", "analog_contrast", contrast, SETTING_INI);
+    g_setting.image.hdzero.brightness = ini_getl("image", "hdzero_brightness", brightness, SETTING_INI);
+    g_setting.image.hdzero.saturation = ini_getl("image", "hdzero_saturation", saturation, SETTING_INI);
+    g_setting.image.hdzero.contrast = ini_getl("image", "hdzero_contrast", contrast, SETTING_INI);
     // head tracker
     g_setting.ht.enable = settings_get_bool("ht", "enable", g_setting_defaults.ht.enable);
     g_setting.ht.max_angle = ini_getl("ht", "max_angle", g_setting_defaults.ht.max_angle, SETTING_INI);
