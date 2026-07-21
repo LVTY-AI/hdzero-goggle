@@ -25,8 +25,10 @@
 // first few MB of transport packets, collect the video PES PTS stamps (90kHz),
 // and take the median delta. Codec-agnostic (H.264 and H.265 alike), no
 // bitstream parsing. Returns whole fps, or 0 if the file isn't readable TS.
-#define TSPROBE_READ_MAX (4 * 1024 * 1024)
-#define TSPROBE_PTS_MAX  40
+#define TSPROBE_READ_MAX     (4 * 1024 * 1024)
+#define TSPROBE_PTS_MAX      40
+#define TSPROBE_CHUNK_PKTS   512
+#define TSPROBE_CHUNK_BYTES  (TSPROBE_CHUNK_PKTS * 188)
 
 static int tsprobe_cmp_u64(const void *a, const void *b) {
     uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
@@ -34,7 +36,6 @@ static int tsprobe_cmp_u64(const void *a, const void *b) {
 }
 
 static uint16_t awdmx_probeTsFps(const char *sFile) {
-    uint8_t pkt[188];
     uint64_t pts[TSPROBE_PTS_MAX];
     uint64_t deltas[TSPROBE_PTS_MAX];
     int nPts = 0, nDeltas = 0;
@@ -60,35 +61,62 @@ static uint16_t awdmx_probeTsFps(const char *sFile) {
         base = i;
     }
 
-    for (off_t off = base; off + 188 <= base + TSPROBE_READ_MAX && nPts < TSPROBE_PTS_MAX; off += 188) {
-        if (pread(fd, pkt, 188, off) != 188)
-            break;
-        if (pkt[0] != 0x47)
-            break;
-        if (!(pkt[1] & 0x40)) // payload_unit_start_indicator
-            continue;
-
-        int p = 4;
-        if (pkt[3] & 0x20) // adaptation field present
-            p += 1 + pkt[4];
-        if (p + 14 > 188)
-            continue;
-
-        // PES start for a video stream_id (0xE0-0xEF), with a PTS present.
-        if (pkt[p] != 0x00 || pkt[p + 1] != 0x00 || pkt[p + 2] != 0x01)
-            continue;
-        if ((pkt[p + 3] & 0xF0) != 0xE0)
-            continue;
-        if (!(pkt[p + 7] & 0x80)) // PTS_DTS_flags: PTS absent
-            continue;
-
-        const uint8_t *q = &pkt[p + 9];
-        pts[nPts++] = ((uint64_t)((q[0] >> 1) & 0x07) << 30) |
-                      ((uint64_t)q[1] << 22) |
-                      ((uint64_t)((q[2] >> 1) & 0x7F) << 15) |
-                      ((uint64_t)q[3] << 7) |
-                      ((uint64_t)(q[4] >> 1) & 0x7F);
+    // Read in large, packet-aligned chunks instead of one pread() per 188-byte
+    // packet -- the per-packet version could cost thousands of syscalls on a
+    // slow-PTS-density file, which is measurable overhead on flash storage.
+    uint8_t *buf = malloc(TSPROBE_CHUNK_BYTES);
+    if (!buf) {
+        close(fd);
+        return 0;
     }
+
+    off_t off = base;
+    while (off < base + TSPROBE_READ_MAX && nPts < TSPROBE_PTS_MAX) {
+        ssize_t n = pread(fd, buf, TSPROBE_CHUNK_BYTES, off);
+        if (n < 188)
+            break;
+
+        int nPkts = n / 188;
+        bool desync = false;
+        for (int k = 0; k < nPkts && nPts < TSPROBE_PTS_MAX; k++) {
+            const uint8_t *pkt = &buf[k * 188];
+            if (pkt[0] != 0x47) {
+                desync = true;
+                break;
+            }
+            if (!(pkt[1] & 0x40)) // payload_unit_start_indicator
+                continue;
+
+            int p = 4;
+            if (pkt[3] & 0x20) // adaptation field present
+                p += 1 + pkt[4];
+            if (p + 14 > 188)
+                continue;
+
+            // PES start for a video stream_id (0xE0-0xEF), with a PTS present.
+            if (pkt[p] != 0x00 || pkt[p + 1] != 0x00 || pkt[p + 2] != 0x01)
+                continue;
+            if ((pkt[p + 3] & 0xF0) != 0xE0)
+                continue;
+            if (!(pkt[p + 7] & 0x80)) // PTS_DTS_flags: PTS absent
+                continue;
+
+            const uint8_t *q = &pkt[p + 9];
+            pts[nPts++] = ((uint64_t)((q[0] >> 1) & 0x07) << 30) |
+                          ((uint64_t)q[1] << 22) |
+                          ((uint64_t)((q[2] >> 1) & 0x7F) << 15) |
+                          ((uint64_t)q[3] << 7) |
+                          ((uint64_t)(q[4] >> 1) & 0x7F);
+        }
+
+        if (desync)
+            break;
+        off += (off_t)nPkts * 188;
+        if (n < TSPROBE_CHUNK_BYTES)
+            break; // short read: EOF
+    }
+
+    free(buf);
     close(fd);
 
     // PTS arrive in decode order; sort so B-frame reordering can't produce
