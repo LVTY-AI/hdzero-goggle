@@ -606,6 +606,64 @@ void Display_UI() {
     pthread_mutex_unlock(&hardware_mutex);
 }
 
+bool Display_Playback(int fps) {
+    // Pick a panel refresh that matches the clip so playback isn't judder-capped
+    // by the 720p60 UI mode. Keeps the UI/SoC source path (Display_VO_SWITCH(0)).
+    vdpo_tmg_t target;
+    if (fps >= 95)
+        target = VDPO_TMG_720P100; // 100fps clips
+    else if (fps >= 85)
+        target = VDPO_TMG_720P90; // 90fps clips
+    else if (fps <= 55)
+        target = VDPO_TMG_720P50; // 50fps clips (e.g. PAL)
+    else
+        target = VDPO_TMG_720P60; // 60fps -> UI default
+
+    pthread_mutex_lock(&hardware_mutex);
+    if (g_hw_stat.vdpo_tmg == target) {
+        pthread_mutex_unlock(&hardware_mutex);
+        return false; // already optimal, nothing to do
+    }
+
+    g_hw_stat.source_mode = SOURCE_MODE_UI;
+    screen.display(0);
+    I2C_Write(ADDR_FPGA, 0x8C, 0x00);
+
+    MFPGA_Pattern(0, 0, 0);
+
+    I2C_Write(ADDR_FPGA, 0x8d, 0x14);
+    I2C_Write(ADDR_FPGA, 0x8e, 0x84);
+    I2C_Write(ADDR_FPGA, 0x80, 0x00);
+    I2C_Write(ADDR_FPGA, 0x84, 0x11);
+
+    if (target == VDPO_TMG_720P100) {
+        system_exec("dispw -s vdpo 720p30"); // 100fps actually
+        g_hw_stat.vdpo_tmg = VDPO_TMG_720P100;
+        Display_VO_SWITCH(0);
+        pclk_phase_set(VIDEO_SOURCE_HDMI_IN_720P100);
+    } else if (target == VDPO_TMG_720P90) {
+        system_exec("dispw -s vdpo 720p90");
+        g_hw_stat.vdpo_tmg = VDPO_TMG_720P90;
+        Display_VO_SWITCH(0);
+        pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P90);
+    } else if (target == VDPO_TMG_720P50) {
+        system_exec("dispw -s vdpo 720p50");
+        g_hw_stat.vdpo_tmg = VDPO_TMG_720P50;
+        Display_VO_SWITCH(0);
+        pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_720P60_50);
+    } else {
+        system_exec("dispw -s vdpo 720p60");
+        g_hw_stat.vdpo_tmg = VDPO_TMG_720P60;
+        Display_VO_SWITCH(0);
+        pclk_phase_set(VIDEO_SOURCE_MENU_UI);
+    }
+
+    screen.display(1);
+    system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
+    pthread_mutex_unlock(&hardware_mutex);
+    return true;
+}
+
 void HDZero_open(int bw) {
     if (bw != g_hw_stat.hdz_bw) // reopen with different bw
         HDZero_Close();

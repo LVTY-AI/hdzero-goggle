@@ -597,6 +597,15 @@ void Display_UI() {
     pthread_mutex_unlock(&hardware_mutex);
 }
 
+bool Display_Playback(int fps) {
+    // Panel retiming for playback is not wired on this target: the M-FPGA's UI
+    // passthrough only supports the boot 1080p50 vdpo timing, so a plain vdpo
+    // switch blanks/garbles the panel. Keep stock behavior (BoxPro carries the
+    // working implementation).
+    (void)fps;
+    return false;
+}
+
 void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
 {
     screen.display(0);

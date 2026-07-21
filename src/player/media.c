@@ -17,6 +17,7 @@
 
 #include "adec2ao.h"
 #include "awdmx.h"
+#include "driver/hardware.h"
 #include "gogglemsg.h"
 #include "vdec2vo.h"
 #include "version.h"
@@ -66,6 +67,7 @@ typedef struct
     pthread_mutex_t mutex;
 
     int playingTime; // ms
+    bool retimed;    // true while the panel refresh is switched to match this clip
 } PlayContext_t;
 
 static int play_start(PlayContext_t *playCtx) {
@@ -240,6 +242,15 @@ media_t *media_instantiate(char *filename, notify_cb_t notify) {
         Vdec2VoParams_t vvParams;
         memset(&vvParams, 0, sizeof(vvParams));
 
+        int voWidth = VO_WIDTH;
+        int voHeight = VO_HEIGHT;
+#if PLAY_HDZERO
+        // Match the panel refresh to the clip so playback isn't judder-capped by
+        // the UI panel mode; Display_UI() restores it on exit.
+        int fps = playCtx->dmx->fps;
+        playCtx->retimed = Display_Playback(fps);
+#endif
+
         vvParams.initRotation = 0;
         vvParams.pixelFormat = MM_PIXEL_FORMAT_YVU_PLANAR_420;
 
@@ -247,8 +258,8 @@ media_t *media_instantiate(char *filename, notify_cb_t notify) {
         vvParams.vdec.width = playCtx->dmx->width;
         vvParams.vdec.height = playCtx->dmx->height;
 
-        vvParams.vo.width = VO_WIDTH;
-        vvParams.vo.height = VO_HEIGHT;
+        vvParams.vo.width = voWidth;
+        vvParams.vo.height = voHeight;
         vvParams.vo.intfType = VO_intfTYPE;
         vvParams.vo.intfSync = VO_intfSYNC;
         vvParams.vo.uiChn = VO_uiCHN;
@@ -288,6 +299,10 @@ failed:
     adec2ao_deinitSys(playCtx->aa);
     vdec2vo_deinitSys(playCtx->vv);
     awdmx_close(playCtx->dmx);
+#if PLAY_HDZERO
+    if (playCtx->retimed)
+        Display_UI(); // restore the default UI panel refresh
+#endif
     pthread_mutex_destroy(&playCtx->mutex);
     free(playCtx);
     LOGD("exit done");
@@ -305,6 +320,10 @@ void media_exit(media_t *media) {
     adec2ao_deinitSys(playCtx->aa);
     vdec2vo_deinitSys(playCtx->vv);
     awdmx_close(playCtx->dmx);
+#if PLAY_HDZERO
+    if (playCtx->retimed)
+        Display_UI(); // restore the default UI panel refresh
+#endif
     pthread_mutex_destroy(&playCtx->mutex);
     free(media->context);
     free(media);

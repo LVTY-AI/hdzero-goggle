@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 // #define LOG_NDEBUG 0
 #define LOG_TAG "awdmx"
@@ -18,6 +19,97 @@
 #include <mpi_demux.h>
 #include <mpi_sys.h>
 #include <mpi_vdec.h>
+
+// The mpegts demuxer leaves mFrameRate at 0 (mp4 fills it), so the panel-retime
+// never engages for .ts recordings. Recover the rate container-side: walk the
+// first few MB of transport packets, collect the video PES PTS stamps (90kHz),
+// and take the median delta. Codec-agnostic (H.264 and H.265 alike), no
+// bitstream parsing. Returns whole fps, or 0 if the file isn't readable TS.
+#define TSPROBE_READ_MAX (4 * 1024 * 1024)
+#define TSPROBE_PTS_MAX  40
+
+static int tsprobe_cmp_u64(const void *a, const void *b) {
+    uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
+    return (x > y) - (x < y);
+}
+
+static uint16_t awdmx_probeTsFps(const char *sFile) {
+    uint8_t pkt[188];
+    uint64_t pts[TSPROBE_PTS_MAX];
+    uint64_t deltas[TSPROBE_PTS_MAX];
+    int nPts = 0, nDeltas = 0;
+
+    int fd = open(sFile, O_RDONLY);
+    if (fd < 0)
+        return 0;
+
+    // Resync in case the file doesn't start on a packet boundary.
+    off_t base = 0;
+    {
+        uint8_t head[188 * 3];
+        ssize_t n = pread(fd, head, sizeof(head), 0);
+        int i;
+        for (i = 0; i + 188 * 2 < n; i++) {
+            if (head[i] == 0x47 && head[i + 188] == 0x47 && head[i + 188 * 2] == 0x47)
+                break;
+        }
+        if (i + 188 * 2 >= n) {
+            close(fd);
+            return 0; // not a transport stream
+        }
+        base = i;
+    }
+
+    for (off_t off = base; off + 188 <= base + TSPROBE_READ_MAX && nPts < TSPROBE_PTS_MAX; off += 188) {
+        if (pread(fd, pkt, 188, off) != 188)
+            break;
+        if (pkt[0] != 0x47)
+            break;
+        if (!(pkt[1] & 0x40)) // payload_unit_start_indicator
+            continue;
+
+        int p = 4;
+        if (pkt[3] & 0x20) // adaptation field present
+            p += 1 + pkt[4];
+        if (p + 14 > 188)
+            continue;
+
+        // PES start for a video stream_id (0xE0-0xEF), with a PTS present.
+        if (pkt[p] != 0x00 || pkt[p + 1] != 0x00 || pkt[p + 2] != 0x01)
+            continue;
+        if ((pkt[p + 3] & 0xF0) != 0xE0)
+            continue;
+        if (!(pkt[p + 7] & 0x80)) // PTS_DTS_flags: PTS absent
+            continue;
+
+        const uint8_t *q = &pkt[p + 9];
+        pts[nPts++] = ((uint64_t)((q[0] >> 1) & 0x07) << 30) |
+                      ((uint64_t)q[1] << 22) |
+                      ((uint64_t)((q[2] >> 1) & 0x7F) << 15) |
+                      ((uint64_t)q[3] << 7) |
+                      ((uint64_t)(q[4] >> 1) & 0x7F);
+    }
+    close(fd);
+
+    // PTS arrive in decode order; sort so B-frame reordering can't produce
+    // bogus deltas, then take the median frame interval.
+    if (nPts < 8)
+        return 0;
+    qsort(pts, nPts, sizeof(pts[0]), tsprobe_cmp_u64);
+    for (int i = 1; i < nPts; i++) {
+        if (pts[i] > pts[i - 1])
+            deltas[nDeltas++] = pts[i] - pts[i - 1];
+    }
+    if (nDeltas < 4)
+        return 0;
+    qsort(deltas, nDeltas, sizeof(deltas[0]), tsprobe_cmp_u64);
+    uint64_t med = deltas[nDeltas / 2];
+    if (med == 0)
+        return 0;
+
+    int fps = (int)((90000 + med / 2) / med);
+    return (fps >= 20 && fps <= 130) ? (uint16_t)fps : 0;
+}
 
 static ERRORTYPE MPPCallbackWrapper(void *cookie, MPP_CHN_S *pChn, MPP_EVENT_TYPE event, void *pEventData) {
     AwdmxContext_t *dmxCtx = (AwdmxContext_t *)cookie;
@@ -180,9 +272,15 @@ AwdmxContext_t *awdmx_open(char *sFile, CB_onDmxEof cbOnEof, void *context) {
     dmxCtx->videoNum = DemuxMediaInfo.mVideoNum;
     dmxCtx->width = DemuxMediaInfo.mVideoStreamInfo[nIndex].mWidth;
     dmxCtx->height = DemuxMediaInfo.mVideoStreamInfo[nIndex].mHeight;
+    dmxCtx->fps = (DemuxMediaInfo.mVideoStreamInfo[nIndex].mFrameRate + 500) / 1000; // x1000 -> whole fps
     dmxCtx->codecType = DemuxMediaInfo.mVideoStreamInfo[nIndex].mCodecType;
     dmxCtx->msDuration = DemuxMediaInfo.mDuration;
-    LOGD("stream info %dx%d", DemuxMediaInfo.mVideoStreamInfo[nIndex].mWidth, DemuxMediaInfo.mVideoStreamInfo[nIndex].mHeight);
+    LOGD("stream info %dx%d @ %dfps", DemuxMediaInfo.mVideoStreamInfo[nIndex].mWidth, DemuxMediaInfo.mVideoStreamInfo[nIndex].mHeight, dmxCtx->fps);
+
+    if (dmxCtx->fps == 0) {
+        dmxCtx->fps = awdmx_probeTsFps(sFile);
+        LOGD("stream info fps probed from PES PTS: %dfps", dmxCtx->fps);
+    }
 
     if (DemuxMediaInfo.mAudioNum > 0) {
         nIndex = DemuxMediaInfo.mAudioIndex;
