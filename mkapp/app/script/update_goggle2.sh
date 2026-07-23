@@ -225,12 +225,31 @@ if [ ! -z "$HDZ_BIN" ]; then
 	i2cset -y 3 0x49 0x10 0xff
 	echo "1"
 	echo "1" > /tmp/progress_goggle
+	# Estimate how long the RX+FPGA writes below will take from the real
+	# payload size, instead of assuming every platform's FPGA image is the
+	# same size - goggles2 writes its VA image twice (see check_mtd_write)
+	# and that image is over 2x the size of goggle/boxpro's, so a fixed
+	# assumption undercounts it badly and freezes the progress bar at its
+	# ceiling for however much longer the real write takes.
+	rx_size=$(wc -c < "${TMP_RX_BIN}" 2>/dev/null); rx_size=${rx_size:-0}
+	va_size=$(wc -c < "${TMP_VA_BIN}" 2>/dev/null); va_size=${va_size:-0}
+	if [ "$PLATFORM" == "HDZGOGGLE2" ]; then va_writes=2; else va_writes=1; fi
+	phase1_secs=$(( (rx_size * 2 + va_size * va_writes) / 53000 ))
+	[ $phase1_secs -lt 10 ] && phase1_secs=10
+	echo "$phase1_secs" > /tmp/progress_goggle_secs
 	update_rx
 	echo "6"
 	echo "6" > /tmp/progress_goggle
 	update_fpga
  	echo "45"
 	echo "45" > /tmp/progress_goggle
+	# Same idea for the app-partition write: estimate from the real app.fex
+	# size inside the archive rather than a fixed constant.
+	app_size=$(tar -tvf "${TMP_DIR}/hdzgoggle_app_ota.tar" app.fex 2>/dev/null | awk '{print $3}')
+	app_size=${app_size:-0}
+	phase2_secs=$(( app_size / 130000 ))
+	[ $phase2_secs -lt 10 ] && phase2_secs=10
+	echo "$phase2_secs" > /tmp/progress_goggle_secs
 	hdz_upgrade_app_out=$(hdz_upgrade_app.sh 2>&1)
 	hdz_upgrade_app_ret=$?
 	echo "$hdz_upgrade_app_out"

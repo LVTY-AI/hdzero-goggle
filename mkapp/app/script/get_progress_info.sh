@@ -13,3 +13,10 @@ then
 else
 	echo "0"
 fi
+
+if [ -f /tmp/progress_goggle_secs ]
+then
+	cat /tmp/progress_goggle_secs
+else
+	echo "0"
+fi
