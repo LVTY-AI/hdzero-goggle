@@ -1213,7 +1213,7 @@ void version_update_title() {
 
 ///////////////////////////////////////////////////////////////////////////////
 // for progress info
-static int get_progress_info(int *v0, int *v1) {
+static int get_progress_info(int *v0, int *v1, int *v2) {
     FILE *stream;
     char buf[128];
     memset(buf, '\0', sizeof(buf));
@@ -1221,52 +1221,75 @@ static int get_progress_info(int *v0, int *v1) {
     fread(buf, sizeof(char), sizeof(buf), stream);
     pclose(stream);
 
-    char *pos = strchr(buf, 0xa);
+    char *pos0 = strchr(buf, 0xa);
+    char *pos1 = pos0 ? strchr(pos0 + 1, 0xa) : NULL;
     char buf_v0[10];
     char buf_v1[10];
+    char buf_v2[10];
     memset(buf_v0, '\0', sizeof(buf_v0));
     memset(buf_v1, '\0', sizeof(buf_v1));
-    memcpy(buf_v0, buf, pos - buf);
-    memcpy(buf_v1, pos + 1, strlen(buf) - (pos - buf - 1));
+    memset(buf_v2, '\0', sizeof(buf_v2));
+    memcpy(buf_v0, buf, pos0 - buf);
+    if (pos1) {
+        memcpy(buf_v1, pos0 + 1, pos1 - (pos0 + 1));
+        memcpy(buf_v2, pos1 + 1, strlen(buf) - (pos1 - buf - 1));
+    } else {
+        memcpy(buf_v1, pos0 + 1, strlen(buf) - (pos0 - buf - 1));
+    }
 
     *v0 = atoi(buf_v0);
     *v1 = atoi(buf_v1);
+    *v2 = pos1 ? atoi(buf_v2) : 0;
     return 0;
 }
 
 void *thread_version(void *ptr) {
     int count = 0;
     int sec = 0;
-    int sec_last = 0;
     int v0 = 0;
     int v1 = 0;
+    int v2 = 0;
     bool is_step1 = false;
     bool is_step2 = false;
+    int step1_start_sec = 0;
+    int step2_start_sec = 0;
 
     int percentage = 0;
     for (;;) {
         if (is_need_update_progress) {
-            get_progress_info(&v0, &v1);
+            get_progress_info(&v0, &v1, &v2);
             if (v1 == 0) {
                 percentage = 0;
-            } else if (v1 == 1) {
+            } else if (v1 == 1 || v1 == 6) {
+                // v1==1 (RX write) and v1==6 (FPGA write) share one
+                // continuous 1%->45% climb, paced by the real payload size
+                // (v2, seconds, reported by the update script) instead of a
+                // fixed constant - a fixed constant undercounts platforms
+                // with a bigger FPGA image (e.g. goggles2), which used to
+                // freeze the bar at the old ceiling for however much longer
+                // the real write actually took.
                 if (is_step1 == false)
-                    percentage = 1;
+                    step1_start_sec = sec;
 
                 is_step1 = true;
 
-                if (sec_last != sec)
-                    percentage++;
+                int span = v2 > 0 ? v2 : 44;
+                int elapsed = sec - step1_start_sec;
+                percentage = 1 + (44 * elapsed) / span;
 
+                if (percentage < 1)
+                    percentage = 1;
                 if (percentage > 45)
                     percentage = 45;
             } else if (v1 == 45) {
                 if (is_step2 == false)
-                    percentage = 45;
+                    step2_start_sec = sec;
 
                 is_step2 = true;
-                if (sec_last != sec)
-                    percentage++;
+
+                int span = v2 > 0 ? v2 : 54;
+                int elapsed = sec - step2_start_sec;
+                percentage = 45 + (54 * elapsed) / span;
 
                 if (percentage > 99)
                     percentage = 99;
@@ -1277,7 +1300,6 @@ void *thread_version(void *ptr) {
                 percentage = 100;
             }
 
-            sec_last = sec;
             process_bar_update(v0, percentage);
             lv_timer_handler();
         }
