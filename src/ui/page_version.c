@@ -1243,6 +1243,18 @@ static int get_progress_info(int *v0, int *v1, int *v2) {
     return 0;
 }
 
+// This thread calls process_bar_update()/lv_timer_handler() below without
+// holding lvgl_mutex, unlike every other background thread touching LVGL
+// (see osd.c). That's currently safe only because flash_goggle()/flash_vtx()
+// run synchronously from the main loop's on_click dispatch (ui_main_menu.c)
+// while main.c holds lvgl_mutex for the whole update - which also blocks out
+// every other, correctly-locking background thread for that same window, so
+// nothing else can race this thread's unlocked calls. If the update flow is
+// ever made non-blocking (e.g. to back a live-progress readout instead of
+// the estimated one below), that invariant breaks and this becomes a real,
+// intermittent UI race - fix it then by releasing lvgl_mutex around the
+// blocking flash call instead of just locking it here (locking it here as-is
+// would deadlock the bar against the main thread for the entire update).
 void *thread_version(void *ptr) {
     int count = 0;
     int sec = 0;
