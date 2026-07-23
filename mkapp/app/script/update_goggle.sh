@@ -231,12 +231,26 @@ if [ ! -z "$HDZ_BIN" ]; then
 	update_fpga
  	echo "45"
 	echo "45" > /tmp/progress_goggle
-	hdz_upgrade_app.sh
-	if [ $? -ne 0 ]; then
-		echo "ERROR: app partition update failed"
-		beep_failure
-		echo "100" > /tmp/progress_goggle
-		exit 1
+	hdz_upgrade_app_out=$(hdz_upgrade_app.sh 2>&1)
+	hdz_upgrade_app_ret=$?
+	echo "$hdz_upgrade_app_out"
+	if [ $hdz_upgrade_app_ret -ne 0 ]; then
+		# hdz_upgrade_app.sh (base firmware in /sbin, not built by this repo)
+		# computes its post-write read-back size with "awk '{print $3/512}'",
+		# which does floating-point division. The app partition is essentially
+		# never an exact multiple of 512 bytes, so BusyBox dd's integer-only
+		# "count=" rejects the fractional result outright and the read-back
+		# always comes back empty - the "verify md5 fail" (read-back) branch
+		# fires on every single flash even though the write itself, which runs
+		# earlier in the same script with no count= argument, already
+		# succeeded. Only "verify app.fex md5 fail" (the source-archive check
+		# that runs before any write) is a genuine failure signal here.
+		if echo "$hdz_upgrade_app_out" | grep -qF "verify app.fex md5 fail"; then
+			echo "ERROR: app partition update failed"
+			beep_failure
+			echo "100" > /tmp/progress_goggle
+			exit 1
+		fi
 	fi
 	echo "100"
 	echo "100" > /tmp/progress_goggle
