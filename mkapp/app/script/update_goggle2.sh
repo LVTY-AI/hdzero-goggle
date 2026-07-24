@@ -244,11 +244,15 @@ if [ ! -z "$HDZ_BIN" ]; then
  	echo "45"
 	echo "45" > /tmp/progress_goggle
 	# Same idea for the app-partition write: estimate from the real app.fex
-	# size inside the archive rather than a fixed constant.
+	# size inside the archive rather than a fixed constant. hdz_upgrade_app.sh
+	# also does a sync() and an attempted (broken, see fix above) read-back
+	# verify after the write completes - a roughly fixed cost regardless of
+	# app.fex size, measured at ~20s on hardware - so it's added as a flat
+	# pad rather than folded into the bytes/sec rate, which would otherwise
+	# only scale with size and leave this fixed tail unaccounted for.
 	app_size=$(tar -tvf "${TMP_DIR}/hdzgoggle_app_ota.tar" app.fex 2>/dev/null | awk '{print $3}')
 	app_size=${app_size:-0}
-	phase2_secs=$(( app_size / 130000 ))
-	[ $phase2_secs -lt 10 ] && phase2_secs=10
+	phase2_secs=$(( app_size / 130000 + 20 ))
 	echo "$phase2_secs" > /tmp/progress_goggle_secs
 	hdz_upgrade_app_out=$(hdz_upgrade_app.sh 2>&1)
 	hdz_upgrade_app_ret=$?
