@@ -9,6 +9,7 @@
 #include "driver/fans.h"
 #include "driver/hardware.h"
 #include "driver/rtc6715.h"
+#include "driver/screen.h"
 #include "log/log.h"
 #include "ui/page_fans.h"
 
@@ -33,7 +34,7 @@ void go_sleep() {
     dvr_update_vi_conf(VR_720P60);
 #endif
 
-    hw_screen_on(0);
+    screen_set_inhibited(SCREEN_INHIBIT_SLEEP, true);
 
     // Turn off HDZero Receiver
     HDZero_Close();
@@ -63,7 +64,7 @@ void go_sleep() {
 void wake_up() {
     LOGI("Exiting sleep mode");
     isSleeping = false;
-    hw_screen_on(1); // Turn on display
+    screen_set_inhibited(SCREEN_INHIBIT_SLEEP, false);
 
     Analog_Module_Power(1);
     g_setting.fans.right_speed = fan_speed_save.right;

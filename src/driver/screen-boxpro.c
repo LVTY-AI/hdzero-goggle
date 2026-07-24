@@ -118,7 +118,7 @@ static void screen_power_down() {
     I2C_Write(ADDR_FPGA, 0x8b, 0x81);
 }
 
-static void screen_display(bool on) {
+static void screen_display_raw(bool on) {
     static int last_on = 1;
 
     if (last_on != on) {
@@ -150,7 +150,8 @@ static void MFPGA_SetRatio(bool ratio) {};
 
 screen_t screen = {
     .start_up = screen_start_up,
-    .display = screen_display,
+    .display = screen_display_request,
+    .display_raw = screen_display_raw,
     .brightness = screen_brightness,
     .pattern = screen_pattern,
     .vtmg = screen_vtmg,

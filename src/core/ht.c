@@ -133,7 +133,7 @@ static void detect_motion(bool is_moving) {
         if (cnt == MOTION_DUR_1MINUTE) { // 1-min
             LOGI("OLED OFF for protection.");
             beep();
-            hw_screen_on(0); // Turn of display
+            screen_set_inhibited(SCREEN_INHIBIT_IDLE, true);
 
             if (g_hw_stat.source_mode == SOURCE_MODE_HDZERO) {
                 HDZero_Close(); // Turn off RF
@@ -173,7 +173,7 @@ static void detect_motion(bool is_moving) {
 
             screen.brightness(g_setting.image.oled);
 
-            hw_screen_on(1);
+            screen_set_inhibited(SCREEN_INHIBIT_IDLE, false);
             state = OLED_MD_DETECTING;
             cnt = 0;
         }

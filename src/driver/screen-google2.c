@@ -139,7 +139,7 @@ static void screen_start_up() {
 #endif
 }
 // OLED display on/off
-static void screen_display(bool on) {
+static void screen_display_raw(bool on) {
     static int last_on = -1;
 
     if (last_on != on)
@@ -177,9 +177,9 @@ static void screen_display(bool on) {
 static void screen_pattern(bool enable, uint8_t mode, uint8_t speed) {
     mode = (enable & 0x01) | ((mode & 0x07) << 1) | ((speed & 0x0F) << 4);
 
-    screen_display(0);
+    screen.display(0);
     I2C_Write(ADDR_FPGA, 0xa4, mode);
-    screen_display(1);
+    screen.display(1);
 }
 
 // G2 mirror of screen-goggle.c's screen_vtmg_invalidate(): force the next
@@ -430,7 +430,8 @@ static void screen_brightness(uint8_t level) {
 
 screen_t screen = {
     .start_up = screen_start_up,
-    .display = screen_display,
+    .display = screen_display_request,
+    .display_raw = screen_display_raw,
     .brightness = screen_brightness,
     .pattern = screen_pattern,
     .vtmg = screen_vtmg,

@@ -145,7 +145,7 @@ static void screen_start_up() {
 }
 
 // OLED display on/off
-static void screen_display(bool on) {
+static void screen_display_raw(bool on) {
     if (on) {
         I2C_Write(ADDR_AL, 0x13, 0x83);
         usleep(1000);
@@ -177,9 +177,9 @@ static void screen_display(bool on) {
 static void screen_pattern(bool enable, uint8_t mode, uint8_t speed) {
     mode = (enable & 0x01) | ((mode & 0x07) << 1) | ((speed & 0x0F) << 4);
 
-    screen_display(0);
+    screen.display(0);
     I2C_Write(ADDR_AL, 0x15, mode);
-    screen_display(1);
+    screen.display(1);
 }
 
 // G1 Auto NTSC/PAL: force the next screen_vtmg() to reprogram the OLED even if
@@ -457,7 +457,8 @@ static void screen_brightness(uint8_t level) {
 
 screen_t screen = {
     .start_up = screen_start_up,
-    .display = screen_display,
+    .display = screen_display_request,
+    .display_raw = screen_display_raw,
     .brightness = screen_brightness,
     .pattern = screen_pattern,
     .vtmg = screen_vtmg,
