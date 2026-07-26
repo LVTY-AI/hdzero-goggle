@@ -1075,10 +1075,14 @@ void Source_HDMI_in() {
     pthread_mutex_unlock(&hardware_mutex);
 }
 
+#define HDMI_IN_REACQUIRE_TICKS 20      // ~2s of no signal before reacquiring
+#define HDMI_IN_REACQUIRE_RETRY_TICKS 40 // ~4s between attempts while still dark
+
 int HDMI_in_detect() {
     static int vtmg_last = -1;
     static int cs_last = -1;
     static int last_vld = 0;
+    static int no_sig_ticks = 0;
     int vtmg, cs, freq_ref;
     int ret = 0;
 
@@ -1088,6 +1092,19 @@ int HDMI_in_detect() {
 
         last_vld = g_hw_stat.hdmiin_valid;
         g_hw_stat.hdmiin_valid = IT66021_Sig_det();
+
+        // A source already powered/transmitting before the goggle boots never
+        // sees the goggle's boot-time HPD/EDID handshake (IT66021_init() only
+        // runs once, in device_init()), so it never starts sending -- the only
+        // previous fix was a physical replug. Re-running the same known-good
+        // reset+EDID+HPD sequence here gives an already-on source a fresh
+        // hot-plug to react to, without needing the user to touch the cable.
+        if (g_hw_stat.hdmiin_valid) {
+            no_sig_ticks = 0;
+        } else if (++no_sig_ticks >= HDMI_IN_REACQUIRE_TICKS) {
+            no_sig_ticks = HDMI_IN_REACQUIRE_TICKS - HDMI_IN_REACQUIRE_RETRY_TICKS;
+            IT66021_init();
+        }
 
         if (g_hw_stat.source_mode == SOURCE_MODE_HDMIIN) {
             if (g_hw_stat.hdmiin_valid) {
