@@ -73,7 +73,10 @@ void IT66021_close() {
 
 void IT66021_init() {
     DM5680_ResetHDMI_RX(0);
-    usleep(1000);
+    usleep(300000); // long enough for the analog front-end/PLL to fully settle,
+                     // approximating what a physical cable replug gives it --
+                     // the previous 1ms blip wasn't enough to recover a receiver
+                     // already locked onto a signal that predates the reset.
     DM5680_ResetHDMI_RX(1);
     usleep(10000);
 

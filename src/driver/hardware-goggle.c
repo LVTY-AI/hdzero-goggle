@@ -1103,6 +1103,7 @@ int HDMI_in_detect() {
             no_sig_ticks = 0;
         } else if (++no_sig_ticks >= HDMI_IN_REACQUIRE_TICKS) {
             no_sig_ticks = HDMI_IN_REACQUIRE_TICKS - HDMI_IN_REACQUIRE_RETRY_TICKS;
+            LOGI("IT66021: no HDMI-in signal, reacquiring");
             IT66021_init();
         }
 
