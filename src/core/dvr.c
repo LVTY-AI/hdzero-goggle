@@ -534,16 +534,19 @@ static void dvr_update_record_conf() {
     // the daemon, and re-write it if it is not.
     const char *want_type = g_setting.record.format_ts ? "ts" : "mp4";
     char got_type[8] = "";
-    int type_tries;
-    for (type_tries = 0; type_tries < 3; type_tries++) {
+    int type_retries = 0;
+    while (true) {
         ini_gets("record", "type", "", got_type, sizeof(got_type), REC_CONF);
         if (strcmp(got_type, want_type) == 0)
             break;
+        if (type_retries == 3)
+            break;
         ini_puts("record", "type", want_type, REC_CONF);
         sync();
+        type_retries++;
     }
-    dvr_dbg_log("update_conf format_ts=%d want=%s got=%s tries=%d",
-                g_setting.record.format_ts, want_type, got_type, type_tries);
+    dvr_dbg_log("update_conf format_ts=%d want=%s got=%s retries=%d",
+                g_setting.record.format_ts, want_type, got_type, type_retries);
 }
 
 void dvr_cmd(osd_dvr_cmd_t cmd) {
