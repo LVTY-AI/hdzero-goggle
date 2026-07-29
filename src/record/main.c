@@ -346,6 +346,9 @@ int record_start(RecordContext_t *recCtx) {
     }
     }
 
+    rec_dbg_log("record_start file='%s' packType='%s' conf='%s'",
+                sFile, recCtx->params.packType, recCtx->confFile);
+
     FFPack_t *ff = ffpack_openFile(sFile, NULL);
     if (ff == NULL) {
         LOGE("open failed");
@@ -906,6 +909,9 @@ void main_loop(RecordContext_t *recCtx) {
         case MSG_cmdSTART:
             if (!record_isGoing(recCtx->vv)) {
                 conf_loadRecordParams(recCtx->confFile, &recCtx->params);
+            } else {
+                rec_dbg_log("START while recording: skip reload, packType='%s'",
+                            recCtx->params.packType);
             }
             record_run(recCtx, REC_statRun);
             tkIdle = tkNow;

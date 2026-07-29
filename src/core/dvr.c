@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -375,6 +376,28 @@ void dvr_star() {
     pthread_mutex_unlock(&dvr_mutex);
 }
 
+// Append one line to a persistent DVR-format trace on the SD card so the rare
+// "MP4 setting recorded as .ts" handoff failure can be diagnosed from logs
+// after the fact. Best-effort: silently skipped when no card is mounted.
+static void dvr_dbg_log(const char *fmt, ...) {
+    FILE *fp = fopen("/mnt/extsd/dvr_dbg.log", "a");
+    if (fp == NULL)
+        return;
+
+    time_t now = time(NULL);
+    char ts[20];
+    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    fprintf(fp, "%s [app] ", ts);
+
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(fp, fmt, ap);
+    va_end(ap);
+
+    fputc('\n', fp);
+    fclose(fp);
+}
+
 static void dvr_update_record_conf() {
     int bitrate_scale;
     switch (g_setting.record.bitrate_scale) {
@@ -503,6 +526,27 @@ static void dvr_update_record_conf() {
     ini_puts("record", "label", g_setting.record.naming == SETTING_NAMING_ELRS ? dvr_race_label : "", REC_CONF);
 
     sync();
+
+    // The record daemon picks the clip container purely from this "type" key
+    // and silently falls back to "ts" if the value is missing or unrecognised.
+    // A lost or raced write therefore turns an MP4 recording into a .ts file,
+    // so confirm the intended value is actually on disk before we hand off to
+    // the daemon, and re-write it if it is not.
+    const char *want_type = g_setting.record.format_ts ? "ts" : "mp4";
+    char got_type[8] = "";
+    int type_retries = 0;
+    while (true) {
+        ini_gets("record", "type", "", got_type, sizeof(got_type), REC_CONF);
+        if (strcmp(got_type, want_type) == 0)
+            break;
+        if (type_retries == 3)
+            break;
+        ini_puts("record", "type", want_type, REC_CONF);
+        sync();
+        type_retries++;
+    }
+    dvr_dbg_log("update_conf format_ts=%d want=%s got=%s retries=%d",
+                g_setting.record.format_ts, want_type, got_type, type_retries);
 }
 
 void dvr_cmd(osd_dvr_cmd_t cmd) {

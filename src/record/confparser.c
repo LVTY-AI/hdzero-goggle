@@ -3,13 +3,38 @@
 #include <log/log.h>
 
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "confparser.h"
 #include "minIni.h"
+
+// Persistent DVR-format trace shared with the goggle app (see dvr.c). Lets the
+// rare "MP4 recorded as .ts" handoff failure be diagnosed from the record
+// daemon's side after the fact. Best-effort; skipped when no card is mounted.
+void rec_dbg_log(const char* fmt, ...)
+{
+    FILE* fp = fopen("/mnt/extsd/dvr_dbg.log", "a");
+    if (fp == NULL)
+        return;
+
+    time_t now = time(NULL);
+    char ts[20];
+    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    fprintf(fp, "%s [rec] ", ts);
+
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(fp, fmt, ap);
+    va_end(ap);
+
+    fputc('\n', fp);
+    fclose(fp);
+}
 
 #define SEC_RECORD      "record"
 #define SEC_VENC        "venc"
@@ -428,6 +453,9 @@ void conf_loadRecordParams(char* confFile, RecordParams_t* para)
             strcpy(para->packType, REC_packTYPE);
         }
     }
+
+    rec_dbg_log("loadConf conf=%s rawType='%s' len=%ld packType='%s'",
+                confFile, sTemp, lValue, para->packType);
 
     lValue = ini_getl(SEC_RECORD, KEY_NAMING, NAMING_CONTIGUOUS, confFile);
     lValue = check_set(lValue, NAMING_CONTIGUOUS, NAMING_ELRS);

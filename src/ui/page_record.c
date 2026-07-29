@@ -164,10 +164,6 @@ static void page_record_on_click(uint8_t key, int sel) {
         btn_group_toggle_sel(&btn_group_format);
         g_setting.record.format_ts = btn_group_get_sel(&btn_group_format);
         settings_put_bool("record", "format_ts", g_setting.record.format_ts);
-        if (g_setting.record.format_ts)
-            ini_puts("record", "type", "ts", REC_CONF);
-        else
-            ini_puts("record", "type", "mp4", REC_CONF);
     } else if (sel == ROW_RECORD_BITRATE) {
         btn_group_toggle_sel(&btn_group_bitrate_scale);
         g_setting.record.bitrate_scale = btn_group_get_sel(&btn_group_bitrate_scale);

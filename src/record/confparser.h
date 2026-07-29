@@ -23,6 +23,8 @@ void conf_saveAencParams(char* confFile, AencParams_t* aePara);
 void conf_loadRecordParams(char* confFile, RecordParams_t* recPara);
 void conf_saveRecordParams(char* confFile, RecordParams_t* recPara);
 
+void rec_dbg_log(const char* fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif /* End of #ifdef __cplusplus */
