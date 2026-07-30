@@ -146,9 +146,6 @@ void app_switch_to_analog(bool is_av_in) {
 }
 
 void app_switch_to_hdmi_in() {
-#if defined HDZGOGGLE2
-    system_exec("aww 0x0300b084 0x0001555");
-#endif
     rtc6715.init(0, 0);
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     scan_core_notify_analog_powered_off();
@@ -187,10 +184,6 @@ void app_switch_to_hdmi_in() {
 //    false = user selected from auto scan page
 void app_switch_to_hdzero(bool is_default) {
     int ch;
-
-#if defined HDZGOGGLE2
-    system_exec("aww 0x0300b084 0x0001555");
-#endif
 
     rtc6715.init(0, 0);
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)

@@ -40,14 +40,14 @@ pthread_mutex_t hardware_mutex;
 
 uint32_t vclk_phase_default[VIDEO_SOURCE_NUM] = {
     // 0x??,  0x8e,  0x??, 0x??
-    0x0000000c, // VIDEO_SOURCE_VERSION
+    0x0000000e, // VIDEO_SOURCE_VERSION
     0x00200000, // VIDEO_SOURCE_MENU_UI
     0x00010000, // VIDEO_SOURCE_HDZERO_IN_720P60_50
     0x00200000, // VIDEO_SOURCE_HDZERO_IN_720P90
     0x00000000, // VIDEO_SOURCE_HDZERO_IN_1080P30
     0x00010000, // VIDEO_SOURCE_AV_IN
-    0x00200000, // VIDEO_SOURCE_HDMI_IN_1080P50
-    0x00200000, // VIDEO_SOURCE_HDMI_IN_1080P60
+    0x00000000, // VIDEO_SOURCE_HDMI_IN_1080P50
+    0x00000000, // VIDEO_SOURCE_HDMI_IN_1080P60
     0x00000000, // VIDEO_SOURCE_HDMI_IN_1080POTHER
     0x00000000, // VIDEO_SOURCE_HDMI_IN_720P50
     0x00000000, // VIDEO_SOURCE_HDMI_IN_720P60
@@ -64,7 +64,7 @@ bit[5:4] hdmi out
 bit[6]   oled
 */
 uint32_t pclk_phase_default[VIDEO_SOURCE_NUM] = {
-    0x00000003,
+    0x00000004,
     0x00000000, // VIDEO_SOURCE_MENU_UI
     0x00000000, // VIDEO_SOURCE_HDZERO_IN_720P60_50
     0x00000000, // VIDEO_SOURCE_HDZERO_IN_720P90
@@ -75,7 +75,7 @@ uint32_t pclk_phase_default[VIDEO_SOURCE_NUM] = {
     0x00000001, // VIDEO_SOURCE_HDMI_IN_1080POTHER
     0x00000000, // VIDEO_SOURCE_HDMI_IN_720P50
     0x00000000, // VIDEO_SOURCE_HDMI_IN_720P60
-    0x00000000, // VIDEO_SOURCE_HDMI_IN_720P100
+    0x00000001, // VIDEO_SOURCE_HDMI_IN_720P100
     0x00000000, // VIDEO_SOURCE_TP2825_EX, DO NOT USE
 };
 
@@ -483,11 +483,13 @@ void pclk_phase_set(video_source_t source) {
     LOGI("video_source:%d", source);
     LOGI("pclk_phase_set %d", pclk_phase[source]);
     // bit[0] hdmi in
-    if (source == VIDEO_SOURCE_HDMI_IN_1080P50 || source == VIDEO_SOURCE_HDMI_IN_1080P60 || source == VIDEO_SOURCE_HDMI_IN_1080POTHER) {
-        IT66021_Set_Pclk((pclk_phase[source] >> 0) & 1, 0);
-    } else {
-        IT66021_Set_Pclk((pclk_phase[source] >> 0) & 1, 0);
-    }
+    // IT66021_Set_Pclk((pclk_phase[source] >> 0) & 1, 0);
+    IT66021_Mask_WR(0, 0x0f, 0x03, 0x00);
+    if ((pclk_phase[source] >> 0) & 1)
+        I2C_L_Write(ADDR_IT66021, 0x50, 0xb3);
+    else
+        I2C_L_Write(ADDR_IT66021, 0x50, 0xa1);
+
     // bit[1] analog in
     TP2825_Set_Pclk((pclk_phase[source] >> 1) & 1);
 
@@ -669,7 +671,7 @@ void Display_1080P24_t(int mode) {
     vclk_phase_set(VIDEO_SOURCE_HDZERO_IN_1080P30, 0);
     pclk_phase_set(VIDEO_SOURCE_HDZERO_IN_1080P30);
 
-    I2C_Write(ADDR_FPGA, 0x80, 0x84);
+    I2C_Write(ADDR_FPGA, 0x80, 0x04);
     // I2C_Write(ADDR_FPGA, 0x84, 0x00); // close OSD
 
     DM5680_SetFPS(mode);
