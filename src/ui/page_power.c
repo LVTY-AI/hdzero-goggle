@@ -140,6 +140,12 @@ static lv_obj_t *page_power_create(lv_obj_t *parent, panel_arr_t *arr) {
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
     if (getHwRevision() >= HW_REV_2) {
         create_btn_group_item(&btn_group_power_ana, cont, 2, _lang("AnalogRX Power"), _lang("On"), _lang("Auto"), "", "", ROW_POWER_ANA);
+        // This label is wider than the standard button-group label area. Move
+        // its options right so the selected arrow does not overlap the label.
+        for (int i = 0; i < btn_group_power_ana.valid; i++) {
+            lv_obj_set_grid_cell(btn_group_power_ana.btn_a[i].container, LV_GRID_ALIGN_START, i + 3, 1,
+                                 LV_GRID_ALIGN_CENTER, ROW_POWER_ANA, 1);
+        }
         pp_power.p_arr.max = ROW_COUNT;
     } else {
         pp_power.p_arr.max = ROW_COUNT - 1;
