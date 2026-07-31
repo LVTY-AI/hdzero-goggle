@@ -124,6 +124,7 @@ int HDMI_in_detect();
 int Get_VideoLatancy_status(); // ret: 0=unlocked, 1=locked
 int Get_HAN_status();          // ret: 0=error; 1=ok
 
+void vclk_phase_init();
 void pclk_phase_init();
 
 extern uint32_t vclk_phase[VIDEO_SOURCE_NUM];

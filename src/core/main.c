@@ -251,6 +251,9 @@ int main(int argc, char *argv[]) {
     scan_core_self_check();
 #endif
     language_init();
+#ifdef HDZGOGGLE2
+    vclk_phase_init();
+#endif
     pclk_phase_init();
 
     // 2. Initialize communications.
