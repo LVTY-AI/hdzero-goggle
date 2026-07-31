@@ -359,7 +359,7 @@ void fans_auto_ctrl_core(int which, int tempe, bool binit) {
             fans_left_setspeed(speed[which]);
             break;
         case FAN_RIGHT:
-            fans_left_setspeed(speed[which]);
+            fans_right_setspeed(speed[which]);
             break;
         }
     }
