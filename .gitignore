@@ -3,6 +3,12 @@
 build_goggle
 build_boxpro
 build_goggle2
+build_goggle_release
+build_boxpro_release
+build_goggle2_release
+build_goggle_hardened_test
+build_boxpro_hardened_test
+build_goggle2_hardened_test
 linux-4.9
 /media
 toolchain
