@@ -82,10 +82,6 @@ void app_exit_menu() {
 }
 
 void app_switch_to_analog(bool is_av_in) {
-#ifdef HDZGOGGLE2
-    system_exec("aww 0x0300b084 0x0001555");
-#endif
-
     dvr_update_vi_conf(VR_720P50);
     osd_fhd(0);
     osd_show(true);
