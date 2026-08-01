@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/epoll.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -839,9 +840,25 @@ static void get_event(int fd) {
     // expected timestamp in the future beyond that will the events be accepted
     static struct timeval next_scroll = {0, 0};
     static struct timeval next_rel = {0, 0};
+    static struct timeval last_wall_time = {0, 0};
     static bool discard_scroll = false;
 
     read(fd, &event, sizeof(event));
+
+    // Setting the RTC backwards can also move evdev timestamps backwards on
+    // kernels that do not support EVIOCSCLOCKID. Reset the absolute debounce
+    // deadlines before classifying this event so wheel input is not discarded
+    // until wall time catches up.
+    struct timeval wall_time;
+    gettimeofday(&wall_time, NULL);
+    if (timerisset(&last_wall_time) && timercmp(&wall_time, &last_wall_time, <)) {
+        timerclear(&next_scroll);
+        timerclear(&next_rel);
+        discard_scroll = false;
+        roller_up_acc = 0;
+        roller_down_acc = 0;
+    }
+    last_wall_time = wall_time;
 
     switch (event.type) {
     case EV_SYN:
@@ -1080,6 +1097,12 @@ void input_device_init() {
 
         int fd = open(buf, O_RDONLY);
         if (fd >= 0) {
+            // Keep input timestamps independent of RTC changes made by the
+            // clock page or an external time source.
+            int clkid = CLOCK_MONOTONIC;
+            if (ioctl(fd, EVIOCSCLOCKID, &clkid) != 0) {
+                LOGI("EVIOCSCLOCKID unsupported on %s", buf);
+            }
             add_to_epfd(epfd, fd);
             LOGI("opened %s", buf);
         }
