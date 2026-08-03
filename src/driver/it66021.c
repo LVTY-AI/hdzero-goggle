@@ -373,9 +373,13 @@ void IT66021_edid() {
 }
 
 void IT66021_Set_Pclk(int inv, int dly) {
+    // Only G1 and BoxPro reach this; G2 programs 0x50 inline in its own
+    // pclk_phase_set() because the VA-198 bitstream wants the opposite
+    // polarity. Keep the original G1/BoxPro values here -- those targets
+    // have no VA-198 and sample HDMI on the wrong clock edge without them.
     IT66021_Mask_WR(0, 0x0f, 0x03, 0x00);
     if (inv)
-        I2C_L_Write(ADDR_IT66021, 0x50, 0xB2);
+        I2C_L_Write(ADDR_IT66021, 0x50, 0xA0 + dly);
     else
-        I2C_L_Write(ADDR_IT66021, 0x50, 0xA1);
+        I2C_L_Write(ADDR_IT66021, 0x50, 0xB0 + dly);
 }
