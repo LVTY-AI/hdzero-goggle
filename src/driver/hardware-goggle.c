@@ -533,6 +533,11 @@ void pclk_phase_set(video_source_t source) {
     I2C_Write(ADDR_AL, 0x14, (pclk_phase[source] >> 6) & 1);
 }
 void hw_stat_init() {
+    // The screen_vtmg() cache starts at mode 0, but the OLED keeps whatever
+    // mode a previous app instance left it in (e.g. killed during retimed DVR
+    // playback) -- invalidate so the first vtmg() call really programs it.
+    screen_vtmg_invalidate();
+
     g_hw_stat.source_mode = SOURCE_MODE_UI;
     g_hw_stat.vdpo_tmg = VDPO_TMG_1080P50;
 
