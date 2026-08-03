@@ -435,11 +435,12 @@ void conf_loadRecordParams(char* confFile, RecordParams_t* para)
     }
 
     lValue = ini_gets(SEC_RECORD, KEY_TYPE, REC_packTYPE, sTemp, sizearray(sTemp), confFile);
-    if( lValue > 0 && lValue < 4) {
+    {
         int i;
         char* sTypes[] = REC_packTYPES;
+
         for( i=0; i<REC_packTypesNUM; i++ ) {
-            if( strcmp(sTemp, sTypes[i]) == 0 ) {
+            if( lValue > 0 && lValue < 4 && strcmp(sTemp, sTypes[i]) == 0 ) {
                 break;
             }
         }
@@ -449,8 +450,17 @@ void conf_loadRecordParams(char* confFile, RecordParams_t* para)
             strcpy(para->packType, sTemp);
         }
         else {
-            /* unsupported type, set to default */
+            /* Unusable value -- missing, empty, over-long or unrecognised.
+             * Falling back silently is what turns an MP4 recording into a .ts
+             * file with no error anywhere, so say so loudly enough to be found
+             * in a log afterwards. Note the old code only assigned packType
+             * inside the length check, so an over-long or empty value left the
+             * previous recording's type in place instead of defaulting. */
             strcpy(para->packType, REC_packTYPE);
+            LOGW("record type '%s' (len %ld) unusable in %s -- falling back to '%s'",
+                 sTemp, lValue, confFile, REC_packTYPE);
+            rec_dbg_log("loadConf FALLBACK rawType='%s' len=%ld -> packType='%s' conf=%s",
+                        sTemp, lValue, para->packType, confFile);
         }
     }
 
