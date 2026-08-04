@@ -26,5 +26,8 @@
 #define SELF_TEST_FILE "/mnt/extsd/self_test.txt"
 #define NO_DIAL_FILE   "/mnt/extsd/no_dial.txt"
 #define APP_LOG_FILE   "/mnt/extsd/HDZGOGGLE.log"
+#define APP_LOG_PREV   "/mnt/extsd/HDZGOGGLE.log.1"
+// The log is kept across boots, so cap it and keep one previous file.
+#define APP_LOG_MAX_BYTES (8 * 1024 * 1024)
 #define APP_BIN_FILE   "/mnt/extsd/HDZGOGGLE"
 #define DEVELOP_SCRIPT "/mnt/extsd/develop.sh"
