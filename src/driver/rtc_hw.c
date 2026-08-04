@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <linux/rtc.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <sys/ioctl.h>
 #include <sys/time.h> // settimeofday, struct timeval
 #include <unistd.h>
