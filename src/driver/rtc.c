@@ -148,6 +148,7 @@ void rtc_tv2rd(const struct timeval *tv, struct rtc_date *rd) {
 void rtc_init() {
     struct rtc_date rd;
 
+    rtc_hw_log_devices();
     rtc_get_clock(&rd);
 
     // Has time accumulated since the
@@ -236,8 +237,9 @@ void rtc_timestamp() {
  *  Set Hardware Clock and synchronize OS Clock in UTC.
  */
 void rtc_set_clock(const struct rtc_date *rd) {
-    rtc_hw_write(rd);
-    g_rtc_has_battery = 1;
+    if (rtc_hw_write(rd) > 0) {
+        g_rtc_has_battery = 1;
+    }
 }
 
 /**

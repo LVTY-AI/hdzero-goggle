@@ -31,10 +31,14 @@ void rtc_hw_read(struct rtc_date *rd) {
     rtc_tv2rd(&tv, rd);
 }
 
-void rtc_hw_write(const struct rtc_date *rd) {
+int rtc_hw_write(const struct rtc_date *rd) {
     g_rtc_date = *rd;
     clock_gettime(CLOCK_MONOTONIC, &g_rtc_set_at);
     g_rtc_was_set = 1;
+    return 1;
+}
+
+void rtc_hw_log_devices(void) {
 }
 
 #endif // EMULATOR_BUILD

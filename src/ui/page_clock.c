@@ -79,6 +79,7 @@ static int page_clock_set_clock_confirm = 0;
 static int page_clock_is_dirty = 0;
 static uint32_t page_clock_last_input = 0;
 static struct rtc_date page_clock_rtc_date = {0};
+static lv_obj_t *page_clock_battery_note = NULL;
 
 /**
  * Acquire index from selected dropdown option as a string.
@@ -400,12 +401,15 @@ static void page_clock_set_clock_timer_cb(struct _lv_timer_t *timer) {
     ini_putl("clock", "hour", g_setting.clock.hour, SETTING_INI);
     ini_putl("clock", "min", g_setting.clock.min, SETTING_INI);
     ini_putl("clock", "sec", g_setting.clock.sec, SETTING_INI);
-    ini_putl("clock", "sec", g_setting.clock.sec, SETTING_INI);
 
     rtc_set_clock(&page_clock_rtc_date);
     page_clock_refresh_datetime();
     page_clock_set_clock_reset();
     page_clock_is_dirty = 0;
+
+    if (page_clock_battery_note && rtc_has_battery() == 0) {
+        lv_obj_add_flag(page_clock_battery_note, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 /**
@@ -475,6 +479,7 @@ static lv_obj_t *page_clock_create(lv_obj_t *parent, panel_arr_t *arr) {
         lv_obj_set_style_pad_top(note, UI_PAGE_TEXT_PAD, 0);
         lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
         lv_obj_set_grid_cell(note, LV_GRID_ALIGN_START, 1, 4, LV_GRID_ALIGN_START, 6, 2);
+        page_clock_battery_note = note;
     }
 
     page_clock_clear_datetime();

@@ -11,6 +11,7 @@
 #include <linux/rtc.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <sys/time.h> // settimeofday, struct timeval
 #include <unistd.h>
@@ -89,7 +90,7 @@ void rtc_hw_read(struct rtc_date *rd) {
     }
 }
 
-void rtc_hw_write(const struct rtc_date *rd) {
+int rtc_hw_write(const struct rtc_date *rd) {
     struct rtc_time rt;
     struct timeval tv;
     rd2rt(rd, &rt);
@@ -116,10 +117,44 @@ void rtc_hw_write(const struct rtc_date *rd) {
         if (fd >= 0) {
             if (ioctl(fd, RTC_SET_TIME, &rt) != 0) {
                 LOGE("rtc_hw_write: ioctl(%d,RTC_SET_TIME,&rt) failed with errno(%d)", fd, errno);
+            } else {
+                written++;
             }
             close(fd);
         } else {
             LOGE("rtc_hw_write failed to open(%s, O_WRONLY)", RTC_DEV_FALLBACK);
         }
+    }
+
+    return written;
+}
+
+void rtc_hw_log_devices(void) {
+    // Boot diagnostics identify which RTC driver is present and which device
+    // actually returned a usable time after power-off.
+    for (int i = 0; i < RTC_DEV_MAX; ++i) {
+        char path[32], name[32] = "?";
+        snprintf(path, sizeof(path), "/sys/class/rtc/rtc%d/name", i);
+        FILE *fp = fopen(path, "r");
+        if (fp) {
+            if (fgets(name, sizeof(name), fp)) {
+                name[strcspn(name, "\n")] = 0;
+            }
+            fclose(fp);
+        }
+
+        int fd = rtc_open_dev(i, O_RDONLY);
+        if (fd < 0) {
+            continue;
+        }
+        struct rtc_time rt;
+        if (ioctl(fd, RTC_RD_TIME, &rt) == 0) {
+            LOGI("rtc_init: /dev/rtc%d (%s) reads %04d-%02d-%02d %02d:%02d:%02d",
+                 i, name, rt.tm_year + 1900, rt.tm_mon + 1, rt.tm_mday,
+                 rt.tm_hour, rt.tm_min, rt.tm_sec);
+        } else {
+            LOGI("rtc_init: /dev/rtc%d (%s) read failed errno(%d)", i, name, errno);
+        }
+        close(fd);
     }
 }
