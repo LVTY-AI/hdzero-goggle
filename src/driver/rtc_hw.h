@@ -13,8 +13,11 @@ extern "C" {
 
 // Read the hardware clock into *rd (leaves *rd untouched on failure).
 void rtc_hw_read(struct rtc_date *rd);
-// Write *rd to the hardware clock (and, on the goggle, the OS clock).
-void rtc_hw_write(const struct rtc_date *rd);
+// Write *rd to the hardware clock (and, on the goggle, the OS clock). Returns
+// the number of RTC devices that accepted the write.
+int rtc_hw_write(const struct rtc_date *rd);
+// Emit one boot-time diagnostic line for each RTC device that is present.
+void rtc_hw_log_devices(void);
 
 #ifdef __cplusplus
 }
