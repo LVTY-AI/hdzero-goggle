@@ -1,26 +1,29 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#ifndef EMULATOR_BUILD
 #include <linux/input.h>
+#endif
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef EMULATOR_BUILD
 #include <sys/epoll.h>
 #include <sys/ioctl.h>
+#endif
 #include <sys/stat.h>
+#ifndef EMULATOR_BUILD
 #include <sys/time.h>
+#endif
 #include <unistd.h>
 
 #include <log/log.h>
 #include <minIni.h>
 
-#ifdef EMULATOR_BUILD
-#include "SDLaccess.h"
-#endif
-
 #include "defines.h"
 #include "input_device.h"
+#include "input_device_internal.h"
 
 #include "common.hh"
 #include "ht.h"
@@ -65,7 +68,7 @@ static uint16_t tune_timer = 0;
 static int epfd;
 static pthread_t input_device_pid;
 
-static int btn_value = 0;
+int btn_value = 0;
 
 // action: 1 = tune up, 2 = tune down, 3 = confirm
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
@@ -538,13 +541,13 @@ void tune_channel_timer() {
 static int roller_up_acc = 0;
 static int roller_down_acc = 0;
 
-static bool scroll_sim_mode = false;
-static bool scroll_sim_mode_pending = false;
+bool scroll_sim_mode = false;
+bool scroll_sim_mode_pending = false;
 
 #define SCROLL_REPEAT_NONE 0
 #define SCROLL_REPEAT_UP   1
 #define SCROLL_REPEAT_DOWN 2
-static int scroll_sim_mode_repeat = SCROLL_REPEAT_NONE;
+int scroll_sim_mode_repeat = SCROLL_REPEAT_NONE;
 
 void (*btn_click_callback)() = &osd_toggle;
 void (*btn_press_callback)() = &app_switch_to_menu;
@@ -555,10 +558,10 @@ void (*rbtn_double_click_callback)() = &ht_set_center_position;
 
 void (*roller_callback)(uint8_t key) = &tune_channel;
 
-static void roller_up(void);
-static void roller_down(void);
+void roller_up(void);
+void roller_down(void);
 
-static void btn_press(void) // long press left key
+void btn_press(void) // long press left key
 {
     LOGI("btn_press (%d)", g_app_state);
     if (g_scanning || (g_init_done != 1)) // no long pree Enter before done with init
@@ -622,7 +625,7 @@ static void btn_press(void) // long press left key
     pthread_mutex_unlock(&lvgl_mutex);
 }
 
-static void btn_click(void) // short press enter key
+void btn_click(void) // short press enter key
 {
     LOGI("btn_click (%d)", g_app_state);
     if (g_init_done != 1) // no short pree Enter before done with init
@@ -755,7 +758,7 @@ void rbtn_click(right_button_t click_type) {
     }
 }
 
-static void roller_up(void) {
+void roller_up(void) {
     LOGI("roller up (%d)", g_app_state);
 
     if (g_scanning)
@@ -790,7 +793,7 @@ static void roller_up(void) {
     pthread_mutex_unlock(&lvgl_mutex);
 }
 
-static void roller_down(void) {
+void roller_down(void) {
     LOGI("roller down (%d)", g_app_state);
 
     if (g_scanning)
@@ -824,6 +827,7 @@ static void roller_down(void) {
     pthread_mutex_unlock(&lvgl_mutex);
 }
 
+#ifndef EMULATOR_BUILD
 static void get_event(int fd) {
     struct input_event event;
     static int event_type_last = 0;
@@ -1086,32 +1090,11 @@ static void *thread_input_device(void *ptr) {
 #endif
 }
 
-void input_device_init() {
-#ifndef EMULATOR_BUILD
-    epfd = epoll_create(EPOLL_FD_CNT);
-    assert(epfd > 0);
-
-    char buf[64];
-    for (int i = 0; i < EPOLL_FD_CNT; i++) {
-        snprintf(buf, 64, "/dev/input/event%d", i);
-
-        int fd = open(buf, O_RDONLY);
-        if (fd >= 0) {
-            // Keep input timestamps independent of RTC changes made by the
-            // clock page or an external time source.
-            int clkid = CLOCK_MONOTONIC;
-            if (ioctl(fd, EVIOCSCLOCKID, &clkid) != 0) {
-                LOGI("EVIOCSCLOCKID unsupported on %s", buf);
-            }
-            add_to_epfd(epfd, fd);
-            LOGI("opened %s", buf);
-        }
-    }
-    app_state_push(APP_STATE_MAINMENU);
-#else
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        printf("Error initializing SDL: %s\n", SDL_GetError());
-    }
 #endif
-    pthread_create(&input_device_pid, NULL, thread_input_device, NULL);
+
+void input_device_init() {
+    // Bring up whichever input backend was compiled in (evdev on the goggle,
+    // SDL in the emulator) and run its read loop on a background pthread.
+    input_backend_init();
+    pthread_create(&input_device_pid, NULL, input_backend_thread, NULL);
 }

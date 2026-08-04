@@ -31,6 +31,7 @@ SDL_mutex *global_sdl_mutex;
 #include "core/settings.h"
 #include "core/sleep_mode.h"
 #include "core/thread.h"
+#include "platform/paths.h"
 #include "driver/beep.h"
 #include "driver/dm5680.h"
 #include "driver/esp32.h"
@@ -244,6 +245,10 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
+    // Resolve emulator filesystem roots before settings/resources are read.
+    // On hardware this keeps the compiled-in /mnt/app and /mnt/extsd paths.
+    paths_init();
+
     // 1. Recall configuration
     settings_init();
     settings_load();
@@ -314,6 +319,10 @@ int main(int argc, char *argv[]) {
     // 10. Execute main loop
     g_init_done = 1;
 
+#ifdef EMULATOR_BUILD
+    input_device_print_help();
+#endif
+
     // Bring the ELRS backpack up once boot has genuinely settled, not just
     // after a fixed delay: enabling it during the busy HDZero bring-up (or
     // while the boot-time auto-scan menu loop is still actively driving the
@@ -332,6 +341,10 @@ int main(int argc, char *argv[]) {
         sleep_reminder();
         statubar_update();
         osd_hdzero_update();
+#ifdef EMULATOR_BUILD
+        if (gif_cnt % 200 == 0)
+            osd_inject_mock_fc();
+#endif
         ims_update();
         ui_osd_element_pos_update();
         ht_detect_motion();
@@ -350,6 +363,11 @@ int main(int argc, char *argv[]) {
                 }
             }
         }
+
+#if defined(EMULATOR_BUILD) && (defined(__APPLE__) || defined(_WIN32))
+        // Cocoa and Windows require SDL events to be pumped on the main thread.
+        input_device_pump();
+#endif
 
         usleep(5000);
         gif_cnt++;
