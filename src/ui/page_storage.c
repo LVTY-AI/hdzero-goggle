@@ -593,6 +593,15 @@ static void *page_storage_repair_thread(void *arg) {
 
     if (!page_storage.disable_controls) {
         page_storage.was_sd_repair_invoked = true;
+
+        // A cleanly ejected card has nothing to repair. Skip the expensive
+        // unmount/fsck/remount cycle, but keep the full check for dirty or
+        // unreadable media. Manual Repair SD Card still always runs fully.
+        if (!sdcard_filesystem_dirty()) {
+            LOGI("SD filesystem clean - automatic integrity check skipped");
+            pthread_exit(NULL);
+        }
+
         page_storage.is_auto_sd_repair_active = true;
         pthread_mutex_lock(&lvgl_mutex);
         page_storage_disable_controls();
