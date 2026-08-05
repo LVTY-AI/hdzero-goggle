@@ -1255,6 +1255,15 @@ void Display_Osd(bool enable) {
     I2C_Write(ADDR_FPGA, 0x84, enable ? 0x11 : 0x01);
 }
 
+uint8_t Display_Osd_Readback(void) {
+    uint8_t value;
+
+    pthread_mutex_lock(&hardware_mutex);
+    value = I2C_Read(ADDR_FPGA, 0x84);
+    pthread_mutex_unlock(&hardware_mutex);
+    return value;
+}
+
 void Set_Brightness(uint8_t bri) {
     int8_t val = 0x80 + bri - 39;
     I2C_Write(ADDR_FPGA, 0x85, val);

@@ -577,6 +577,13 @@ void dvr_cmd(osd_dvr_cmd_t cmd) {
     if (start_rec) {
         if (!dvr_is_recording && !sdcard_is_full()) {
             dvr_update_record_conf();
+            // Re-assert the record-OSD bit at the exact point recording starts.
+            // Display/UI transitions can reinitialize this FPGA register after
+            // source entry, so the source-entry write alone is not sufficient.
+            Display_Osd(g_setting.record.osd);
+            uint8_t osd_reg = Display_Osd_Readback();
+            LOGI("dvr record OSD: requested=%d readback=0x%02x",
+                 g_setting.record.osd, osd_reg);
             if (g_sdcard_ready) {
                 dvr_is_recording = true;
                 record_pending = false;
