@@ -98,6 +98,9 @@ typedef enum {
     SETTING_RECORD_BITRATE_SCALE_NORMAL = 0,
     SETTING_RECORD_BITRATE_SCALE_HALF = 1,
     SETTING_RECORD_BITRATE_SCALE_QUARTER = 2,
+    // Keep the existing values stable so saved settings retain their meaning.
+    SETTING_RECORD_BITRATE_SCALE_HIGH = 3,
+    SETTING_RECORD_BITRATE_SCALE_MAX = 4,
 } setting_record_bitrate_scale_t;
 
 typedef enum {
