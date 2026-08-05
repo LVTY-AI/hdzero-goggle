@@ -251,7 +251,15 @@ int bs_insert_vui(sps_bit_stream* bs, int fps)
 
     bs_insert_u(0, 1, bs); // aspect_ratio_info_present_flag
     bs_insert_u(0, 1, bs); // overscan_info_present_flag
-    bs_insert_u(0, 1, bs); // video_signal_type_present_flag
+    // The DVR records full-range (0-255) pixels, but with no colour
+    // signalling players default to limited range (16-235) and expand -
+    // superwhite then overflows and shows as green speckle on the goggle's
+    // own playback. Declare the true full range so the decoder configures
+    // the display for it. (video_format=5 unspecified, no colour_description.)
+    bs_insert_u(1, 1, bs); // video_signal_type_present_flag = 1
+    bs_insert_u(5, 3, bs); // video_format = 5 (unspecified)
+    bs_insert_u(1, 1, bs); // video_full_range_flag = 1
+    bs_insert_u(0, 1, bs); // colour_description_present_flag = 0
     bs_insert_u(0, 1, bs); // chroma_loc_info_present_flag
 
     bs_insert_u(1, 1, bs); // timing_info_present_flag
