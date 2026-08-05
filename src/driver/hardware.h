@@ -107,6 +107,7 @@ void Display_1080P24(int mode);
 
 void Display_HDZ(int mode, int is_43);
 void Display_Osd(bool enable);
+uint8_t Display_Osd_Readback(void);
 
 void Set_Brightness(uint8_t bri);
 void Set_Contrast(uint8_t con);
