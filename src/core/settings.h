@@ -101,6 +101,16 @@ typedef enum {
 } setting_record_bitrate_scale_t;
 
 typedef enum {
+    SETTING_RECORD_RC_CBR = 0,
+    SETTING_RECORD_RC_VBR = 1,
+} setting_record_rc_t;
+
+#define VBR_QUALITY_MIN 0
+#define VBR_QUALITY_MAX 13
+#define VBR_MAX_QP_RECOMMENDED 40
+#define VBR_MAX_QP_MAX 52
+
+typedef enum {
     SETTING_NAMING_CONTIGUOUS,
     SETTING_NAMING_DATE,
     SETTING_NAMING_ELRS
@@ -118,6 +128,9 @@ typedef struct {
     int mic_gain;
     int linein_gain;
     setting_record_naming_t naming;
+    setting_record_rc_t rc_mode;
+    uint8_t vbr_quality;
+    uint8_t vbr_max_qp;
     uint8_t stop_delay_seconds; // auto record: grace period after signal loss before stopping (0 = off)
 } setting_record_t;
 

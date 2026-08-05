@@ -67,6 +67,9 @@ const setting_t g_setting_defaults = {
         .mic_gain = 4,
         .linein_gain = 3,
         .naming = SETTING_NAMING_CONTIGUOUS,
+        .rc_mode = SETTING_RECORD_RC_CBR,
+        .vbr_quality = 6,
+        .vbr_max_qp = VBR_MAX_QP_RECOMMENDED,
         .stop_delay_seconds = 0,
     },
     .image = {
@@ -531,6 +534,15 @@ void settings_load(void) {
     g_setting.record.mode_manual = settings_get_bool("record", "mode_manual", g_setting_defaults.record.mode_manual);
     g_setting.record.format_ts = settings_get_bool("record", "format_ts", g_setting_defaults.record.format_ts);
     g_setting.record.bitrate_scale = ini_getl("record", "bitrate_scale", g_setting_defaults.record.bitrate_scale, SETTING_INI);
+    g_setting.record.rc_mode = ini_getl("record", "rc_mode", g_setting_defaults.record.rc_mode, SETTING_INI);
+    if (g_setting.record.rc_mode > SETTING_RECORD_RC_VBR)
+        g_setting.record.rc_mode = SETTING_RECORD_RC_CBR;
+    g_setting.record.vbr_quality = ini_getl("record", "vbr_quality", g_setting_defaults.record.vbr_quality, SETTING_INI);
+    if (g_setting.record.vbr_quality < VBR_QUALITY_MIN || g_setting.record.vbr_quality > VBR_QUALITY_MAX)
+        g_setting.record.vbr_quality = g_setting_defaults.record.vbr_quality;
+    g_setting.record.vbr_max_qp = ini_getl("record", "vbr_max_qp", g_setting_defaults.record.vbr_max_qp, SETTING_INI);
+    if (g_setting.record.vbr_max_qp > VBR_MAX_QP_MAX)
+        g_setting.record.vbr_max_qp = g_setting_defaults.record.vbr_max_qp;
     g_setting.record.osd = settings_get_bool("record", "osd", g_setting_defaults.record.osd);
     g_setting.record.audio = settings_get_bool("record", "audio", g_setting_defaults.record.audio);
     g_setting.record.audio_source = ini_getl("record", "audio_source", g_setting_defaults.record.audio_source, SETTING_INI);
