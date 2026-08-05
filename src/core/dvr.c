@@ -518,6 +518,22 @@ static void dvr_update_record_conf() {
         }
     }
 
+    // The recorder treats kbps as a target under CBR and as a ceiling under
+    // VBR. Keep CBR as the default and apply the user-controlled VBR quality
+    // and QP floor to both codecs so changing source or codec cannot leave
+    // stale encoder parameters behind.
+    bool const use_vbr = (g_setting.record.rc_mode == SETTING_RECORD_RC_VBR);
+    ini_putl("venc", "rc", use_vbr ? 1 : 0, REC_CONF);
+    for (int i = 0; i < 2; i++) {
+        const char *sec = i ? "h265" : "h264";
+        if (use_vbr) {
+            ini_putl(sec, "quality", g_setting.record.vbr_quality, REC_CONF);
+            ini_putl(sec, "maxQP", g_setting.record.vbr_max_qp, REC_CONF);
+        } else {
+            ini_putl(sec, "maxQP", 52, REC_CONF);
+        }
+    }
+
     ini_putl("record", "audio", g_setting.record.audio, REC_CONF);
     dvr_select_audio_source(g_setting.record.audio_source);
     ini_putl("record", "naming", g_setting.record.naming, REC_CONF);
