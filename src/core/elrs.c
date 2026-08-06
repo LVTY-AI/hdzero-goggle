@@ -625,14 +625,19 @@ bool elrs_headtracking_enabled() {
     return headtracking_enabled;
 }
 
-void msp_channel_update() {
+bool msp_channel_update() {
     // Channel 1...20 for R1...8, E1, F1, F2 and F4, L1...8
     uint8_t const ch = g_setting.scan.channel;
     uint8_t const band = g_setting.source.hdzero_band;
     uint8_t chan;
 
+    // This is the final authority check: no UI, dial path, or assignable
+    // button may transmit a channel while the backpack or VTX Control is off.
+    if (!g_setting.elrs.enable || !g_setting.elrs.vtx_send_enable)
+        return false;
+
     if (ch == 0 || ch > HDZERO_CHANNEL_NUM)
-        return; // Invalid value -> ignore
+        return false; // Invalid value -> ignore
     if (band == SETTING_SOURCES_HDZERO_BAND_RACEBAND) {
         if (ch <= 8) {
             chan = ch - 1 + (4 * 8); // Map R1..8
@@ -650,6 +655,32 @@ void msp_channel_update() {
     }
     msp_send_packet(MSP_SET_BAND_CHAN, MSP_PACKET_COMMAND, sizeof(chan), &chan);
     LOGI("MSPv2 MSP_SET_BAND_CHAN %d sent", chan);
+    return true;
+}
+
+bool vtx_sent_osd_wanted(bool deliberate) {
+    switch (g_setting.elrs.vtx_sent_osd) {
+    case SETTING_VTX_SENT_OSD_OFF:
+        return false;
+    case SETTING_VTX_SENT_OSD_DELIBERATE:
+        return deliberate;
+    case SETTING_VTX_SENT_OSD_ALWAYS:
+    default:
+        return true;
+    }
+}
+
+void vtx_sent_osd_show(bool deliberate) {
+    if (!vtx_sent_osd_wanted(deliberate))
+        return;
+    channel_osd_sent = (g_setting.elrs.vtx_sent_style == SETTING_VTX_SENT_STYLE_SUBTLE)
+                           ? CHANNEL_SHOWTIME_SUBTLE
+                           : CHANNEL_SHOWTIME;
+}
+
+void elrs_send_vtx() {
+    if (msp_channel_update())
+        vtx_sent_osd_show(true);
 }
 
 void elrs_clear_osd() {

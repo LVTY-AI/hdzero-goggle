@@ -93,7 +93,10 @@ bool msp_read_resposne(uint16_t function, uint16_t *payload_size, uint8_t *paylo
 mspAwaitResposne_e msp_await_resposne(uint16_t function, uint16_t payload_size, uint8_t *payload, uint32_t timeout_ms);
 void msp_cancel_await();
 void msp_ht_update(uint16_t pan, uint16_t tilt, uint16_t roll);
-void msp_channel_update();
+bool msp_channel_update();
+void elrs_send_vtx();
+bool vtx_sent_osd_wanted(bool deliberate);
+void vtx_sent_osd_show(bool deliberate);
 
 #ifdef __cplusplus
 }
