@@ -174,7 +174,27 @@ typedef struct {
 
 typedef struct {
     bool enable;
+    bool vtx_send_enable; // master switch: may VTX channel commands be sent at all
+    bool auto_send_vtx;   // dial click also sends the channel, not just a long press
+    // When to show the green "VTX SENT" confirmation. Deliberate = a dial long
+    // press, the Send VTX button action, or Send VTX on the ELRS page; with
+    // Auto Send VTX on, a plain dial click is not deliberate.
+    uint8_t vtx_sent_osd;
+    // How the banner looks. Independent of vtx_sent_osd: "only on a long
+    // press" and "keep it subtle" are separate wishes.
+    uint8_t vtx_sent_style;
 } setting_elrs_t;
+
+typedef enum {
+    SETTING_VTX_SENT_OSD_ALWAYS = 0,
+    SETTING_VTX_SENT_OSD_DELIBERATE = 1,
+    SETTING_VTX_SENT_OSD_OFF = 2,
+} setting_vtx_sent_osd_t;
+
+typedef enum {
+    SETTING_VTX_SENT_STYLE_NORMAL = 0,
+    SETTING_VTX_SENT_STYLE_SUBTLE = 1,
+} setting_vtx_sent_style_t;
 
 typedef enum {
     EMBEDDED_4x3,

@@ -71,7 +71,7 @@ extern "C" {
 #define UI_CLOCK_ROWS                     60, 60, 60, 60, 60, 15, 10, 60, 60, 60, LV_GRID_TEMPLATE_LAST
 #define UI_CLOCK_DATE_PAD                 8
 #define UI_ELRS_COLS                      160, 220, 160, 160, 160, 160, LV_GRID_TEMPLATE_LAST
-#define UI_ELRS_ROWS                      60, 60, 60, 60, 60, 40, 40, 60, 60, 60, LV_GRID_TEMPLATE_LAST
+#define UI_ELRS_ROWS                      60, 60, 60, 60, 60, 60, 60, 40, 40, 60, 60, 40, 40, 40, LV_GRID_TEMPLATE_LAST
 #define UI_FANS_COLS                      160, 160, 160, 160, 140, 160, LV_GRID_TEMPLATE_LAST
 #define UI_FANS_ROWS                      60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
 #define UI_HT_COLS                        160, 160, 160, 160, 160, 160, LV_GRID_TEMPLATE_LAST
@@ -222,7 +222,7 @@ static inline int UI_STATUS_BAR_LABEL_WIDTH() {
 #define UI_CLOCK_ROWS                     40, 40, 40, 40, 40, 10, 6, 40, 40, 40, LV_GRID_TEMPLATE_LAST
 #define UI_CLOCK_DATE_PAD                 6
 #define UI_ELRS_COLS                      106, 140, 106, 106, 106, 106, LV_GRID_TEMPLATE_LAST
-#define UI_ELRS_ROWS                      40, 40, 40, 40, 40, 26, 26, 40, 40, 40, LV_GRID_TEMPLATE_LAST
+#define UI_ELRS_ROWS                      40, 40, 40, 40, 40, 40, 40, 26, 26, 40, 40, 28, 28, 28, LV_GRID_TEMPLATE_LAST
 #define UI_FANS_COLS                      106, 106, 106, 106, 92, 106, LV_GRID_TEMPLATE_LAST
 #define UI_FANS_ROWS                      40, 40, 40, 40, 40, 40, 40, 40, 40, 40, LV_GRID_TEMPLATE_LAST
 #define UI_HT_COLS                        106, 106, 106, 106, 106, 106, LV_GRID_TEMPLATE_LAST

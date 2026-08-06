@@ -414,6 +414,7 @@ void osd_analog_rssi_show(bool bShow) {
 //  = 0x80 | Channel
 //  = 0x00 | Channel Show Time
 uint8_t channel_osd_mode;
+uint8_t channel_osd_sent;
 uint8_t channel_osd_preview_proto = 0;
 uint8_t channel_osd_preview_band = 0xFF;
 
@@ -549,6 +550,28 @@ void osd_channel_show(bool bShow) {
         lv_obj_clear_flag(g_osd_hdzero.channel[is_fhd], LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(g_osd_hdzero.channel[is_fhd], LV_OBJ_FLAG_HIDDEN);
+    }
+
+    // This confirmation is independent of the channel OSD visibility toggle.
+    // It is only raised after msp_channel_update() confirms a real send.
+    if (channel_osd_sent) {
+        bool const is_hdz = g_source_info.source == SOURCE_HDZERO;
+        uint8_t const sent_channel = (is_hdz ? g_setting.scan.channel
+                                             : g_setting.source.analog_channel) & 0x7F;
+        if (g_setting.elrs.vtx_sent_style == SETTING_VTX_SENT_STYLE_SUBTLE) {
+            lv_label_set_text(g_osd_hdzero.vtx_sent[is_fhd], "VTX SENT");
+            lv_obj_set_style_bg_opa(g_osd_hdzero.vtx_sent[is_fhd], LV_OPA_TRANSP, 0);
+            lv_obj_set_style_text_color(g_osd_hdzero.vtx_sent[is_fhd], lv_color_make(0x00, 0xB0, 0x00), 0);
+        } else {
+            snprintf(buf, sizeof(buf), "  %s  VTX SENT  ",
+                     channel2str(is_hdz, g_setting.source.hdzero_band, sent_channel));
+            lv_label_set_text(g_osd_hdzero.vtx_sent[is_fhd], buf);
+            lv_obj_set_style_bg_opa(g_osd_hdzero.vtx_sent[is_fhd], LV_OPA_100, 0);
+            lv_obj_set_style_text_color(g_osd_hdzero.vtx_sent[is_fhd], lv_color_make(0x00, 0xFF, 0x00), 0);
+        }
+        lv_obj_clear_flag(g_osd_hdzero.vtx_sent[is_fhd], LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(g_osd_hdzero.vtx_sent[is_fhd], LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -1034,6 +1057,14 @@ static void embedded_osd_init(uint8_t fhd) {
     lv_obj_set_style_bg_color(g_osd_hdzero.channel[fhd], lv_color_hex(0x010101), LV_PART_MAIN);
     lv_obj_set_style_radius(g_osd_hdzero.channel[fhd], 50, 0);
     channel_osd_mode = 0;
+
+    osd_object_create_label(fhd, &g_osd_hdzero.vtx_sent[fhd], "", &g_setting.osd.element[OSD_GOGGLE_CHANNEL].position, so);
+    lv_obj_set_style_bg_color(g_osd_hdzero.vtx_sent[fhd], lv_color_hex(0x010101), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(g_osd_hdzero.vtx_sent[fhd], LV_OPA_100, 0);
+    lv_obj_set_style_radius(g_osd_hdzero.vtx_sent[fhd], 50, 0);
+    lv_obj_set_style_text_color(g_osd_hdzero.vtx_sent[fhd], lv_color_make(0x00, 0xFF, 0x00), 0);
+    lv_obj_align(g_osd_hdzero.vtx_sent[fhd], LV_ALIGN_TOP_MID, 0, fhd ? 90 : 60);
+    lv_obj_add_flag(g_osd_hdzero.vtx_sent[fhd], LV_OBJ_FLAG_HIDDEN);
 
     osd_resource_path(buf, "%s", is_fhd, noSdcard_bmp);
     osd_object_create_img(fhd, &g_osd_hdzero.sd_rec[fhd], buf, &g_setting.osd.element[OSD_GOGGLE_SD_REC].position, so);

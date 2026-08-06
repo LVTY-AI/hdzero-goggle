@@ -144,7 +144,9 @@ static int find_freq_table_index(void) {
 // merged to the R7 row) tunes/labels as F8 at the F8 slot and R7 at the R7 slot.
 static void apply_freq_entry(const scan_freq_entry_t *entry,
                              const scan_result_t *r,
-                             bool send_msp, int analog_ch) {
+                             bool send_msp,
+                             bool deliberate,
+                             int analog_ch) {
     if (r->protocol == PROTOCOL_HDZ) {
         dvr_cmd(DVR_STOP);
 
@@ -190,7 +192,8 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
             HDZero_open(hdzero_effective_bw());
             hdzero_switch_channel(g_setting.scan.channel - 1);
         }
-        if (send_msp) msp_channel_update();
+        if (send_msp && msp_channel_update())
+            vtx_sent_osd_show(deliberate);
     } else if (r->protocol == PROTOCOL_ANALOG) {
         dvr_cmd(DVR_STOP);
 
@@ -216,7 +219,8 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
         } else if (channel_changed) {
             rtc6715.set_ch(g_setting.source.analog_channel - 1);
         }
-        if (send_msp) msp_channel_update();
+        if (send_msp && msp_channel_update())
+            vtx_sent_osd_show(deliberate);
     } else {
         dvr_cmd(DVR_STOP);
         // No signal: stay on current source, but tune to the entry's
@@ -320,7 +324,10 @@ void tune_channel(uint8_t action) {
                     }
                 }
             }
-            apply_freq_entry(entry, &r, action == DIAL_KEY_PRESS,
+            apply_freq_entry(entry, &r,
+                             action == DIAL_KEY_PRESS ||
+                                 (action == DIAL_KEY_CLICK && g_setting.elrs.auto_send_vtx),
+                             action == DIAL_KEY_PRESS,
                              auto_detect_freq_idx);
             channel_osd_mode = CHANNEL_SHOWTIME;
             channel_osd_preview_proto = 0; // back to normal "CH:" display
@@ -458,8 +465,16 @@ void tune_channel(uint8_t action) {
                 // re-inited the DM6302 up to three times (~5s frozen, unmasked
                 // green flashes) on every confirm.
                 hdzero_switch_channel(nch1 - 1);
-                if (action == DIAL_KEY_PRESS) {
-                    msp_channel_update();
+                bool const send_msp = action == DIAL_KEY_PRESS ||
+                                      (action == DIAL_KEY_CLICK && g_setting.elrs.auto_send_vtx);
+                if (send_msp && msp_channel_update()) {
+                    vtx_sent_osd_show(action == DIAL_KEY_PRESS);
+                }
+            } else if (action == DIAL_KEY_PRESS) {
+                // A long press on the already-selected channel deliberately
+                // re-sends it to the VTX.
+                if (msp_channel_update()) {
+                    vtx_sent_osd_show(true);
                 }
             }
         } else if (g_source_info.source == SOURCE_AV_MODULE) {
@@ -468,8 +483,14 @@ void tune_channel(uint8_t action) {
                 ini_putl("source", "analog_channel", g_setting.source.analog_channel, SETTING_INI);
                 dvr_cmd(DVR_STOP);
                 rtc6715.set_ch(g_setting.source.analog_channel - 1);
-                if (action == DIAL_KEY_PRESS) {
-                    msp_channel_update();
+                bool const send_msp = action == DIAL_KEY_PRESS ||
+                                      (action == DIAL_KEY_CLICK && g_setting.elrs.auto_send_vtx);
+                if (send_msp && msp_channel_update()) {
+                    vtx_sent_osd_show(action == DIAL_KEY_PRESS);
+                }
+            } else if (action == DIAL_KEY_PRESS) {
+                if (msp_channel_update()) {
+                    vtx_sent_osd_show(true);
                 }
             }
         }
@@ -521,6 +542,9 @@ void tune_channel_confirm() {
 }
 
 void tune_channel_timer() {
+    if (channel_osd_sent)
+        channel_osd_sent--;
+
     if (tune_state == 2) {
         if (!tune_timer)
             return;
