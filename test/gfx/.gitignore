@@ -26,3 +26,9 @@ test_router
 test_router.dSYM/
 test_imagesettings
 test_imagesettings.dSYM/
+test_jpeg
+test_jpeg.dSYM/
+test_pages
+test_pages.dSYM/
+test_playback2
+test_playback2.dSYM/
