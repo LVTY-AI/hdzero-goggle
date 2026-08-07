@@ -31,7 +31,7 @@ result
 result-*
 sdcard/
 emu-out/
-build_emu_linux/
+/build_emu_linux*/
 
 # macOS SDK staged from local Xcode (Apple SDK not redistributable) + cross build dirs
 .devcontainer/MacOSX.sdk.tar
