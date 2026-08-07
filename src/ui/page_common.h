@@ -78,7 +78,9 @@ extern "C" {
 #define RIGHT_BUTTON_IMG "right_button.png"
 #define ALERT_IMG        "alert.png"
 
-#define MAX_PANELS 10
+// Must cover the largest settings page. The Record page currently has twelve
+// rows, including its non-selectable note row.
+#define MAX_PANELS 12
 
 #define FLAG_SELECTABLE LV_OBJ_FLAG_USER_1
 #define STATE_DISABLED  LV_STATE_USER_1

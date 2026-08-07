@@ -45,6 +45,8 @@ enum {
     ROW_COUNT
 };
 
+_Static_assert(ROW_COUNT <= MAX_PANELS, "page_record has more rows than MAX_PANELS");
+
 static bool stop_delay_focused = false;
 static bool stop_delay_changed = false;
 static bool vbr_quality_focused = false;
@@ -133,6 +135,8 @@ static lv_obj_t *page_record_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_t *section = lv_menu_section_create(page);
     lv_obj_add_style(section, &style_submenu, LV_PART_MAIN);
     lv_obj_set_size(section, UI_PAGE_VIEW_SIZE);
+    lv_obj_add_flag(section, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(section, LV_SCROLLBAR_MODE_OFF);
 
     snprintf(buf, sizeof(buf), "%s:", _lang("Record Option"));
     create_text(NULL, section, false, buf, LV_MENU_ITEM_BUILDER_VARIANT_2);

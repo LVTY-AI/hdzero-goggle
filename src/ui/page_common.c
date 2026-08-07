@@ -74,6 +74,9 @@ void set_select_item(const panel_arr_t *arr, int row) {
 
     if (row >= 0 && row < MAX_PANELS) {
         lv_obj_clear_flag(arr->panel[row], LV_OBJ_FLAG_HIDDEN);
+        // Keep the active row visible on pages that opt into scrolling. Pages
+        // without a scrollable ancestor are unaffected.
+        lv_obj_scroll_to_view_recursive(arr->panel[row], LV_ANIM_OFF);
     }
 }
 
