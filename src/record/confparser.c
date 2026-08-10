@@ -33,6 +33,8 @@ void rec_dbg_log(const char* fmt, ...)
     va_end(ap);
 
     fputc('\n', fp);
+    fflush(fp);
+    fsync(fileno(fp));
     fclose(fp);
 }
 

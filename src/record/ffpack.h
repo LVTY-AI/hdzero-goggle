@@ -54,6 +54,13 @@ typedef struct tagFFPack
     uint64_t    nbTotalSize;
 } FFPack_t;
 
+typedef struct tagFFPackCloseResult
+{
+    int flush;
+    int trailer;
+    int io;
+} FFPackCloseResult_t;
+
 FFPack_t* ffpack_openFile(char* sName, void* context);
 FFPack_t* ffpack_open(CB_onData fnOnData, void* context);
 int  ffpack_newProgram(FFPack_t* ff, char* sName);
@@ -62,7 +69,7 @@ int  ffpack_newAudioStream(FFPack_t* ff, uint16_t programId, FFStreamParameters_
 int  ffpack_newDataStream (FFPack_t* ff, uint16_t programId, FFStreamParameters_t* param);
 int  ffpack_start(FFPack_t* ff);
 int  ffpack_input(FFPack_t* ff, int streamIndex, uint8_t* frameData, int frameLen, bool keyFrame, uint64_t pts);
-void ffpack_close(FFPack_t* ff);
+FFPackCloseResult_t ffpack_close(FFPack_t* ff);
 int  ffpack_inputStream(FFPack_t* ff, int streamIndex, void* stream, void* pkt);
 
 void ffpack_setParams(FFPack_t* ff, int streamIndex, void* param);
