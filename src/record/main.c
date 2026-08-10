@@ -248,7 +248,26 @@ inline static bool record_isArecording(RecordContext_t *recCtx) {
     return record_isGoing(recCtx->vv) && recCtx->params.enableAudio;
 }
 
+static void record_closeFile(RecordContext_t *recCtx, const char *reason) {
+    char filePath[256] = "";
+    snprintf(filePath, sizeof(filePath), "%s", recCtx->ff->ofmtContext->url);
+    uint64_t bytes = recCtx->ff->nbTotalSize;
+
+    rec_dbg_log("record_close begin reason=%s file='%s' frames=%u bytes=%llu",
+                reason, filePath, recCtx->nbFramesTotal,
+                (unsigned long long)bytes);
+    FFPackCloseResult_t result = ffpack_close(recCtx->ff);
+    recCtx->ff = NULL;
+    rec_dbg_log("record_close end reason=%s file='%s' flush=%d trailer=%d io=%d",
+                reason, filePath, result.flush, result.trailer, result.io);
+}
+
 void record_stop(RecordContext_t *recCtx) {
+    bool hadRecording = recCtx->ff != NULL;
+    if (hadRecording) {
+        rec_dbg_log("record_stop begin packType='%s'", recCtx->params.packType);
+    }
+
     if (recCtx->params.enableAudio) {
         bool aoplay = ai2ao_playing(recCtx->ao);
         ai2aenc_stop(recCtx->aa, !aoplay);
@@ -258,14 +277,17 @@ void record_stop(RecordContext_t *recCtx) {
 
     pthread_mutex_lock(&recCtx->mutex);
     if (recCtx->ff != NULL) {
-        ffpack_close(recCtx->ff);
-        recCtx->ff = NULL;
+        record_closeFile(recCtx, "stop");
     }
     recCtx->stateGoing = REC_statStop;
     pthread_mutex_unlock(&recCtx->mutex);
 
-    record_saveStatus(recCtx, record_stopStatus(recCtx));
+    int stopStatus = record_stopStatus(recCtx);
+    record_saveStatus(recCtx, stopStatus);
     remove(NOW_RECORDING_FILE);
+    if (hadRecording) {
+        rec_dbg_log("record_stop end status=%d", stopStatus);
+    }
 }
 
 int record_start(RecordContext_t *recCtx) {
@@ -493,8 +515,7 @@ bool record_pack(RecordContext_t *recCtx) {
     }
 
     pthread_mutex_lock(&recCtx->mutex);
-    ffpack_close(recCtx->ff);
-    recCtx->ff = NULL;
+    record_closeFile(recCtx, "segment_rollover");
     recCtx->nbFramesTotal = 0;
     recCtx->nbAudioFrames = 0;
     recCtx->ptsBase = 0;
@@ -603,8 +624,7 @@ failed:
     LOGE("create %s failed", sFile);
     remove(sFile);
     if (recCtx->ff != NULL) {
-        ffpack_close(recCtx->ff);
-        recCtx->ff = NULL;
+        record_closeFile(recCtx, "segment_start_failed");
     }
     pthread_mutex_unlock(&recCtx->mutex);
     return true;
@@ -864,28 +884,31 @@ void record_checkConf(RecordContext_t *recCtx, char *confSet) {
         return;
     }
 
-    /* path where default confs is */
-    if (disk_checkFile(REC_confDEFAULT)) {
-        strcpy(recCtx->confFile, REC_confDEFAULT);
-        return;
-    }
-
     char sTemp[MAX_pathLEN];
     char *p = sTemp;
     readlink("/proc/self/exe", sTemp, MAX_pathLEN);
     if (NULL != (p = strrchr(sTemp, '/'))) {
-        /* path where confs is */
+        /* Prefer the app-owned config that the UI updates before every
+         * recording. /data/confs/record.conf is a legacy installed copy and
+         * can contain a stale container type. */
         *p = '\0';
         strcat(sTemp, REC_confPathFILE);
         if (disk_checkFile(sTemp)) {
             strcpy(recCtx->confFile, sTemp);
             return;
         }
+    }
 
+    /* Legacy fallback for installations without an app-relative config. */
+    if (disk_checkFile(REC_confDEFAULT)) {
+        strcpy(recCtx->confFile, REC_confDEFAULT);
+        return;
+    }
+
+    memset(sTemp, 0, MAX_pathLEN);
+    readlink("/proc/self/exe", sTemp, MAX_pathLEN);
+    if (NULL != (p = strrchr(sTemp, '/'))) {
         /* path where record is */
-        memset(sTemp, 0, MAX_pathLEN);
-        readlink("/proc/self/exe", sTemp, MAX_pathLEN);
-        p = strrchr(sTemp, '/');
         *p = '\0';
         snprintf(recCtx->confFile, MAX_pathLEN, "%s/%s", sTemp, REC_confFILE);
     }

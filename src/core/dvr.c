@@ -396,6 +396,8 @@ static void dvr_dbg_log(const char *fmt, ...) {
     va_end(ap);
 
     fputc('\n', fp);
+    fflush(fp);
+    fsync(fileno(fp));
     fclose(fp);
 }
 
@@ -620,6 +622,7 @@ void dvr_cmd(osd_dvr_cmd_t cmd) {
     } else {
         if (dvr_is_recording) {
             dvr_is_recording = false;
+            dvr_dbg_log("stop_request cmd=%d", cmd);
             system_script(REC_STOP);
             sleep(2); // wait for record process
         }

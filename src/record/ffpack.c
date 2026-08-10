@@ -114,24 +114,25 @@ FFPack_t* ffpack_openFile(char* sName, void* context)
     return ff;
 }
 
-void ffpack_close(FFPack_t* ff)
+FFPackCloseResult_t ffpack_close(FFPack_t* ff)
 {
+    FFPackCloseResult_t result = {0};
     LOGD("ff=%p\n", ff);
 
     //flush all data
-    av_write_frame(ff->ofmtContext, NULL);
+    result.flush = av_write_frame(ff->ofmtContext, NULL);
 
     //LOGD("ofmt=%p\n", ff->ofmtContext);
 
     //Write file trailer
-    av_write_trailer(ff->ofmtContext);
+    result.trailer = av_write_trailer(ff->ofmtContext);
 
     if( ff->ofmtContext != NULL )
     {
         if(!(ff->ofmtContext->flags & AVFMT_NOFILE))
         {
             //LOGD("close pb=%p\n", ff->ofmtContext->pb);
-            avio_close(ff->ofmtContext->pb);
+            result.io = avio_close(ff->ofmtContext->pb);
         }
         else {
             //LOGD("free pb=%p\n", ff->ofmtContext->pb);
@@ -156,7 +157,9 @@ void ffpack_close(FFPack_t* ff)
 
     free(ff);
 
-    LOGD("done\n");
+    LOGD("done: flush=%d trailer=%d io=%d\n",
+         result.flush, result.trailer, result.io);
+    return result;
 }
 
 int ffpack_newProgram(FFPack_t* ff, char* sName)
