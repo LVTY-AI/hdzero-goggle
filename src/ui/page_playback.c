@@ -94,6 +94,11 @@ static lv_obj_t *page_playback_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_set_size(cont, UI_PAGE_VIEW_SIZE);
     lv_obj_clear_flag(cont, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_style(cont, &style_context, LV_PART_MAIN);
+#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
+    // The section's left padding is inside the fixed page width. Shift the
+    // whole FHD content block by one gap so its third tile stays in bounds.
+    lv_obj_set_style_translate_x(cont, -ITEM_GAP_W, 0);
+#endif
 
     for (uint32_t pos = 0; pos < ITEMS_LAYOUT_CNT; pos++) {
         pb_ui[pos]._img = lv_img_create(cont);
