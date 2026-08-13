@@ -1,5 +1,6 @@
 #include "settings.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -709,8 +710,15 @@ void settings_load(void) {
             g_setting.storage.selftest = true;
         }
     } else if (g_setting.storage.logging) {
-        unlink(APP_LOG_FILE);
+        // Keep the log across reboots so a power cycle does not discard it.
+        // Rotate once when it grows past the cap instead of wiping every boot.
+        if (fs_filesize(APP_LOG_FILE) >= APP_LOG_MAX_BYTES) {
+            rename(APP_LOG_FILE, APP_LOG_PREV);
+        }
         g_setting.storage.logging = log_file_open(APP_LOG_FILE);
+        if (g_setting.storage.logging) {
+            LOGI("---- boot ----");
+        }
     }
 
 #ifdef HDZBOXPRO
