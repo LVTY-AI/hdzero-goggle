@@ -464,8 +464,10 @@ bool avshare_connected(MediaType_e streamType) {
 void avshare_reset(void) {
     dpf("avshare reset\n");
 
-    // RESET_IsConnect(gAvshare.bufShare, MEDIA_NUM);
-    // avshare_flush();
+    // A live encoder restart begins a new H.264 stream with fresh SPS/PPS and
+    // an IDR. Discard every chunk from the previous encoder instance so the
+    // RTSP reader cannot concatenate the two bitstream epochs.
+    avshare_flush();
 
 #if (SAVE_FILE_TEST)
     if (gAvshare.fileTest != NULL) {
