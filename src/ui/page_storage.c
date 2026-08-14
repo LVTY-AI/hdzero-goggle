@@ -9,6 +9,7 @@
 #include "../conf/ui.h"
 
 #include "core/common.hh"
+#include "core/settings.h"
 #include "lang/language.h"
 #include "record/record_definitions.h"
 #include "ui/page_common.h"
@@ -222,7 +223,11 @@ static format_codes_t page_storage_format_sd() {
 
     // Restore logging if needed
     if (applogfile) {
-        log_file_open(applogfile);
+        if (g_setting.storage.selftest) {
+            log_file_open(applogfile);
+        } else {
+            settings_open_app_log();
+        }
     }
 
     return status;
@@ -300,7 +305,11 @@ static repair_codes_t page_storage_repair_sd() {
 
     // Restore logging if needed
     if (app_log_file) {
-        log_file_open(app_log_file);
+        if (g_setting.storage.selftest) {
+            log_file_open(app_log_file);
+        } else {
+            settings_open_app_log();
+        }
     }
 
     page_storage.is_sd_repair_active = false;
@@ -488,7 +497,7 @@ static void page_storage_on_click(uint8_t key, int sel) {
 
             if (g_setting.storage.logging) {
                 if (!log_file_opened()) {
-                    log_file_open(APP_LOG_FILE);
+                    settings_open_app_log();
                 }
             } else if (log_file_opened()) {
                 log_file_close();

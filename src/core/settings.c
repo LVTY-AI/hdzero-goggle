@@ -29,6 +29,13 @@ uint8_t hdzero_effective_bw(void) {
     return (uint8_t)g_setting.source.hdzero_bw;
 }
 
+bool settings_open_app_log(void) {
+    if (fs_filesize(APP_LOG_FILE) >= APP_LOG_MAX_BYTES) {
+        rename(APP_LOG_FILE, APP_LOG_PREV);
+    }
+    return log_file_open(APP_LOG_FILE);
+}
+
 const setting_t g_setting_defaults = {
     .scan = {
         .channel = 1,
@@ -712,10 +719,7 @@ void settings_load(void) {
     } else if (g_setting.storage.logging) {
         // Keep the log across reboots so a power cycle does not discard it.
         // Rotate once when it grows past the cap instead of wiping every boot.
-        if (fs_filesize(APP_LOG_FILE) >= APP_LOG_MAX_BYTES) {
-            rename(APP_LOG_FILE, APP_LOG_PREV);
-        }
-        g_setting.storage.logging = log_file_open(APP_LOG_FILE);
+        g_setting.storage.logging = settings_open_app_log();
         if (g_setting.storage.logging) {
             LOGI("---- boot ----");
         }
