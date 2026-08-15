@@ -53,7 +53,9 @@ extern "C" {
 #define UI_PLAYER_TEXT_FONT               &lv_font_montserrat_26
 #define UI_AUTOSCAN_COLS                  160, 150, 180, 220, 180, 160, LV_GRID_TEMPLATE_LAST
 #define UI_AUTOSCAN_ROWS                  60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
-#define UI_SCANNOW_SCANNER_COLS           500, 20, 1164 - 520, LV_GRID_TEMPLATE_LAST
+// Keep the FHD scan grid inside UI_SCANNOW_SCANNER_SIZE; the G2 instruction
+// label otherwise extends past the page and loses the end of "scan".
+#define UI_SCANNOW_SCANNER_COLS           500, 20, 1053 - 520, LV_GRID_TEMPLATE_LAST
 #define UI_SCANNOW_SCANNER_ROWS           60, 60, 80, LV_GRID_TEMPLATE_LAST
 #define UI_SCANNOW_SIGNAL_COLS            120, 80, 80, 180, 100, 80, 80, 180, LV_GRID_TEMPLATE_LAST
 #define UI_SCANNOW_SIGNAL_ROWS            60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
