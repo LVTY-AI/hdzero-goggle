@@ -58,8 +58,8 @@ extern "C" {
 #define UI_SCANNOW_SCANNER_GRID_W         1053
 // The scanner's left inset is taken out of the PROGRESS BAR column, never out
 // of the last column: the instruction label fills that column almost exactly
-// and loses the end of "scan" if it shrinks at all. The bar just gets 30px
-// narrower on G2, which is invisible at this size.
+// and loses the end of "scan" if it shrinks at all. The bar just gets the
+// inset's worth narrower (30px on G2, 20px on G1), invisible at this size.
 #define UI_SCANNOW_PROG_BAR_W             (500 - UI_SCANNOW_SCANNER_PAD_LEFT)
 #define UI_SCANNOW_SCANNER_COLS           UI_SCANNOW_PROG_BAR_W, 20,                           \
                                           UI_SCANNOW_SCANNER_GRID_W - 520,                     \
@@ -81,20 +81,25 @@ extern "C" {
 #define UI_SCANNOW_MODE_BTN_SIZE          300, 64
 #define UI_SCANNOW_MODE_BTN_X0            30
 #define UI_SCANNOW_MODE_BTN_STEP          330
-// Indent the scanner grid to line up with the mode buttons above it, so
-// "Scan Ready" and the progress bar aren't flush against the menu bar.
+// Indent the scanner grid so "Scan Ready" and the progress bar aren't flush
+// against the menu bar.
 //
 // The inset comes OUT of the container width (see SCANNER_COLS) rather than
 // being added to it: the scanner container is CENTER-aligned in the page, so
 // widening it to absorb the inset moves its left edge out by half the increase
 // and the content only shifts by the other half.
 //
-// G2 only: this block is shared with G1, which has no mode buttons for the
-// scanner to line up with, so G1 keeps its existing flush-left layout.
+// G2 lines up with its mode buttons. G1 has no mode buttons, so it restores
+// the 20px the theme used to give it: d2b64107 cleared the theme's horizontal
+// padding for the sake of the FHD grid width and took G1's inset with it,
+// which is the regression against older firmware. The old geometry can't just
+// be restored wholesale -- back then the columns summed to 1164 in a 1053
+// container, which is precisely why the instruction label ran off the page --
+// so G1 gets the inset the same way G2 does, out of the bar column.
 #if defined(HDZGOGGLE2)
 #define UI_SCANNOW_SCANNER_PAD_LEFT       UI_SCANNOW_MODE_BTN_X0
 #else
-#define UI_SCANNOW_SCANNER_PAD_LEFT       0
+#define UI_SCANNOW_SCANNER_PAD_LEFT       20
 #endif
 #define UI_SCANNOW_SCANNER_SIZE           UI_SCANNOW_SCANNER_GRID_W, 250
 #define UI_SCANNOW_PROG_BAR_SIZE          UI_SCANNOW_PROG_BAR_W, 50
