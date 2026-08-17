@@ -5,6 +5,7 @@
 #   build.sh prepare-mac  stage Apple's SDK from your Xcode into .devcontainer (one-time)
 #   build.sh images       build all three images (hdzero-dev, hdzero-dev-win, hdzero-dev-mac)
 #   build.sh linux        Linux emulator   -> build_emu_linux/HDZGOGGLE     (image: hdzero-dev)
+#   build.sh linux-g2     Goggle 2 build   -> build_emu_linux_g2/HDZGOGGLE  (image: hdzero-dev)
 #   build.sh windows      Windows emulator -> build_win_x64/HDZGOGGLE.exe   (image: hdzero-dev-win, mingw)
 #   build.sh mac          macOS emulator   -> build_xmac/HDZGOGGLE          (image: hdzero-dev-mac, LLVM cross)
 #   build.sh all          images + linux + windows + mac
@@ -54,6 +55,16 @@ linux() {
         make -C build_emu_linux -j"$(nproc)"'
 }
 
+# Goggle 2 flavour of the Linux emulator. G1 and G2 share the FHD panel but not
+# every UI metric (conf/ui.h) or page feature, so G2-only layout work needs its
+# own build. Separate build dir; the G1 build above is untouched.
+linux_g2() {
+    ensure_image hdzero-dev Dockerfile
+    DRUN hdzero-dev bash -lc '
+        cmake -S . -B build_emu_linux_g2 -DEMULATOR_BUILD=ON -DHDZ_GOGGLE2=ON -DCMAKE_BUILD_TYPE=Debug &&
+        make -C build_emu_linux_g2 -j"$(nproc)"'
+}
+
 windows() {
     ensure_image hdzero-dev     Dockerfile          # base for the mingw image
     ensure_image hdzero-dev-win Dockerfile.windows
@@ -77,8 +88,9 @@ case "${1:-all}" in
     prepare-mac) prepare_mac ;;
     images)      images ;;
     linux)       linux ;;
+    linux-g2)    linux_g2 ;;
     windows)     windows ;;
     mac)         mac ;;
     all)         images; linux; windows; mac ;;
-    *) echo "usage: build.sh {prepare-mac|images|linux|windows|mac|all}"; exit 2 ;;
+    *) echo "usage: build.sh {prepare-mac|images|linux|linux-g2|windows|mac|all}"; exit 2 ;;
 esac

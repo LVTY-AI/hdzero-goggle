@@ -66,6 +66,15 @@ extern "C" {
 #define UI_SCANNOW_CHAN_FONT              &lv_font_montserrat_40
 #define UI_SCANNOW_CHAN_PAD               12
 #define UI_SCANNOW_PAGE_PAD               60
+// Scan-mode picker (G2 only; G1 has a single protocol and no mode buttons).
+// Scaled to the FHD page: the BoxPro-tuned 220x44 buttons left the 26px FHD
+// label cramped and read undersized against the rest of the page.
+#define UI_SCANNOW_MODE_ROW_SIZE          1053, 76
+#define UI_SCANNOW_MODE_BTN_SIZE          300, 64
+#define UI_SCANNOW_MODE_BTN_X0            30
+#define UI_SCANNOW_MODE_BTN_STEP          330
+// The scanner grid spans the full FHD container width, so no left inset here.
+#define UI_SCANNOW_SCANNER_PAD_LEFT       0
 #define UI_SCANNOW_SCANNER_SIZE           1053, 250
 #define UI_SCANNOW_PROG_BAR_SIZE          500, 50
 #define UI_SCANNOW_FREQ_SIZE              1053, 500
@@ -217,6 +226,15 @@ static inline int UI_STATUS_BAR_LABEL_WIDTH() {
 #define UI_SCANNOW_CHAN_FONT              &lv_font_montserrat_26
 #define UI_SCANNOW_CHAN_PAD               8
 #define UI_SCANNOW_PAGE_PAD               40
+#define UI_SCANNOW_MODE_ROW_SIZE          780, 56
+#define UI_SCANNOW_MODE_BTN_SIZE          220, 44
+#define UI_SCANNOW_MODE_BTN_X0            30
+#define UI_SCANNOW_MODE_BTN_STEP          240
+// Indent the scanner grid to line up with the mode buttons above it: the
+// theme's own horizontal padding is cleared for the FHD grid's sake, which
+// otherwise leaves "Scanning ready" and the progress bar flush against the
+// menu bar.
+#define UI_SCANNOW_SCANNER_PAD_LEFT       UI_SCANNOW_MODE_BTN_X0
 #define UI_SCANNOW_SCANNER_SIZE           780, 160
 #define UI_SCANNOW_PROG_BAR_SIZE          320, 32
 #define UI_SCANNOW_FREQ_SIZE              788, 320

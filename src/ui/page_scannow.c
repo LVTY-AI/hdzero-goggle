@@ -382,7 +382,7 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     // container so it isn't constrained by cont1's grid.
     {
         lv_obj_t *cont_mode = lv_obj_create(page);
-        lv_obj_set_size(cont_mode, 780, 56);
+        lv_obj_set_size(cont_mode, UI_SCANNOW_MODE_ROW_SIZE);
         lv_obj_clear_flag(cont_mode, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_style(cont_mode, &style_scan, LV_PART_MAIN);
         lv_obj_set_style_bg_opa(cont_mode, 0, 0);
@@ -392,8 +392,9 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
         static const char *mode_names[3] = {"HDZero", "Analog", "Auto"};
         for (int i = 0; i < SCAN_MODE_COUNT; i++) {
             mode_btns[i] = lv_btn_create(cont_mode);
-            lv_obj_set_size(mode_btns[i], 220, 44);
-            lv_obj_set_pos(mode_btns[i], 30 + i * 240, 6);
+            lv_obj_set_size(mode_btns[i], UI_SCANNOW_MODE_BTN_SIZE);
+            lv_obj_set_pos(mode_btns[i],
+                           UI_SCANNOW_MODE_BTN_X0 + i * UI_SCANNOW_MODE_BTN_STEP, 6);
             lv_obj_t *lbl = lv_label_create(mode_btns[i]);
             lv_label_set_text(lbl, mode_names[i]);
             lv_obj_set_style_text_color(lbl,
@@ -414,9 +415,12 @@ static lv_obj_t *page_scannow_create(lv_obj_t *parent, panel_arr_t *arr) {
     lv_obj_clear_flag(cont1, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_style(cont1, &style_scan, LV_PART_MAIN);
     lv_obj_set_style_bg_opa(cont1, 0, 0);
-    // The theme adds horizontal padding to generic objects. Clear it here so
+    // The theme adds horizontal padding to generic objects. Override it here so
     // the scan grid columns use the full width declared for the FHD container.
-    lv_obj_set_style_pad_left(cont1, 0, 0);
+    // BoxPro instead asks for a deliberate inset matching the mode buttons
+    // above, so its "Scanning ready" and progress bar aren't flush against the
+    // menu bar.
+    lv_obj_set_style_pad_left(cont1, UI_SCANNOW_SCANNER_PAD_LEFT, 0);
     lv_obj_set_style_pad_right(cont1, 0, 0);
     lv_obj_set_style_grid_column_dsc_array(cont1, col_dsc1, 0);
     lv_obj_set_style_grid_row_dsc_array(cont1, row_dsc1, 0);
