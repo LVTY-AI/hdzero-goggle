@@ -53,9 +53,17 @@ extern "C" {
 #define UI_PLAYER_TEXT_FONT               &lv_font_montserrat_26
 #define UI_AUTOSCAN_COLS                  160, 150, 180, 220, 180, 160, LV_GRID_TEMPLATE_LAST
 #define UI_AUTOSCAN_ROWS                  60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
-// Keep the FHD scan grid inside UI_SCANNOW_SCANNER_SIZE; the G2 instruction
+// Keep the FHD scan grid inside UI_SCANNOW_SCANNER_GRID_W; the G2 instruction
 // label otherwise extends past the page and loses the end of "scan".
-#define UI_SCANNOW_SCANNER_COLS           500, 20, 1053 - 520, LV_GRID_TEMPLATE_LAST
+#define UI_SCANNOW_SCANNER_GRID_W         1053
+// The scanner's left inset is taken out of the PROGRESS BAR column, never out
+// of the last column: the instruction label fills that column almost exactly
+// and loses the end of "scan" if it shrinks at all. The bar just gets 30px
+// narrower on G2, which is invisible at this size.
+#define UI_SCANNOW_PROG_BAR_W             (500 - UI_SCANNOW_SCANNER_PAD_LEFT)
+#define UI_SCANNOW_SCANNER_COLS           UI_SCANNOW_PROG_BAR_W, 20,                           \
+                                          UI_SCANNOW_SCANNER_GRID_W - 520,                     \
+                                          LV_GRID_TEMPLATE_LAST
 #define UI_SCANNOW_SCANNER_ROWS           60, 60, 80, LV_GRID_TEMPLATE_LAST
 #define UI_SCANNOW_SIGNAL_COLS            120, 80, 80, 180, 100, 80, 80, 180, LV_GRID_TEMPLATE_LAST
 #define UI_SCANNOW_SIGNAL_ROWS            60, 60, 60, 60, 60, 60, 60, 60, 60, 60, LV_GRID_TEMPLATE_LAST
@@ -66,8 +74,30 @@ extern "C" {
 #define UI_SCANNOW_CHAN_FONT              &lv_font_montserrat_40
 #define UI_SCANNOW_CHAN_PAD               12
 #define UI_SCANNOW_PAGE_PAD               60
-#define UI_SCANNOW_SCANNER_SIZE           1053, 250
-#define UI_SCANNOW_PROG_BAR_SIZE          500, 50
+// Scan-mode picker (G2 only; G1 has a single protocol and no mode buttons).
+// Scaled to the FHD page: the BoxPro-tuned 220x44 buttons left the 26px FHD
+// label cramped and read undersized against the rest of the page.
+#define UI_SCANNOW_MODE_ROW_SIZE          1053, 76
+#define UI_SCANNOW_MODE_BTN_SIZE          300, 64
+#define UI_SCANNOW_MODE_BTN_X0            30
+#define UI_SCANNOW_MODE_BTN_STEP          330
+// Indent the scanner grid to line up with the mode buttons above it, so
+// "Scan Ready" and the progress bar aren't flush against the menu bar.
+//
+// The inset comes OUT of the container width (see SCANNER_COLS) rather than
+// being added to it: the scanner container is CENTER-aligned in the page, so
+// widening it to absorb the inset moves its left edge out by half the increase
+// and the content only shifts by the other half.
+//
+// G2 only: this block is shared with G1, which has no mode buttons for the
+// scanner to line up with, so G1 keeps its existing flush-left layout.
+#if defined(HDZGOGGLE2)
+#define UI_SCANNOW_SCANNER_PAD_LEFT       UI_SCANNOW_MODE_BTN_X0
+#else
+#define UI_SCANNOW_SCANNER_PAD_LEFT       0
+#endif
+#define UI_SCANNOW_SCANNER_SIZE           UI_SCANNOW_SCANNER_GRID_W, 250
+#define UI_SCANNOW_PROG_BAR_SIZE          UI_SCANNOW_PROG_BAR_W, 50
 #define UI_SCANNOW_FREQ_SIZE              1053, 500
 #define UI_CLOCK_COLS                     160, 160, 160, 160, 160, 160, LV_GRID_TEMPLATE_LAST
 #define UI_CLOCK_ROWS                     60, 60, 60, 60, 60, 15, 10, 60, 60, 60, LV_GRID_TEMPLATE_LAST
@@ -217,6 +247,15 @@ static inline int UI_STATUS_BAR_LABEL_WIDTH() {
 #define UI_SCANNOW_CHAN_FONT              &lv_font_montserrat_26
 #define UI_SCANNOW_CHAN_PAD               8
 #define UI_SCANNOW_PAGE_PAD               40
+#define UI_SCANNOW_MODE_ROW_SIZE          780, 56
+#define UI_SCANNOW_MODE_BTN_SIZE          220, 44
+#define UI_SCANNOW_MODE_BTN_X0            30
+#define UI_SCANNOW_MODE_BTN_STEP          240
+// Indent the scanner grid to line up with the mode buttons above it: the
+// theme's own horizontal padding is cleared for the FHD grid's sake, which
+// otherwise leaves "Scanning ready" and the progress bar flush against the
+// menu bar.
+#define UI_SCANNOW_SCANNER_PAD_LEFT       UI_SCANNOW_MODE_BTN_X0
 #define UI_SCANNOW_SCANNER_SIZE           780, 160
 #define UI_SCANNOW_PROG_BAR_SIZE          320, 32
 #define UI_SCANNOW_FREQ_SIZE              788, 320

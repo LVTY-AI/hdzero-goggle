@@ -4,6 +4,9 @@
 # it does not matter where the workspace is mounted (/workspaces/... or /src).
 #
 #   emu.sh build                         configure + compile the emulator (build_emu_linux)
+#
+# HDZ_TARGET=goggle (default) or goggle2 picks which goggle is emulated; goggle2
+# builds into build_emu_linux_g2 and renders the G2's per-target UI metrics.
 #   emu.sh shot [name] [warmup] [keys]   headless run -> screenshot emu-out/<name>.png
 #   emu.sh all  [name] [warmup] [keys]   build, then shot
 #
@@ -15,7 +18,17 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-BUILD_DIR="$REPO_ROOT/build_emu_linux"
+# HDZ_TARGET selects which goggle the emulator impersonates. The targets differ in
+# panel geometry and per-target UI metrics (conf/ui.h), so previewing a G2-only
+# layout needs a G2 build. Each target gets its own build dir so they don't
+# clobber each other's CMake cache.
+HDZ_TARGET="${HDZ_TARGET:-goggle}"
+case "$HDZ_TARGET" in
+    goggle)  TARGET_FLAGS="-DHDZ_GOGGLE=ON -DHDZ_BOXPRO=OFF -DHDZ_GOGGLE2=OFF"; BUILD_SUFFIX="" ;;
+    goggle2) TARGET_FLAGS="-DHDZ_GOGGLE=OFF -DHDZ_BOXPRO=OFF -DHDZ_GOGGLE2=ON"; BUILD_SUFFIX="_g2" ;;
+    *) echo "unknown HDZ_TARGET '$HDZ_TARGET' (expected: goggle, goggle2)"; exit 2 ;;
+esac
+BUILD_DIR="${BUILD_DIR:-$REPO_ROOT/build_emu_linux$BUILD_SUFFIX}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/emu-out}"
 # All run-time logs go under the gitignored tmp/ tree (repo .gitignore: /tmp),
 # so they never clutter the repo root or emu-out.
@@ -27,7 +40,7 @@ mkdir -p "$OUT_DIR" "$LOG_DIR"
 do_build() {
     cmake -S "$REPO_ROOT" -B "$BUILD_DIR" \
         -DEMULATOR_BUILD=ON -DCMAKE_BUILD_TYPE=Debug \
-        -DHDZ_GOGGLE=ON -DHDZ_BOXPRO=OFF -DHDZ_GOGGLE2=OFF
+        $TARGET_FLAGS
     make -C "$BUILD_DIR" -j"$(nproc)"
 }
 
