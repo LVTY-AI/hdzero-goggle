@@ -59,6 +59,11 @@ void lv_gif_set_src(lv_obj_t * obj, const void * src)
 {
     lv_gif_t * gifobj = (lv_gif_t *) obj;
 
+    /*`next_frame_task_cb` dereferences `gif` unconditionally, so the timer must
+     *not run while it is NULL. That window spans the close below and the open
+     *that follows, and it never closes at all if the source fails to open.*/
+    lv_timer_pause(gifobj->timer);
+
     /*Close previous gif if any*/
     if(gifobj->gif) {
         lv_img_cache_invalidate_src(&gifobj->imgdsc);
@@ -76,7 +81,7 @@ void lv_gif_set_src(lv_obj_t * obj, const void * src)
     }
     if(gifobj->gif == NULL) {
         LV_LOG_WARN("Could't load the source");
-        return;
+        return; /*Timer stays paused, so the NULL is never dereferenced*/
     }
 
     gifobj->imgdsc.data = gifobj->gif->canvas;
@@ -128,6 +133,12 @@ static void next_frame_task_cb(lv_timer_t * t)
 {
     lv_obj_t * obj = t->user_data;
     lv_gif_t * gifobj = (lv_gif_t *) obj;
+    if(gifobj->gif == NULL) {
+        /*No source loaded, or the last one failed to open. Nothing to animate,
+         *and spinning at 10 ms to rediscover that is pure waste.*/
+        lv_timer_pause(t);
+        return;
+    }
     uint32_t elaps = lv_tick_elaps(gifobj->last_call);
     if(elaps < gifobj->gif->gce.delay * 10) return;
 

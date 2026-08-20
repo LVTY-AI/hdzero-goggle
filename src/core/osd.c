@@ -67,6 +67,24 @@ extern lv_style_t style_osd;
 extern pthread_mutex_t lvgl_mutex;
 extern int gif_cnt;
 
+// The two GIF elements (low battery, VRX overheat) used to have their source
+// re-set on every OSD refresh, which tore the decoder down and re-read the file
+// from flash thousands of times an hour whether or not the element was even
+// visible. That is wasteful, and it is also how the app died: a single failed
+// open leaves lv_gif holding a NULL decoder that its 10 ms timer dereferences.
+// The path is constant in practice, so only touch the source when it changes -
+// which still picks up a resource swapped in on the SD card, at no per-tick
+// cost. Indexed by is_fhd, matching the widget arrays.
+static char osd_gif_src_battery_low[2][128];
+static char osd_gif_src_vrx_temp[2][128];
+
+static void osd_gif_set_src_cached(lv_obj_t *obj, char *cache, size_t cache_len, const char *path) {
+    if (!obj || strcmp(cache, path) == 0)
+        return;
+    lv_gif_set_src(obj, path);
+    snprintf(cache, cache_len, "%s", path);
+}
+
 // Use SDCARD for Embedded Glyph if the glyph exists otherwise use goggle FS
 void osd_resource_path(char *buf, const char *fmt, osd_resource_t osd_resource_type, ...) {
     char filename[128];
@@ -223,7 +241,8 @@ void osd_battery_low_show() {
 
     if (show_gif && !blink && g_setting.osd.element[OSD_GOGGLE_BATTERY_LOW].show) {
         osd_resource_path(buf, "%s", is_fhd, lowBattery_gif);
-        lv_gif_set_src(g_osd_hdzero.battery_low[is_fhd], buf);
+        osd_gif_set_src_cached(g_osd_hdzero.battery_low[is_fhd], osd_gif_src_battery_low[is_fhd],
+                               sizeof(osd_gif_src_battery_low[is_fhd]), buf);
         lv_obj_clear_flag(g_osd_hdzero.battery_low[is_fhd], LV_OBJ_FLAG_HIDDEN);
     } else
         lv_obj_add_flag(g_osd_hdzero.battery_low[is_fhd], LV_OBJ_FLAG_HIDDEN);
@@ -325,7 +344,8 @@ void osd_vrxtemp_show() {
     char buf[128];
     if (g_temperature.is_overheat && g_setting.osd.element[OSD_GOGGLE_VRX_TEMP].show) {
         osd_resource_path(buf, "%s", is_fhd, VrxTemp7_gif);
-        lv_gif_set_src(g_osd_hdzero.vrx_temp[is_fhd], buf);
+        osd_gif_set_src_cached(g_osd_hdzero.vrx_temp[is_fhd], osd_gif_src_vrx_temp[is_fhd],
+                               sizeof(osd_gif_src_vrx_temp[is_fhd]), buf);
         lv_obj_clear_flag(g_osd_hdzero.vrx_temp[is_fhd], LV_OBJ_FLAG_HIDDEN);
     } else
         lv_obj_add_flag(g_osd_hdzero.vrx_temp[is_fhd], LV_OBJ_FLAG_HIDDEN);
@@ -902,9 +922,9 @@ void osd_hdzero_update(void) {
     osd_battery_voltage_show(g_setting.osd.is_visible);
     osd_clock_show(g_setting.osd.is_visible);
 
-    if (gif_cnt % 10 == 0) { // delay needed to allow gif to flash
-        osd_resource_path(buf, "%s", is_fhd, VrxTemp7_gif);
-        lv_gif_set_src(g_osd_hdzero.vrx_temp[is_fhd], buf);
+    // Throttled because it only decides show/hide; the GIF animates on its own
+    // timer now rather than being restarted from here.
+    if (gif_cnt % 10 == 0) {
         osd_vrxtemp_show();
     }
 
@@ -943,9 +963,9 @@ void osd_hdzero_update(void) {
 
 #endif
 
-    if (gif_cnt % 10 == 0) { // delay needed to allow gif to flash
-        osd_resource_path(buf, "%s", is_fhd, lowBattery_gif);
-        lv_gif_set_src(g_osd_hdzero.battery_low[is_fhd], buf);
+    // Throttled for the same reason as the VRX-temp GIF above; this also sets
+    // the cadence at which the gradual-warning blink phase is re-evaluated.
+    if (gif_cnt % 10 == 0) {
         osd_battery_low_show();
     }
 
