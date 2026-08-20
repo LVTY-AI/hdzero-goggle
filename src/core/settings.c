@@ -456,6 +456,7 @@ void settings_load(void) {
     g_setting.fans.right_speed = ini_getl("fans", "right_speed", g_setting_defaults.fans.right_speed, SETTING_INI);
 
     // source
+    g_setting.source.analog_module = ini_getl("source", "analog_module", g_setting_defaults.source.analog_module, SETTING_INI);
     g_setting.source.analog_format = ini_getl("source", "analog_format", g_setting_defaults.source.analog_format, SETTING_INI);
     g_setting.source.analog_auto = ini_getl("source", "analog_auto", g_setting_defaults.source.analog_auto, SETTING_INI);
     g_setting.source.analog_ratio = ini_getl("source", "analog_ratio", g_setting_defaults.source.analog_ratio, SETTING_INI);
