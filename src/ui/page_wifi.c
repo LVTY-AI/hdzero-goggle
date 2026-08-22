@@ -301,7 +301,7 @@ static void page_wifi_update_settings() {
     snprintf(g_setting.wifi.gateway, WIFI_NETWORK_MAX, "%s", page_wifi.page_2.gateway.text);
     snprintf(g_setting.wifi.dns, WIFI_NETWORK_MAX, "%s", page_wifi.page_2.dns.text);
 
-    snprintf(g_setting.wifi.root_pw, WIFI_PASSWD_MAX, "%s", page_wifi.page_3.root_pw.text);
+    snprintf(g_setting.wifi.root_pw, sizeof(g_setting.wifi.root_pw), "%s", page_wifi.page_3.root_pw.text);
 
     if (0 == strlen(g_setting.wifi.clientid)) {
         page_wifi_generate_clientid(g_setting.wifi.clientid, WIFI_CLIENTID_MAX);
