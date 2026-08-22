@@ -289,7 +289,7 @@ typedef struct {
     char gateway[WIFI_NETWORK_MAX];
     char dns[WIFI_NETWORK_MAX];
     uint8_t rf_channel;
-    char root_pw[WIFI_SSID_MAX];
+    char root_pw[WIFI_PASSWD_MAX];
     bool ssh;
 } wifi_t;
 

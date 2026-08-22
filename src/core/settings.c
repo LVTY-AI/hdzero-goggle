@@ -679,7 +679,7 @@ void settings_load(void) {
     ini_gets("wifi", "gateway", g_setting_defaults.wifi.gateway, g_setting.wifi.gateway, WIFI_NETWORK_MAX, SETTING_INI);
     ini_gets("wifi", "dns", g_setting_defaults.wifi.dns, g_setting.wifi.dns, WIFI_NETWORK_MAX, SETTING_INI);
     g_setting.wifi.rf_channel = ini_getl("wifi", "rf_channel", g_setting_defaults.wifi.rf_channel, SETTING_INI);
-    ini_gets("wifi", "root_pw", g_setting_defaults.wifi.root_pw, g_setting.wifi.root_pw, WIFI_PASSWD_MAX, SETTING_INI);
+    ini_gets("wifi", "root_pw", g_setting_defaults.wifi.root_pw, g_setting.wifi.root_pw, sizeof(g_setting.wifi.root_pw), SETTING_INI);
     g_setting.wifi.ssh = settings_get_bool("wifi", "ssh", g_setting_defaults.wifi.ssh);
 
     //  no dial under video mode
