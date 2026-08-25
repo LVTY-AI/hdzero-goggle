@@ -40,14 +40,17 @@ static btn_group_t btn_group_fans;
 static slider_group_t slider_group[2];
 
 static void update_visibility() {
+#if defined(HDZBOXPRO)
     slider_enable(&slider_group[0], btn_group_fans.current != 0);
     if (btn_group_fans.current == 0) {
         lv_obj_clear_flag(pp_fans.p_arr.panel[1], FLAG_SELECTABLE);
     } else {
         lv_obj_add_flag(pp_fans.p_arr.panel[1], FLAG_SELECTABLE);
     }
+#else
+    slider_enable(&slider_group[0], true);
+    lv_obj_add_flag(pp_fans.p_arr.panel[1], FLAG_SELECTABLE);
 
-#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
     slider_enable(&slider_group[1], btn_group_fans.current != 0);
     if (btn_group_fans.current == 0) {
         lv_obj_clear_flag(pp_fans.p_arr.panel[2], FLAG_SELECTABLE);
@@ -55,6 +58,16 @@ static void update_visibility() {
         lv_obj_add_flag(pp_fans.p_arr.panel[2], FLAG_SELECTABLE);
     }
 #endif
+}
+
+static void fans_manual_override() {
+    if (!g_setting.fans.auto_mode)
+        return;
+
+    g_setting.fans.auto_mode = false;
+    settings_put_bool("fans", "auto", g_setting.fans.auto_mode);
+    btn_group_set_sel(&btn_group_fans, 1);
+    update_visibility();
 }
 
 static lv_obj_t *page_fans_create(lv_obj_t *parent, panel_arr_t *arr) {
@@ -112,8 +125,13 @@ static lv_obj_t *page_fans_create(lv_obj_t *parent, panel_arr_t *arr) {
 
 static void fans_top_speed_inc() {
     char buf[12];
-    int32_t value = lv_slider_get_value(slider_group[0].slider);
+    int32_t value;
 
+#if defined(HDZBOXPRO)
+    fans_manual_override();
+#endif
+
+    value = lv_slider_get_value(slider_group[0].slider);
     if (value < MAX_FAN_TOP)
         value += 1;
 
@@ -130,8 +148,13 @@ static void fans_top_speed_inc() {
 
 static void fans_top_speed_dec() {
     char buf[12];
-    int32_t value = lv_slider_get_value(slider_group[0].slider);
+    int32_t value;
 
+#if defined(HDZBOXPRO)
+    fans_manual_override();
+#endif
+
+    value = lv_slider_get_value(slider_group[0].slider);
     if (value > MIN_FAN_TOP)
         value -= 1;
 
@@ -147,7 +170,11 @@ static void fans_top_speed_dec() {
 
 static void fans_side_speed_inc() {
     char buf[12];
-    int32_t value = lv_slider_get_value(slider_group[1].slider);
+    int32_t value;
+
+    fans_manual_override();
+
+    value = lv_slider_get_value(slider_group[1].slider);
 
     if (value < MAX_FAN_SIDE)
         value += 1;
@@ -165,7 +192,11 @@ static void fans_side_speed_inc() {
 
 static void fans_side_speed_dec() {
     char buf[12];
-    int32_t value = lv_slider_get_value(slider_group[1].slider);
+    int32_t value;
+
+    fans_manual_override();
+
+    value = lv_slider_get_value(slider_group[1].slider);
 
     if (value > MIN_FAN_SIDE)
         value -= 1;
@@ -261,10 +292,14 @@ static void page_fans_mode_on_click(uint8_t key, int sel) {
 void step_topfan() {
     char str[10];
 
-    if (g_setting.fans.top_speed == MAX_FAN_TOP)
+#if defined(HDZBOXPRO)
+    fans_manual_override();
+#endif
+
+    if (fan_speed.top == MAX_FAN_TOP)
         g_setting.fans.top_speed = MIN_FAN_TOP;
     else
-        g_setting.fans.top_speed++;
+        g_setting.fans.top_speed = fan_speed.top + 1;
 
     fans_top_setspeed(g_setting.fans.top_speed);
     ini_putl("fans", "top_speed", g_setting.fans.top_speed, SETTING_INI);
@@ -334,7 +369,9 @@ void fans_auto_ctrl_core(int which, int tempe, bool binit) {
         speed[0] = speed[1] = speed[2] = 2; // Initial fan speed for auto mode
         respeed_cnt[0] = respeed_cnt[1] = respeed_cnt[2] = 0;
         respeeding[0] = respeeding[1] = respeeding[2] = 0;
+#if defined(HDZBOXPRO)
         fans_top_setspeed(speed[0]);
+#endif
         fans_left_setspeed(speed[1]);
         fans_right_setspeed(speed[2]);
     }
@@ -432,9 +469,14 @@ void fans_auto_ctrl() {
     auto_mode_d = g_setting.fans.auto_mode;
 
     if (g_setting.fans.auto_mode) {
+#if defined(HDZBOXPRO)
         fans_auto_ctrl_core(FAN_TOP, g_temperature.top, binit_r);
         fans_auto_ctrl_core(FAN_RIGHT, g_temperature.right, false);
         fans_auto_ctrl_core(FAN_LEFT, g_temperature.left, false);
+#else
+        fans_auto_ctrl_core(FAN_RIGHT, g_temperature.right, binit_r);
+        fans_auto_ctrl_core(FAN_LEFT, g_temperature.left, binit_r);
+#endif
     } else {
         if (binit_f)
             speed.top = speed.left = speed.right = 0xFF;
@@ -449,11 +491,20 @@ void fans_auto_ctrl() {
             speed.left = g_setting.fans.left_speed;
         }
 
+#if defined(HDZBOXPRO)
         if (speed.top != g_setting.fans.top_speed) {
             fans_top_setspeed(g_setting.fans.top_speed);
             speed.top = g_setting.fans.top_speed;
         }
+#endif
     }
+
+#if !defined(HDZBOXPRO)
+    if (speed.top != g_setting.fans.top_speed) {
+        fans_top_setspeed(g_setting.fans.top_speed);
+        speed.top = g_setting.fans.top_speed;
+    }
+#endif
 }
 
 void change_topfan(uint8_t key) {
