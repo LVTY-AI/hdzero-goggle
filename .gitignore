@@ -1,14 +1,5 @@
 /build
-/build_emu
-build_goggle
-build_boxpro
-build_goggle2
-build_goggle_release
-build_boxpro_release
-build_goggle2_release
-build_goggle_hardened_test
-build_boxpro_hardened_test
-build_goggle2_hardened_test
+build_*
 linux-4.9
 /media
 toolchain
@@ -33,11 +24,8 @@ sdcard/
 emu-out/
 /build_emu_linux*/
 
-# macOS SDK staged from local Xcode (Apple SDK not redistributable) + cross build dirs
+# macOS SDK staged from local Xcode (Apple SDK not redistributable)
 .devcontainer/MacOSX.sdk.tar
-build_xmac/
-build_win_x64/
-build_win_repro/
 
 # runtime-written config (the app creates this in its working dir)
 /setting.ini
