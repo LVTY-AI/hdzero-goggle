@@ -28,10 +28,16 @@
         reg_a2: addr[15:8]
         reg_a3: wr_data[7:0]
         reg_a4: wr_data[15:8]
-        reg_a5: rd_data_right[7:0]   (read only)
-        reg_a6: rd_data_right[15:8]  (read only)
-        reg_a7: rd_data_left[7:0]    (read only)
-        reg_a8: rd_data_left[15:8]   (read only)
+        reg_a5: rd_data[7:0]         (read only)
+        reg_a6: rd_data[15:8]        (read only)
+        reg_a7: unused, reads 0x00   (read only)
+        reg_a8: unused, reads 0x00   (read only)
+
+    reg_a5/a6 return the panel selected by the sel field of reg_a0 -- they are
+    NOT "the right panel" as this comment used to claim.  a7/a8 read back 0x00
+    on this bitstream; there is no separate left-hand read path.  Verified on
+    hardware: reading 0xD002 with sel=0 and sel=1 returns the two panels'
+    genuinely different factory coefficients through a5/a6.
 
 */
 
