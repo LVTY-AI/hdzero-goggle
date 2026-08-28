@@ -14,8 +14,6 @@
 #include "msp_displayport.h"
 #include "uart.h"
 
-// #define _OLED_TEMP_TEST
-
 // OLED access
 /*
         V536  --m_i2c-->  AL FPGA  --I2C-->  OLED
@@ -80,10 +78,49 @@ static uint16_t oled_read(uint16_t addr, uint8_t sel) {
     return rdat;
 }
 
-static void screen_start_up() {
-    uint16_t l0, l1, l2, l3, l4;
-    uint16_t r0, r1, r2, r3, r4;
+// The OLED DDIC powers up in temperature-compensation mode 0x05, which does not
+// hold the grey axis as the panel warms: the image is neutral on a cold boot and
+// drifts green/brown within a few seconds of the panels reaching temperature.
+// Mode 0x0A with the factory coefficients biased up by 32 holds neutral across
+// the range.
+//
+// The coefficients only reach the analog path on the next display-on, so this has
+// to run before the boot display cycle (Display_UI_init() -> screen.pattern()) --
+// which is exactly where screen_start_up() sits in main().  Writing them to a
+// panel that is already displaying does nothing until something re-latches it.
+//
+// Each panel is handled independently: the two carry different factory
+// coefficients (0xA1 vs 0xA8 on the bench unit), which is why the drift can show
+// on one eye and not the other.  Mode 0x05 is the gate -- a panel that has already
+// been adjusted, or a revision reporting some other mode, is left untouched.
+static void oled_temp_compensation(void) {
+    oled_write(0xF000, 0x00AA, 2);
+    oled_write(0xF001, 0x0012, 2);
 
+    for (uint8_t sel = 0; sel < 2; sel++) {
+        uint16_t mode = oled_read(0xD000, sel);
+
+        if (mode != 0x05) {
+            LOGI("OLED temp comp: panel %d reports mode %#x, left alone", sel, mode);
+            continue;
+        }
+
+        uint16_t c2 = oled_read(0xD002, sel);
+        uint16_t c3 = oled_read(0xD003, sel);
+        uint16_t c4 = oled_read(0xD004, sel);
+
+        oled_write(0xD000, 0x000A, sel);
+        oled_write(0xD001, 0x000A, sel);
+        oled_write(0xD002, c2 + 32, sel);
+        oled_write(0xD003, c3 + 32, sel);
+        oled_write(0xD004, c4 + 32, sel);
+
+        LOGI("OLED temp comp: panel %d 0x05 -> 0x0A, coeff %#x/%#x/%#x -> %#x/%#x/%#x",
+             sel, c2, c3, c4, c2 + 32, c3 + 32, c4 + 32);
+    }
+}
+
+static void screen_start_up() {
     if (!(I2C_Read(ADDR_AL, 0x00) & 0x01)) {
         LOGW("OLED_Startup failed: Auto init is not ready...");
     }
@@ -92,56 +129,7 @@ static void screen_start_up() {
     // I2C_Write(ADDR_AL, 0x15, 0x00);
     usleep(1000);
 
-#ifdef _OLED_TEMP_TEST
-    oled_write(0xF000, 0x00AA, 2);
-    oled_write(0xF001, 0x0012, 2);
-
-    l0 = oled_read(0xD000, 0);
-    l1 = oled_read(0xD001, 0);
-    l2 = oled_read(0xD002, 0);
-    l3 = oled_read(0xD003, 0);
-    l4 = oled_read(0xD004, 0);
-
-    r0 = oled_read(0xD000, 1);
-    r1 = oled_read(0xD001, 1);
-    r2 = oled_read(0xD002, 1);
-    r3 = oled_read(0xD003, 1);
-    r4 = oled_read(0xD004, 1);
-
-    LOGI("OLED temp test: 0xD0 L = %x  %x  %x  %x  %x  ", l0, l1, l2, l3, l4);
-    LOGI("OLED temp test: 0xD0 R = %x  %x  %x  %x  %x  ", r0, r1, r2, r3, r4);
-
-    if (l0 == 0x05) {
-        oled_write(0xD000, 0x000A, 0);
-        oled_write(0xD001, 0x000A, 0);
-        oled_write(0xD002, l2 + 32, 0);
-        oled_write(0xD003, l3 + 32, 0);
-        oled_write(0xD004, l4 + 32, 0);
-    }
-
-    if (r0 == 0x05) {
-        oled_write(0xD000, 0x000A, 1);
-        oled_write(0xD001, 0x000A, 1);
-        oled_write(0xD002, r2 + 32, 1);
-        oled_write(0xD003, r3 + 32, 1);
-        oled_write(0xD004, r4 + 32, 1);
-    }
-
-    l0 = oled_read(0xD000, 0);
-    l1 = oled_read(0xD001, 0);
-    l2 = oled_read(0xD002, 0);
-    l3 = oled_read(0xD003, 0);
-    l4 = oled_read(0xD004, 0);
-
-    r0 = oled_read(0xD000, 1);
-    r1 = oled_read(0xD001, 1);
-    r2 = oled_read(0xD002, 1);
-    r3 = oled_read(0xD003, 1);
-    r4 = oled_read(0xD004, 1);
-
-    LOGI("OLED temp test modified: 0xD0 L = %x  %x  %x  %x  %x  ", l0, l1, l2, l3, l4);
-    LOGI("OLED temp test modified: 0xD0 R = %x  %x  %x  %x  %x  ", r0, r1, r2, r3, r4);
-#endif
+    oled_temp_compensation();
 }
 
 // OLED display on/off
