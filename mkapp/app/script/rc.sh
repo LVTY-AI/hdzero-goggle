@@ -36,6 +36,23 @@ function write_flashes()
 	/mnt/app/script/write_flashes.sh
 }
 
+# WORKAROUND (remove once the rootfs ships a fixed hwclock):
+# /usr/sbin/hwclock is util-linux 2.25.2 and crashes with SIGSEGV whenever it
+# decides the RTC is kept in UTC -- on that path it calls
+# setenv("TZ", getenv("TZUTC"), 1), TZUTC is never set, and musl's setenv()
+# runs strlen(NULL). Without /etc/adjtime it always picks UTC, so every plain
+# "hwclock" call dies, including the "hwclock -w" that /etc/init.d/S01app runs
+# at shutdown, and each one leaves a bogus "fatal signal 11" line in kmsg.
+# Declaring LOCAL steers it onto the path that works. That is accurate here:
+# there is no /etc/localtime and no TZ, so libc local time IS UTC, which is
+# what the app writes into the RTC. Delete this function and its call to undo.
+function seed_adjtime()
+{
+	if [ ! -e /etc/adjtime ]; then
+		printf "0.000000 0 0.000000\n0\nLOCAL\n" > /etc/adjtime
+	fi
+}
+
 function beep()
 {
 	echo "131">/sys/class/gpio/export
@@ -71,6 +88,9 @@ function update_boot()
 }
 
 echo "0 4 1 7">/proc/sys/kernel/printk
+
+#give hwclock a mode it can survive (see seed_adjtime)
+seed_adjtime
 
 #config UART and VDPO
 config_uart_vdpo
