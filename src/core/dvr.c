@@ -604,10 +604,21 @@ void dvr_cmd(osd_dvr_cmd_t cmd) {
             // Re-assert the record-OSD bit at the exact point recording starts.
             // Display/UI transitions can reinitialize this FPGA register after
             // source entry, so the source-entry write alone is not sufficient.
-            Display_Osd(g_setting.record.osd);
-            uint8_t osd_reg = Display_Osd_Readback();
-            LOGI("dvr record OSD: requested=%d readback=0x%02x",
-                 g_setting.record.osd, osd_reg);
+            //
+            // Not on HDMI In on the goggles: Source_HDMI_in() runs that session
+            // with the overlay plane switched off, and re-asserting the bit here
+            // turned it back on part-way through -- an overlay the rest of the
+            // session is not set up for.
+            bool reassert_osd = true;
+#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
+            reassert_osd = (g_source_info.source != SOURCE_HDMI_IN);
+#endif
+            if (reassert_osd) {
+                Display_Osd(g_setting.record.osd);
+                uint8_t osd_reg = Display_Osd_Readback();
+                LOGI("dvr record OSD: requested=%d readback=0x%02x",
+                     g_setting.record.osd, osd_reg);
+            }
             if (g_sdcard_ready) {
                 dvr_is_recording = true;
                 record_pending = false;
