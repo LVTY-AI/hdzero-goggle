@@ -1,7 +1,10 @@
 #include "page_source.h"
 
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <unistd.h>
 
 #include <minIni.h>
@@ -295,6 +298,9 @@ static void disable_auto_protocol_detect(void) {
 }
 #endif
 
+// Forward declaration; the definition sits below the select helpers.
+static void source_switch_settled(void);
+
 static void page_source_select_hdzero() {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
@@ -311,6 +317,7 @@ static void page_source_select_hdzero() {
     g_source_info.source = SOURCE_HDZERO;
     dvr_select_audio_source(g_setting.record.audio_source);
     dvr_enable_line_out(true);
+    source_switch_settled();
 }
 
 static void page_source_select_hdmi() {
@@ -319,6 +326,7 @@ static void page_source_select_hdmi() {
 #endif
     if (g_source_info.hdmi_in_status)
         app_switch_to_hdmi_in();
+    source_switch_settled();
 }
 
 static void page_source_select_av_in() {
@@ -330,6 +338,7 @@ static void page_source_select_av_in() {
     g_source_info.source = SOURCE_AV_IN;
     dvr_select_audio_source(g_setting.record.audio_source);
     dvr_enable_line_out(true);
+    source_switch_settled();
 }
 
 static void page_source_select_analog() {
@@ -341,6 +350,7 @@ static void page_source_select_analog() {
     g_source_info.source = SOURCE_AV_MODULE;
     dvr_select_audio_source(g_setting.record.audio_source);
     dvr_enable_line_out(true);
+    source_switch_settled();
 }
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
@@ -446,7 +456,39 @@ void page_source_select_auto_detect() {
 }
 #endif
 
+// Drop-all settle window for button-driven source switching, in milliseconds.
+#define SOURCE_SWITCH_SETTLE_MS 500
+
+// Monotonic timestamp of the last completed source switch; see
+// source_switch_settling().
+static struct timespec source_switch_settled_at;
+
+// Drop-all guard against the button-event backlog. A source switch runs
+// synchronously under the caller's lock and takes seconds (sleep() calls,
+// REC_STOP_LIVE, VI/Cedar reconfig), while presses keep arriving and are
+// buffered by the dm5680 UART. The parse loop resumes mid-batch when the
+// switch returns, so replayed presses dispatch back-to-back within
+// milliseconds of each other -- a real (human) press cannot follow that fast
+// after the OSD settles. Draining the backlog replays stale intent and
+// repeats the rapid repeated source switching that is the prime trigger for
+// the VI/CSI/Cedar freeze class, so presses inside this window are dropped
+// instead of queued.
+bool source_switch_settling(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    int64_t ms = (int64_t)(now.tv_sec - source_switch_settled_at.tv_sec) * 1000 +
+                 (now.tv_nsec - source_switch_settled_at.tv_nsec) / 1000000;
+    return ms >= 0 && ms < SOURCE_SWITCH_SETTLE_MS;
+}
+
+// Arm the settle window; called when a source switch completes.
+static void source_switch_settled(void) {
+    clock_gettime(CLOCK_MONOTONIC, &source_switch_settled_at);
+}
+
 void source_toggle() {
+    if (source_switch_settling())
+        return;
     beep_dur(BEEP_SHORT);
     switch (g_source_info.source) {
     case SOURCE_HDZERO:
@@ -466,6 +508,8 @@ void source_toggle() {
 }
 
 void source_cycle() {
+    if (source_switch_settling())
+        return;
     beep_dur(BEEP_SHORT);
     switch (g_source_info.source) {
     case SOURCE_HDZERO:
