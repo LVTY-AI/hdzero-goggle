@@ -787,7 +787,17 @@ void rbtn_click(right_button_t click_type) {
             } else if (click_type == RIGHT_LONG_PRESS) {
                 (*rbtn_press_callback)();
             } else if (click_type == RIGHT_DOUBLE_CLICK) {
-                (*rbtn_double_click_callback)();
+                // Presses buffered while a blocking source switch ran are
+                // replayed back-to-back, so the 250 ms short-click window in
+                // dm5680 reclassifies consecutive buffered presses as double
+                // clicks that the pilot never made. Drop them inside the
+                // settle window when the single-click action is a source
+                // switch; the switch itself is already guarded at
+                // source_toggle()/source_cycle().
+                if (!source_switch_settling() ||
+                    (rbtn_click_callback != &source_cycle &&
+                     rbtn_click_callback != &source_toggle))
+                    (*rbtn_double_click_callback)();
             }
             break;
         case APP_STATE_SLEEP:
