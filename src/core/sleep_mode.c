@@ -12,12 +12,13 @@
 #include "driver/screen.h"
 #include "log/log.h"
 #include "ui/page_fans.h"
+#include "util/time.h"
 
 static app_state_t previousState;
 static int fans_auto_mode_save;
 static fan_speed_t fan_speed_save;
 
-static uint16_t beepCnt = 0;
+static uint32_t beep_at; // when the last reminder beeped, or sleep began
 
 bool isSleeping = false;
 
@@ -58,7 +59,7 @@ void go_sleep() {
     fans_left_setspeed(MIN_FAN_SIDE);
     fans_right_setspeed(MIN_FAN_SIDE);
     isSleeping = true;
-    beepCnt = 0;
+    beep_at = time_ms();
 }
 
 void wake_up() {
@@ -91,9 +92,10 @@ void sleep_reminder() {
         return;
     }
 
-#define BEEP_INTERVAL 4000
-    if (++beepCnt == BEEP_INTERVAL) {
+    // Timed by the clock: the main loop runs at whatever pace its work allows.
+    const uint32_t now = time_ms();
+    if (now - beep_at >= SLEEP_BEEP_INTERVAL_MS) {
         beep_dur(BEEP_VERY_SHORT);
-        beepCnt = 0;
+        beep_at = now;
     }
 }
