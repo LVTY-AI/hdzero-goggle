@@ -27,6 +27,10 @@ typedef enum {
 } battery_warn_level_t;
 
 void battery_init();
+// The cell count Auto reads from a pack at `mv`: the fewest cells that put it
+// at or below 4.35 V each, so a full pack reads right whether its cells
+// charge to 4.20 V or to 4.35 V. Between CELL_MIN_COUNT and CELL_MAX_COUNT.
+int battery_cells_for_millivolts(int mv);
 void battery_update();
 
 bool battery_is_low();
