@@ -544,6 +544,7 @@ void hw_stat_init() {
     g_hw_stat.hdz_bw = 0;
     g_hw_stat.hdzero_open = 0;
     g_hw_stat.m0_open = 0;
+    g_hw_stat.hdz_mode = VR_720P60;
 
     g_hw_stat.is_av_in = 1;
     g_hw_stat.av_pal[0] = g_hw_stat.av_pal[1] = g_hw_stat.av_pal_w = 0;
@@ -637,6 +638,7 @@ void Display_720P60_50_t(int mode, uint8_t is_43) // fps: 0=50, 1=60
     Display_VO_SWITCH(1);
     screen.display(1);
     system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
+    g_hw_stat.hdz_mode = mode;
 }
 
 void Display_720P90_t(int mode) {
@@ -659,6 +661,7 @@ void Display_720P90_t(int mode) {
     Display_VO_SWITCH(1);
     screen.display(1);
     system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
+    g_hw_stat.hdz_mode = mode;
 }
 
 void Display_1080P30_t(int mode) {
@@ -683,6 +686,7 @@ void Display_1080P30_t(int mode) {
     Display_VO_SWITCH(1);
     screen.display(1);
     system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
+    g_hw_stat.hdz_mode = mode;
 }
 
 void Display_1080P24_t(int mode) {
@@ -707,6 +711,7 @@ void Display_1080P24_t(int mode) {
     Display_VO_SWITCH(1);
     screen.display(1);
     system_exec("aww 0x06542018 0x00000044"); // disable horizontal chroma FIR filter.
+    g_hw_stat.hdz_mode = mode;
 }
 
 void Display_720P60_50(int mode, uint8_t is_43) {
@@ -758,60 +763,60 @@ void HDZero_Close() {
 
 int HDZERO_detect() // return = 1: vtmg to V536 changed
 {
-    static video_resolution_t cam_mode_last = VR_720P60;
     static uint8_t cam_4_3_last = 0;
     int ret = 0;
 
     pthread_mutex_lock(&hardware_mutex);
 
     if (g_hw_stat.source_mode == SOURCE_MODE_HDZERO) {
+        const camera_video_t camera = camera_video_snapshot();
+        const video_resolution_t cam_mode_last = g_hw_stat.hdz_mode;
 
-        if (cam_mode_last != CAM_MODE) { // Camera mode changed
-            LOGI("CAM_mode: %d->%d", cam_mode_last, CAM_MODE);
+        if (cam_mode_last != camera.mode) { // Camera mode changed
+            LOGI("CAM_mode: %d->%d", cam_mode_last, camera.mode);
 
             // 1. Change fps
-            switch (CAM_MODE) {
+            switch (camera.mode) {
             case VR_720P50:
             case VR_720P60:
             case VR_960x720P60:
             case VR_540P60:
-                Display_720P60_50_t(CAM_MODE, cam_4_3);
+                Display_720P60_50_t(camera.mode, camera.is_43);
                 break;
             case VR_720P30:
                 perror("cam_mode =2 fix me!!\n ");
                 break;
             case VR_540P90:
             case VR_540P90_CROP:
-                Display_720P90_t(CAM_MODE);
+                Display_720P90_t(camera.mode);
                 break;
             case VR_1080P30:
-                Display_1080P30_t(CAM_MODE);
+                Display_1080P30_t(camera.mode);
                 break;
             case VR_1080P24:
-                Display_1080P24_t(CAM_MODE);
+                Display_1080P24_t(camera.mode);
                 break;
 
             default:
-                LOGW("cam_mode =%d not suppored!!\n ", CAM_MODE);
+                LOGW("cam_mode =%d not suppored!!\n ", camera.mode);
                 break;
             }
 
-            if (CAM_MODE == VR_1080P30 || CAM_MODE == VR_1080P24)
+            if (camera.mode == VR_1080P30 || camera.mode == VR_1080P24)
                 fhd_req = 1;
             else if (cam_mode_last == VR_1080P30 || cam_mode_last == VR_1080P24)
                 fhd_req = -1;
-            dvr_update_vi_conf(CAM_MODE);
+            dvr_update_vi_conf(camera.mode);
             system_script(REC_STOP_LIVE);
-            cam_mode_last = CAM_MODE;
             ret = 1;
         }
 
-        if (cam_4_3_last != cam_4_3) {
-            LOGI("cam_4_3: %d  CAM_MODE=%d", cam_4_3, CAM_MODE);
-            cam_4_3_last = cam_4_3;
+        if (cam_mode_last != camera.mode || cam_4_3_last != camera.is_43) {
+            LOGI("cam_4_3: %d  CAM_MODE=%d", camera.is_43, camera.mode);
+            cam_4_3_last = camera.is_43;
 
-            if (CAM_MODE != VR_720P50)
-                screen.mfpga.set_ratio(cam_4_3);
+            if (camera.mode != VR_720P50)
+                screen.mfpga.set_ratio(camera.is_43);
             else
                 screen.mfpga.set_ratio(0);
         }

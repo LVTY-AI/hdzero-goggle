@@ -1,6 +1,7 @@
 #include "msp_displayport.h"
 
 #include <log/log.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -26,10 +27,17 @@ uint8_t crc8tab[256] = {
     0x84, 0x51, 0xFB, 0x2E, 0x7A, 0xAF, 0x05, 0xD0, 0xAD, 0x78, 0xD2, 0x07, 0x53, 0x86, 0x2C, 0xF9};
 
 #ifndef EMULATOR_BUILD
-video_resolution_t CAM_MODE = VR_720P60;
+static video_resolution_t detected_mode = VR_720P60;
+static atomic_uint camera_video = ATOMIC_VAR_INIT(VR_720P60);
 #else
-video_resolution_t CAM_MODE = VR_1080P30;
+static video_resolution_t detected_mode = VR_1080P30;
+static atomic_uint camera_video = ATOMIC_VAR_INIT(VR_1080P30);
 #endif
+
+camera_video_t camera_video_snapshot(void) {
+    unsigned int value = atomic_load(&camera_video);
+    return (camera_video_t){.mode = value & 0xff, .is_43 = (value >> 8) & 1};
+}
 
 char fc_variant[5] = "BTFL"; // 4 char ASCII from FC
 uint8_t link_quality = 0;    // bit[7:0]: LQ(8~0)
@@ -43,7 +51,7 @@ uint8_t vtxFcLock = 0;
 // bit[0] msp_displayport_is_OK
 // bit[1] VTX_serial_is_OK
 // bit[3] Unlocked VTX
-uint8_t cam_4_3 = 0; // 1=16:9;0=4:3
+static uint8_t detected_is_43;
 
 osd_resolution_t osd_resolution = SD_3016;
 static osd_resolution_t resolution_last = HD_5018;
@@ -243,7 +251,7 @@ void camTypeDetect(uint8_t rData) {
     }
 
     if (cur_cam == last_cam) {
-        CAM_MODE = cur_cam;
+        detected_mode = cur_cam;
     } else if (cur_cam == VR_1080P30 || last_cam == VR_1080P30) {
         // LOGI("Cam_mode changed:%d", cur_cam);
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
@@ -342,9 +350,9 @@ void vtxFcLockDetect(uint8_t rData) {
 
 void vtxCamRatioDetect(uint8_t rData) {
     if (rData == 0xaa)
-        cam_4_3 = 1;
+        detected_is_43 = 1;
     else if (rData == 0x55)
-        cam_4_3 = 0;
+        detected_is_43 = 0;
 }
 
 void parser_config(uint8_t *rx_buf) {
@@ -357,6 +365,8 @@ void parser_config(uint8_t *rx_buf) {
     vtxTypeDetect(rx_buf[10]);
     vtxFcLockDetect(rx_buf[11]);
     vtxCamRatioDetect(rx_buf[12]);
+    // Publish together, after parsing; readers never block UART/font processing.
+    atomic_store(&camera_video, (unsigned int)detected_mode | (detected_is_43 << 8));
 }
 
 /*
