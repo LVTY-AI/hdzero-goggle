@@ -324,11 +324,15 @@ ERRORTYPE adec2ao_seekTo(Adec2AoContext_t *aa) {
         AW_MPI_AO_SetStreamEof(aa->aoDev, aa->aoChn, 0, FALSE);
     }
 
-    if (aa->adecChn >= 0) {
-        ret = AW_MPI_ADEC_Seek(aa->adecChn);
-    }
+    // Return queued PCM frames while the decoder still owns their buffers.
+    // Resetting the decoder first invalidates the frames retained by AO.
     if (aa->aoChn >= 0) {
         ret = AW_MPI_AO_Seek(aa->aoDev, aa->aoChn);
+        if (ret != SUCCESS)
+            return ret;
+    }
+    if (aa->adecChn >= 0) {
+        ret = AW_MPI_ADEC_Seek(aa->adecChn);
     }
 
     return ret;
