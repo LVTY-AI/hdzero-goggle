@@ -17,6 +17,7 @@
 #include "core/msp_displayport.h"
 #include "core/settings.h"
 #include "driver/hardware.h"
+#include "driver/rtc.h"
 #include "record/record_definitions.h"
 #include "ui/page_common.h"
 #include "util/sdcard.h"
@@ -538,7 +539,16 @@ static void dvr_update_record_conf() {
 
     ini_putl("record", "audio", g_setting.record.audio, REC_CONF);
     dvr_select_audio_source(g_setting.record.audio_source);
-    ini_putl("record", "naming", g_setting.record.naming, REC_CONF);
+    // An unset clock only changes this recording, not the saved preference.
+    // Recheck at each start so a later clock sync enables Date naming again.
+    setting_record_naming_t naming = g_setting.record.naming;
+    if (naming == SETTING_NAMING_DATE) {
+        struct rtc_date rd;
+        rtc_get_clock(&rd);
+        if (rd.year <= 1970 || rtc_has_valid_date(&rd) != 0)
+            naming = SETTING_NAMING_CONTIGUOUS;
+    }
+    ini_putl("record", "naming", naming, REC_CONF);
     ini_putl("record", "rolling", g_setting.record.rolling ? 1 : 0, REC_CONF);
 
     // Only the ELRS naming scheme consumes race labels. Clear the pending

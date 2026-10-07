@@ -10,7 +10,6 @@
 #include "../core/common.hh"
 #include "core/app_state.h"
 #include "core/dvr.h"
-#include "driver/rtc.h"
 #include "lang/language.h"
 #include "page_common.h"
 #include "ui/ui_style.h"
@@ -118,13 +117,8 @@ static void update_visibility() {
         lv_obj_clear_flag(pp_record.p_arr.panel[ROW_VBR_MAX_QP], FLAG_SELECTABLE);
     }
 
-    btn_group_enable(&btn_group_file_naming, rtc_has_battery() == 0);
-
-    if (rtc_has_battery() == 0) {
-        lv_obj_add_flag(pp_record.p_arr.panel[ROW_NAMING_SCHEME], FLAG_SELECTABLE);
-    } else {
-        lv_obj_clear_flag(pp_record.p_arr.panel[ROW_NAMING_SCHEME], FLAG_SELECTABLE);
-    }
+    btn_group_enable(&btn_group_file_naming, true);
+    lv_obj_add_flag(pp_record.p_arr.panel[ROW_NAMING_SCHEME], FLAG_SELECTABLE);
 }
 
 static lv_obj_t *page_record_create(lv_obj_t *parent, panel_arr_t *arr) {
@@ -345,13 +339,11 @@ static void page_record_on_click(uint8_t key, int sel) {
         g_setting.record.osd = !btn_group_get_sel(&btn_group_record_osd);
         settings_put_bool("record", "osd", g_setting.record.osd);
     } else if (sel == ROW_NAMING_SCHEME) {
-        if (rtc_has_battery() == 0) {
-            btn_group_toggle_sel(&btn_group_file_naming);
-            g_setting.record.naming = btn_group_get_sel(&btn_group_file_naming);
-            ini_putl("record", "naming", g_setting.record.naming, SETTING_INI);
-            if (g_setting.record.naming != SETTING_NAMING_ELRS) {
-                dvr_clear_race_label();
-            }
+        btn_group_toggle_sel(&btn_group_file_naming);
+        g_setting.record.naming = btn_group_get_sel(&btn_group_file_naming);
+        ini_putl("record", "naming", g_setting.record.naming, SETTING_INI);
+        if (g_setting.record.naming != SETTING_NAMING_ELRS) {
+            dvr_clear_race_label();
         }
     } else if (sel == ROW_ROLLING) {
         btn_group_toggle_sel(&btn_group_rolling);
