@@ -28,10 +28,10 @@ uint8_t crc8tab[256] = {
 
 #ifndef EMULATOR_BUILD
 static video_resolution_t detected_mode = VR_720P60;
-static atomic_uint camera_video = ATOMIC_VAR_INIT(VR_720P60);
+static atomic_uint camera_video = VR_720P60;
 #else
 static video_resolution_t detected_mode = VR_1080P30;
-static atomic_uint camera_video = ATOMIC_VAR_INIT(VR_1080P30);
+static atomic_uint camera_video = VR_1080P30;
 #endif
 
 camera_video_t camera_video_snapshot(void) {

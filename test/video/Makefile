@@ -7,7 +7,7 @@ else
 LDFLAGS += -Wl,--gc-sections
 endif
 CFLAGS += -ffunction-sections -fdata-sections
-SOURCES = test_camera_mode.c ../../src/core/msp_displayport.c ../../lib/log/src/log.c
+SOURCES = test_camera_mode.c ../../src/core/msp_displayport.c ../../src/core/app_state.c ../../lib/log/src/log.c
 
 .PHONY: run clean
 run: test_camera_boxpro test_camera_goggle test_camera_goggle2

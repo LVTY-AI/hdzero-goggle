@@ -267,7 +267,9 @@ void app_switch_to_hdzero(bool is_default) {
 #endif
     ini_putl("autoscan", "last_source", g_setting.autoscan.last_source, SETTING_INI);
 
-    dvr_update_vi_conf(camera.mode);
+    // The peripheral detector can retime again after Display_* releases the
+    // hardware lock. Do not overwrite its newer DVR format with our entry mode.
+    dvr_update_vi_conf(CAM_MODE);
     system_script(REC_STOP_LIVE);
 
     osd_detecting_show(false); // restore the normal channel tag
