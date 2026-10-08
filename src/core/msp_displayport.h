@@ -64,7 +64,15 @@ void lqDetect(uint8_t rData);
 void lqStatistics();
 void vtxTempDetect(uint8_t rData);
 
-extern video_resolution_t CAM_MODE;
+typedef struct {
+    video_resolution_t mode;
+    uint8_t is_43;
+} camera_video_t;
+
+// One coherent configuration packet. Keep the snapshot across blocking work.
+camera_video_t camera_video_snapshot(void);
+#define CAM_MODE (camera_video_snapshot().mode)
+#define cam_4_3 (camera_video_snapshot().is_43)
 
 extern char fc_variant[5];
 extern uint8_t link_quality;
@@ -74,7 +82,6 @@ extern osd_resolution_t osd_resolution;
 extern uint8_t vtxVersion;
 extern uint8_t vtxType;
 extern uint8_t vtxFcLock;
-extern uint8_t cam_4_3;
 
 extern uint16_t fc_osd[HD_VMAX][HD_HMAX];
 extern uint8_t loc_buf[HD_VMAX][4];

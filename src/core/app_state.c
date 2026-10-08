@@ -207,31 +207,33 @@ void app_switch_to_hdzero(bool is_default) {
     HDZero_open(hdzero_effective_bw());
     ch &= 0x7f;
 
-    LOGI("switch to bw:%d, band:%d, ch:%d, CAM_MODE=%d 4:3=%d", hdzero_effective_bw(), g_setting.source.hdzero_band, g_setting.scan.channel, CAM_MODE, cam_4_3);
     DM6302_SetChannel(g_setting.source.hdzero_band, ch);
     DM5680_clear_vldflg();
     DM5680_req_vldflg();
     progress_bar.start = 0;
 
+    const camera_video_t camera = camera_video_snapshot();
+    LOGI("switch to bw:%d, band:%d, ch:%d, CAM_MODE=%d 4:3=%d", hdzero_effective_bw(), g_setting.source.hdzero_band, g_setting.scan.channel, camera.mode, camera.is_43);
+
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
-    switch (CAM_MODE) {
+    switch (camera.mode) {
     case VR_720P50:
     case VR_720P60:
     case VR_960x720P60:
     case VR_540P60:
-        Display_720P60_50(CAM_MODE, cam_4_3);
+        Display_720P60_50(camera.mode, camera.is_43);
         break;
 
     case VR_540P90:
     case VR_540P90_CROP:
-        Display_720P90(CAM_MODE);
+        Display_720P90(camera.mode);
         break;
 
     case VR_1080P30:
-        Display_1080P30(CAM_MODE);
+        Display_1080P30(camera.mode);
         break;
     case VR_1080P24:
-        Display_1080P24(CAM_MODE);
+        Display_1080P24(camera.mode);
         break;
     default:
         perror("switch_to_video CaM_MODE error");
@@ -239,13 +241,13 @@ void app_switch_to_hdzero(bool is_default) {
 
     channel_osd_mode = CHANNEL_SHOWTIME;
 
-    if (CAM_MODE == VR_1080P30 || CAM_MODE == VR_1080P24)
+    if (camera.mode == VR_1080P30 || camera.mode == VR_1080P24)
         lvgl_switch_to_1080p();
     else
         lvgl_switch_to_720p();
-    osd_fhd(CAM_MODE == VR_1080P30 || CAM_MODE == VR_1080P24);
+    osd_fhd(camera.mode == VR_1080P30 || camera.mode == VR_1080P24);
 #elif defined HDZBOXPRO
-    Display_HDZ(CAM_MODE, cam_4_3);
+    Display_HDZ(camera.mode, camera.is_43);
     channel_osd_mode = CHANNEL_SHOWTIME;
     lvgl_switch_to_720p();
     LOGI("lvgl_switch_to_720p");
@@ -265,6 +267,8 @@ void app_switch_to_hdzero(bool is_default) {
 #endif
     ini_putl("autoscan", "last_source", g_setting.autoscan.last_source, SETTING_INI);
 
+    // The peripheral detector can retime again after Display_* releases the
+    // hardware lock. Do not overwrite its newer DVR format with our entry mode.
     dvr_update_vi_conf(CAM_MODE);
     system_script(REC_STOP_LIVE);
 

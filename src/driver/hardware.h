@@ -61,6 +61,7 @@ typedef struct {
     int hdz_bw; // 0=27MHz; 1=17MHz
     int hdzero_open;
     int m0_open;
+    int hdz_mode; // last mode programmed, protected by hardware_mutex
 
     // av in
     int is_av_in;
