@@ -89,11 +89,17 @@ static void hdz_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_
     }
 
 #ifndef EMULATOR_BUILD
-    for (lv_coord_t y = area->y1 + disp_orbit_y; y <= area->y2; y++) {
-        fbdev.fb_mem_offset = (y * (disp_drv.hor_res - DISP_OVERSCAN) + disp_orbit_x) * 4;
-        fbdev.fb_fix.smem_len = 4 * (area->x2 - area->x1 + 1 - DISP_OVERSCAN);
-        memcpy(fbdev.fb_mem + fbdev.fb_mem_offset, ((char *)color_p), fbdev.fb_fix.smem_len);
-        color_p += (area->x2 - area->x1 + 1);
+    // full_refresh supplies the overscanned frame. Move a viewport inside it,
+    // as the SDL path does, and replace every visible pixel on every flush.
+    // The hardware pipeline expects packed render-width rows, not fb_var.xres.
+    const int width = disp_drv.hor_res - DISP_OVERSCAN;
+    const int height = disp_drv.ver_res - DISP_OVERSCAN;
+    const int stride = area->x2 - area->x1 + 1;
+    const lv_color_t *src = color_p + disp_orbit_y * stride + disp_orbit_x;
+    unsigned char *dst = fbdev.fb_mem + fbdev.fb_mem_offset;
+    for (int y = 0; y < height; y++) {
+        memcpy(dst + y * width * sizeof(lv_color_t), src + y * stride,
+               width * sizeof(lv_color_t));
     }
 
     fb_sync(&fbdev);
