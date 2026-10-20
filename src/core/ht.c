@@ -168,9 +168,20 @@ static void detect_motion(bool is_moving) {
                 HDZero_open(hdzero_effective_bw());
                 DM6302_SetChannel(g_setting.source.hdzero_band, ch & 0x7F);
             }
-            if (g_hw_stat.source_mode == SOURCE_MODE_AV) {
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+            bool use_internal_analog = !g_hw_stat.is_av_in;
+#if defined(HDZGOGGLE2)
+            // Match source entry: Dual uses the built-in receiver even when
+            // Expansion is selected. AV-in must leave that receiver off.
+            use_internal_analog = use_internal_analog &&
+                                  (g_setting.source.analog_module != SETTING_SOURCES_ANALOG_MODULE_EXTERNAL ||
+                                   g_setting.source.auto_protocol_detect);
+#endif
+            if (g_hw_stat.source_mode == SOURCE_MODE_AV && use_internal_analog) {
                 rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
+                rtc6715.set_ch(g_setting.source.analog_channel - 1);
             }
+#endif
 
             LOGI("OLED ON from protection.");
 
