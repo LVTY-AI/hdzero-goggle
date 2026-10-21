@@ -384,6 +384,12 @@ int settings_put_bool(char *section, char *key, bool value) {
     return ini_puts(section, key, value ? "true" : "false", SETTING_INI);
 }
 
+// Validate before narrowing INI values to the setting's field type.
+static long settings_get_long_bounded(char *section, char *key, long default_val, long min, long max) {
+    long value = ini_getl(section, key, default_val, SETTING_INI);
+    return (value < min || value > max) ? default_val : value;
+}
+
 void settings_reset(void) {
     char buf[256];
 
@@ -447,9 +453,6 @@ void settings_load(void) {
     // Start with a fully configured structure then update!
     memcpy(&g_setting, &g_setting_defaults, sizeof(g_setting));
 
-    // scan
-    g_setting.scan.channel = ini_getl("scan", "channel", g_setting_defaults.scan.channel, SETTING_INI);
-
     // fans
     g_setting.fans.auto_mode = settings_get_bool("fans", "auto", g_setting_defaults.fans.auto_mode);
     g_setting.fans.top_speed = ini_getl("fans", "top_speed", g_setting_defaults.fans.top_speed, SETTING_INI);
@@ -461,9 +464,12 @@ void settings_load(void) {
     g_setting.source.analog_format = ini_getl("source", "analog_format", g_setting_defaults.source.analog_format, SETTING_INI);
     g_setting.source.analog_auto = ini_getl("source", "analog_auto", g_setting_defaults.source.analog_auto, SETTING_INI);
     g_setting.source.analog_ratio = ini_getl("source", "analog_ratio", g_setting_defaults.source.analog_ratio, SETTING_INI);
-    g_setting.source.hdzero_band = ini_getl("source", "hdzero_band", g_setting_defaults.source.hdzero_band, SETTING_INI);
+    g_setting.source.hdzero_band = settings_get_long_bounded("source", "hdzero_band", g_setting_defaults.source.hdzero_band,
+                                                          SETTING_SOURCES_HDZERO_BAND_RACEBAND, SETTING_SOURCES_HDZERO_BAND_LOWBAND);
+    // HDZERO_CHANNEL_NUM depends on the loaded band.
+    g_setting.scan.channel = settings_get_long_bounded("scan", "channel", g_setting_defaults.scan.channel, 1, HDZERO_CHANNEL_NUM);
     g_setting.source.hdzero_bw = ini_getl("source", "hdzero_bw", g_setting_defaults.source.hdzero_bw, SETTING_INI);
-    g_setting.source.analog_channel = ini_getl("source", "analog_channel", g_setting_defaults.source.analog_channel, SETTING_INI);
+    g_setting.source.analog_channel = settings_get_long_bounded("source", "analog_channel", g_setting_defaults.source.analog_channel, 1, ANALOG_CHANNEL_NUM);
     g_setting.source.auto_protocol_detect = settings_get_bool("source", "auto_protocol_detect", g_setting_defaults.source.auto_protocol_detect);
     g_setting.source.analog_scan_band = ini_getl("source", "analog_scan_band", g_setting_defaults.source.analog_scan_band, SETTING_INI);
     if (g_setting.source.analog_scan_band > 5) {
@@ -472,12 +478,6 @@ void settings_load(void) {
     g_setting.source.scan_mode_initial = ini_getl("source", "scan_mode_initial", g_setting_defaults.source.scan_mode_initial, SETTING_INI);
     if (g_setting.source.scan_mode_initial > 2) {
         g_setting.source.scan_mode_initial = g_setting_defaults.source.scan_mode_initial;
-    }
-    if (g_setting.scan.channel > HDZERO_CHANNEL_NUM) {
-        g_setting.scan.channel = 1;
-    }
-    if (g_setting.source.analog_channel > ANALOG_CHANNEL_NUM) {
-        g_setting.scan.channel = 33;
     }
 
     // autoscan

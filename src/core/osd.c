@@ -440,6 +440,7 @@ uint8_t channel_osd_preview_band = 0xFF;
 
 char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // channel=[1:18]
 {
+    static char unknown_channel_name[] = "--";
     static char *hdzero_channel_name[2][BASE_CH_NUM] = {
         {"R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "E1", "F1", "F2", "F4"},
         {"L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "  ", "  ", "  ", "  "},
@@ -454,6 +455,8 @@ char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // cha
         "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"};
 
     if (is_hdzero) {
+        if (is_lowband > 1)
+            return unknown_channel_name;
         // Bound by the requested band, not the global setting: Lowband has 8
         // named channels (L1-L8), Raceband has BASE_CH_NUM (R1-R8,E1,F1,F2,F4).
         // Using the passed is_lowband lets cross-band previews (BoxPro dial)
@@ -465,6 +468,8 @@ char *channel2str(uint8_t is_hdzero, uint8_t is_lowband, uint8_t channel) // cha
         else
             return hdzero_channel_name[is_lowband][0];
     } else {
+        if (channel == 0 || channel > ANALOG_CHANNEL_NUM)
+            return unknown_channel_name;
         return analog_channel_name[channel - 1];
     }
 }
