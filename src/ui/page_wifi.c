@@ -28,6 +28,7 @@
 #include "ui/ui_keyboard.h"
 #include "ui/ui_style.h"
 #include "util/filesystem.h"
+#include "util/strings.h"
 #include "util/system.h"
 
 /**
@@ -156,10 +157,16 @@ static void page_wifi_update_services() {
         fprintf(fp, "insmod /mnt/app/ko/xradio_mac.ko\n");
         fprintf(fp, "insmod /mnt/app/ko/xradio_core.ko\n");
         fprintf(fp, "insmod /mnt/app/ko/xradio_wlan.ko\n");
-        fprintf(fp, "ifconfig wlan0 %s netmask %s up\n", g_setting.wifi.ip_addr, g_setting.wifi.netmask);
+        fprintf(fp, "ifconfig wlan0 ");
+        str_write_shell_arg(fp, g_setting.wifi.ip_addr);
+        fprintf(fp, " netmask ");
+        str_write_shell_arg(fp, g_setting.wifi.netmask);
+        fprintf(fp, " up\n");
         fprintf(fp, "hostapd /tmp/hostapd.conf&\n");
         fprintf(fp, "udhcpd /tmp/udhcpd.conf&\n");
-        fprintf(fp, "route add default gw %s\n", g_setting.wifi.gateway);
+        fprintf(fp, "route add default gw ");
+        str_write_shell_arg(fp, g_setting.wifi.gateway);
+        fprintf(fp, "\n");
         fprintf(fp, "/mnt/app/app/record/rtspLive > /tmp/rtspLive.log 2>&1 &\n");
         fclose(fp);
         system_exec("chmod +x " WIFI_AP_ON);
@@ -173,19 +180,24 @@ static void page_wifi_update_services() {
         fprintf(fp, "ifconfig wlan0 up\n");
 
         if (g_setting.wifi.dhcp) {
-            fprintf(fp,
-                    "udhcpc -x hostname:%s -x 0x3d:%s -r %s -i wlan0 -b&\n",
-                    g_setting.wifi.ssid[WIFI_MODE_AP],
-                    g_setting.wifi.clientid,
-                    g_setting.wifi.ip_addr);
+            fprintf(fp, "udhcpc -x hostname:");
+            str_write_shell_arg(fp, g_setting.wifi.ssid[WIFI_MODE_AP]);
+            fprintf(fp, " -x 0x3d:");
+            str_write_shell_arg(fp, g_setting.wifi.clientid);
+            fprintf(fp, " -r ");
+            str_write_shell_arg(fp, g_setting.wifi.ip_addr);
+            fprintf(fp, " -i wlan0 -b&\n");
         }
 
         fprintf(fp, "mkdir /var/log\n");
         fprintf(fp, "wpa_supplicant -Dnl80211 -iwlan0 -c/tmp/wpa_supplicant.conf&\n");
 
         if (!g_setting.wifi.dhcp) {
-            fprintf(fp, "ifconfig wlan0 %s\n", g_setting.wifi.ip_addr);
-            fprintf(fp, "route add default gw %s\n", g_setting.wifi.gateway);
+            fprintf(fp, "ifconfig wlan0 ");
+            str_write_shell_arg(fp, g_setting.wifi.ip_addr);
+            fprintf(fp, "\nroute add default gw ");
+            str_write_shell_arg(fp, g_setting.wifi.gateway);
+            fprintf(fp, "\n");
         }
 
         fprintf(fp, "/mnt/app/app/record/rtspLive > /tmp/rtspLive.log 2>&1 &\n");
@@ -248,10 +260,11 @@ static void page_wifi_update_services() {
 
     if ((fp = fopen(ROOT_PW_SET, "w"))) {
         fprintf(fp, "#!/bin/sh\n");
-        fprintf(fp, "passwd << EOF\n");
-        fprintf(fp, "%s\n", g_setting.wifi.root_pw);
-        fprintf(fp, "%s\n", g_setting.wifi.root_pw);
-        fprintf(fp, "EOF\n");
+        fprintf(fp, "printf '%%s\\n' ");
+        str_write_shell_arg(fp, g_setting.wifi.root_pw);
+        fprintf(fp, " ");
+        str_write_shell_arg(fp, g_setting.wifi.root_pw);
+        fprintf(fp, " | passwd\n");
         fclose(fp);
         system_exec("chmod +x " ROOT_PW_SET "; " ROOT_PW_SET);
     }

@@ -39,3 +39,20 @@ static int str_compare_ptr(const void *p1, const void *p2) {
 void str_qsort(char **list, int count) {
     qsort(list, count, sizeof(char *), str_compare_ptr);
 }
+
+int str_write_shell_arg(FILE *stream, const char *text) {
+    if (stream == NULL || text == NULL || fputc('\'', stream) == EOF) {
+        return -1;
+    }
+    for (; *text; ++text) {
+        if (*text == '\'') {
+            /* End the literal, emit an escaped quote, then resume it. */
+            if (fputs("'\\''", stream) == EOF) {
+                return -1;
+            }
+        } else if (fputc((unsigned char)*text, stream) == EOF) {
+            return -1;
+        }
+    }
+    return fputc('\'', stream) == EOF ? -1 : 0;
+}
