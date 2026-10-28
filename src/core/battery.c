@@ -7,18 +7,24 @@
 
 sys_battery_t g_battery;
 
-static int battery_detect_type() {
-    int v = read_voltage();
-    return (v * 10 / 1000 / 42 + 1);
+// A full high-voltage cell. A standard cell charges to 4.20 V.
+#define CELL_FULL_MV 4350
+
+int battery_cells_for_millivolts(int mv) {
+    // The fewest cells that put the pack at or below a full cell each.
+    const int cells = mv > 0 ? (mv + CELL_FULL_MV - 1) / CELL_FULL_MV : 0;
+    if (cells < CELL_MIN_COUNT)
+        return CELL_MIN_COUNT;
+    if (cells > CELL_MAX_COUNT)
+        return CELL_MAX_COUNT;
+    return cells;
 }
 
 void battery_init() {
     switch (g_setting.power.cell_count_mode) {
     default:
     case SETTING_POWER_CELL_COUNT_MODE_AUTO:
-        g_battery.type = battery_detect_type();
-        if (g_battery.type < CELL_MIN_COUNT)
-            g_battery.type = CELL_MIN_COUNT;
+        g_battery.type = battery_cells_for_millivolts(read_voltage());
         g_setting.power.cell_count = g_battery.type;
         break;
     case SETTING_POWER_CELL_COUNT_MODE_MANUAL:
