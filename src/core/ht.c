@@ -16,6 +16,7 @@
 #include "common.hh"
 #include "elrs.h"
 #include "ht.h"
+#include "ht_alarm.h"
 #include "osd.h"
 
 #include "bmi270/accel_gyro.h"
@@ -485,7 +486,7 @@ void head_alarm_init() {
 void *head_alarm_thread(void *arg) {
     while (1) {
         bool sounding_alarm = false;
-        if (ht_data.enable && (g_setting.ht.alarm_state != SETTING_HT_ALARM_STATE_OFF)) {                                                                                                             // user settings
+        if (ht_data.enable && (g_setting.ht.alarm_state != SETTING_HT_ALARM_STATE_OFF) && ht_alarm_angle_is_set(g_setting.ht.alarm_angle)) {                                                          // user settings
             if ((g_setting.ht.alarm_on_arm && g_setting.ht.alarm_state == SETTING_HT_ALARM_STATE_ARM) || (g_setting.ht.alarm_on_video && g_setting.ht.alarm_state == SETTING_HT_ALARM_STATE_VIDEO)) { // system enabling alarm (when armed or has video signal)
 
                 if (ht_data.tiltAngle < g_setting.ht.alarm_angle) {
