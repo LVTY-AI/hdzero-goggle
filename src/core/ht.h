@@ -63,6 +63,9 @@ void ht_set_center_position();
 int16_t *ht_get_channels();
 void head_alarm_init();
 
+float ht_get_pan_angle(void);
+float ht_get_tilt_angle(void);
+
 #ifdef __cplusplus
 }
 #endif

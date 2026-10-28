@@ -301,7 +301,7 @@ void ht_set_maxangle(int angle) {
 }
 
 void ht_set_alarm_angle() {
-    g_setting.ht.alarm_angle = ht_data.tiltAngle;
+    g_setting.ht.alarm_angle = ht_get_tilt_angle();
     ini_putl("ht", "alarm_angle", g_setting.ht.alarm_angle, SETTING_INI);
 }
 
@@ -483,18 +483,30 @@ void head_alarm_init() {
     pthread_create(&head_alarm_handle, NULL, head_alarm_thread, NULL);
 }
 
+float ht_get_pan_angle(void) {
+    return ht_data.panAngle;
+}
+
+float ht_get_tilt_angle(void) {
+#if defined(HDZBOXPRO)
+    return normalize(-ht_data.rollAngle, -180.0, 180.0);
+#else
+    return ht_data.tiltAngle;
+#endif
+}
+
 void *head_alarm_thread(void *arg) {
     while (1) {
         bool sounding_alarm = false;
         if (ht_data.enable && (g_setting.ht.alarm_state != SETTING_HT_ALARM_STATE_OFF) && ht_alarm_angle_is_set(g_setting.ht.alarm_angle)) {                                                          // user settings
             if ((g_setting.ht.alarm_on_arm && g_setting.ht.alarm_state == SETTING_HT_ALARM_STATE_ARM) || (g_setting.ht.alarm_on_video && g_setting.ht.alarm_state == SETTING_HT_ALARM_STATE_VIDEO)) { // system enabling alarm (when armed or has video signal)
 
-                if (ht_data.tiltAngle < g_setting.ht.alarm_angle) {
+                if (ht_get_tilt_angle() < g_setting.ht.alarm_angle) {
                     beep();
                     usleep(100000);
                     beep();
                     for (int i = 0; i < 30; i++) { // delay of 3 seconds split into 30x100ms to allow for a quicker response to the alarm
-                        if (ht_data.tiltAngle >= g_setting.ht.alarm_angle) {
+                        if (ht_get_tilt_angle() >= g_setting.ht.alarm_angle) {
                             break;
                         }
                         usleep(100000);
