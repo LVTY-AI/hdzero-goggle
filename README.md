@@ -2,30 +2,36 @@
 
 To install this firmware, head on over to the [releases](https://github.com/LVTY-AI/hdzero-goggle/releases) page and download the latest version for your goggles! I also have backups on [Google Drive](https://drive.google.com/drive/folders/1L3Wu2_ggWYJpjnqjVrTsP1es7GogYQT6?usp=share_link), as well as the recovery firmware files and VTX firmwares on there.
 
-A couple of quick FAQ's I get very often:
+## A couple of quick FAQ's I get very often:
 
 **1. Does this have all of the latest changes from the official HDZero Github and do you have the fixes for DVR, Scroll Wheel, and Ghosting?**
 
 Yes. In fact, I also have a bunch of other features pulled in from other forks and custom repos out there. My firmware has significant changes and fixes over the official HDZero Github. This means I have the DVR fix for the G2 and the ghosting fix for the BoxPros. The scroll wheel fixes are included, but this is mostly a hardware issue. I suggest you reach out to HDZero support to get your scroll wheel replaced if my firmware doesn't solve your issues.
 
+
 **2. Is this firmware safe and will it brick my goggles or void the warranty?**
 
 Yes, it's safe. Loads of people use it, myself included. No, it won't brick your goggles or void the warranty. This firmware is less likely to brick your goggles than the official firmware and actually has critical fixes that will extend your goggles' lifespan and prevent them from having issues and dying randomly. I test this firmware on my own goggles before it ever gets released.
+
 
 **3. What is different about your firmware over the official HDZero firmware?**
 
 My firmware has many new features, critical fixes, and general bug fixes that you won't find on the official firmware. The basic list is Auto HDZ/Analog, Analog and Auto Scan modes, separate image settings for analog and HDZero, RTC sync over backpack, Gradual low voltage alarm, Audio settings, Auto Bandwidth, fixed Headtracker and ELRS backpack. For a full list of features, check out the compact change log or the full release notes, both of which can be found [here](https://github.com/LVTY-AI/hdzero-goggle/releases).
 
+
 **4. Which goggles are supported on your firmware?**
 
 I currently support all of the HDZero branded goggles. This includes the G1, G2, BoxPro, and BoxPro+. Divimath products are NOT supported and using my firmware for those goggles will brick them. As a side note, the G2 is the only goggle I don't personally own, and while it is fully supported right now, it relies on a small group of testers to prove some features work and work out the bugs. Due to this, some features may arrive slower on the G2's, there may be a few more bugs, and for some future planned features, there will be no G2 support unless I acquire a set myself. Divimath goggles cannot be supported unless I get my hands on a set myself.
 
+
 **5. How can I support you and this project?**
 
-If you'd like to support the work I'm doing here (and help me get a G2 for testing), you can send a donation here: https://www.paypal.com/paypalme/ripleyjb
+If you'd like to support the work I'm doing here (and help me get a G2 for testing), you can send a donation here: [Paypal](https://www.paypal.com/paypalme/ripleyjb)
+
 I also appreciate people who want to test for me with their G2's. Send me a message on Discord if you'd like to test for me. Additionally, I appreciate anyone who either wants to contribute to the project here on Github, has suggestions for the project, or simply reports bugs that you find. Spreading the word about this firmware is greatly appreciated as well, as many pilots simply don't know it's out there. Maybe you guys can convince HDZero to send me some goggles for testing and adopt this as the offical firmware!
 
 As a perk for donating, your feature requests will get top priority and I'll give you early access to upcoming firmwares (there's some really cool stuff to come). I'll also have a special firmware version with some extra goodies as a thank you to those who donated $25 or more. Be sure to drop your Discord username/Github username in the donation description so I know who you are if you'd like access to priority feature requests, early access firmwares or the extra goodies firmware. It is not a requirement to donate. Firmware releases will continue to be free. Donations for this project help cover costs related to this project and will contribute to better support for all goggles users!
+
 
 If you'd like to request a feature you'd like me to add, send me a message in Discord, leave it in the #feature-suggestions channel on the [HDZero Discord](https://discord.gg/kGsnEDMb2V), or open an issue on here, and I'll get to it when I can. This is a project I'm working on in my free time, so please set timeline expectations accordingly. For any other questions you may have, feel free to send me a message on Discord!
 
