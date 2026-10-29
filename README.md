@@ -14,7 +14,7 @@ Yes, it's safe. Loads of people use it, myself included. No, it won't brick your
 
 **3. What is different about your firmware over the official HDZero firmware?**
 
-My firmware has many new features, critical fixes, and general bug fixes that you won't find on the official firmware. The basic list is Auto HDZ/Analog, Analog and Auto Scan modes, separate image settings for analog and HDZero, RTC sync over backpack, Gradual low voltage alarm, Audio settings, Auto Bandwidth, fixed Headtracker and ELRS backpack. For a full list of features, check out the compact change log or the full release notes, both of which can be found [here](https://github.com/LVTY-AI/hdzero-goggle/releases)
+My firmware has many new features, critical fixes, and general bug fixes that you won't find on the official firmware. The basic list is Auto HDZ/Analog, Analog and Auto Scan modes, separate image settings for analog and HDZero, RTC sync over backpack, Gradual low voltage alarm, Audio settings, Auto Bandwidth, fixed Headtracker and ELRS backpack. For a full list of features, check out the compact change log or the full release notes, both of which can be found [here](https://github.com/LVTY-AI/hdzero-goggle/releases).
 
 **4. Which goggles are supported on your firmware?**
 
