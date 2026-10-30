@@ -165,7 +165,12 @@ static void show_pb_item(uint8_t pos, char *label, bool star) {
     lv_label_set_text(pb_ui[pos]._label, label);
     lv_obj_clear_flag(pb_ui[pos]._label, LV_OBJ_FLAG_HIDDEN);
 
-    const lv_coord_t labelPosX = pb_ui[pos].x + (UI_PAGE_PLAYBACK_ITEM_PREVIEW_W - lv_txt_get_width(label, strlen(label) - 2, &lv_font_montserrat_26, 0, 0)) / 2;
+    // Leaving the last two characters out of the measurement shifts the label
+    // right, roughly by the ITEM_GAP_W / 2 the thumbnail is drawn in. Clamp so
+    // a label of two characters or fewer cannot wrap the unsigned length.
+    const size_t labelLen = strlen(label);
+    const lv_coord_t labelW = lv_txt_get_width(label, labelLen > 2 ? labelLen - 2 : 0, &lv_font_montserrat_26, 0, 0);
+    const lv_coord_t labelPosX = pb_ui[pos].x + (UI_PAGE_PLAYBACK_ITEM_PREVIEW_W - labelW) / 2;
     const lv_coord_t labelPosY = pb_ui[pos].y + UI_PAGE_PLAYBACK_ITEM_PREVIEW_H + 10;
     lv_obj_set_pos(pb_ui[pos]._label, labelPosX, labelPosY);
     lv_obj_set_pos(pb_ui[pos]._arrow, labelPosX - lv_obj_get_width(pb_ui[pos]._arrow) - 5, labelPosY);
