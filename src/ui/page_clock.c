@@ -51,8 +51,12 @@ typedef enum {
     ITEM_LIST_TOTAL
 } ITEM_LIST;
 
+#define MAX_YEARS_DROPDOWN 300 // 2023 .. 2322
+
 typedef struct {
-    char list[1024];
+    // Sized for the longest list, Year: four digits plus a newline
+    // (or the closing NUL) per option.
+    char list[MAX_YEARS_DROPDOWN * 5];
     char entry[32];
 } dropdown_list_t;
 
@@ -65,7 +69,6 @@ typedef struct {
 /**
  *  Globals
  */
-static const int MAX_YEARS_DROPDOWN = 300; // 2023 + 300 == 2323
 static lv_coord_t col_dsc[] = {UI_CLOCK_COLS};
 static lv_coord_t row_dsc[] = {UI_CLOCK_ROWS};
 static item_t page_clock_items[ITEM_LIST_TOTAL] = {0};
@@ -106,11 +109,18 @@ static int page_clock_get_dropdown_index(ITEM_LIST item, const char *sel_opt) {
  * Generic util to generate the content (options) of a dropdown type.
  */
 static void page_clock_build_options(dropdown_list_t *options, int total_entries, int offset, int selected) {
-    for (int i = 0, j = 0; i < total_entries; ++i) {
-        if (i != 0) {
-            j += snprintf(&options->list[j], sizeof(options->list) - j, "\n");
+    size_t used = 0;
+
+    for (int i = 0; i < total_entries; ++i) {
+        size_t room = sizeof(options->list) - used;
+        int len = snprintf(&options->list[used], room, "%s%02d", i != 0 ? "\n" : "", i + offset);
+        if (len < 0 || (size_t)len >= room) {
+            // Out of room: end the list at the last whole option.
+            options->list[used] = '\0';
+            LOGE("clock: option list full after %d of %d entries", i, total_entries);
+            break;
         }
-        j += snprintf(&options->list[j], sizeof(options->list) - j, "%02d", i + offset);
+        used += len;
     }
 
     snprintf(options->entry, sizeof(options->entry), "%d", selected);
