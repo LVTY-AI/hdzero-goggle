@@ -1167,12 +1167,9 @@ void Display_Osd(bool enable) {
 }
 
 uint8_t Display_Osd_Readback(void) {
-    uint8_t value;
-
-    pthread_mutex_lock(&hardware_mutex);
-    value = I2C_Read(ADDR_FPGA, 0x84);
-    pthread_mutex_unlock(&hardware_mutex);
-    return value;
+    // The I2C layer serializes this single-register read. Taking hardware_mutex
+    // here would invert HDZERO_detect's hardware_mutex -> dvr_mutex order.
+    return I2C_Read(ADDR_FPGA, 0x84);
 }
 
 void Set_Brightness(uint8_t bri) {
