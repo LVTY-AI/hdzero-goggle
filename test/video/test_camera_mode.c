@@ -1,6 +1,8 @@
 #include <assert.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "core/msp_displayport.h"
 #include "driver/hardware.h"
@@ -18,6 +20,7 @@ setting_t g_setting;
 source_info_t g_source_info;
 progress_bar_t progress_bar;
 int valid_channel_tb[10], user_select_index;
+extern pthread_mutex_t hardware_mutex;
 
 static void publish(uint8_t mode, uint8_t ratio) {
     uint8_t packet[13] = {0};
@@ -48,7 +51,7 @@ int i2c_write(int port, uint8_t dev, uint8_t reg, uint8_t value) {
     }
     return 1;
 }
-uint8_t i2c_read(int port, uint8_t dev, uint8_t reg) { return 0; }
+uint8_t i2c_read(int port, uint8_t dev, uint8_t reg) { return dev == 0x64 && reg == 0x84 ? 0x11 : 0; }
 void IT66021_Set_Pclk(int inv, int delay) {}
 void IT66021_Mask_WR(uint8_t bank, uint8_t addr, uint8_t mask, uint8_t value) {}
 void IT66121_set_phase(uint8_t phase, uint8_t invert) {}
@@ -91,6 +94,11 @@ screen_t screen = {
 
 int main(void) {
     hw_stat_init();
+    assert(pthread_mutex_lock(&hardware_mutex) == 0);
+    alarm(5); // Readback must not wait on the mode-change lock.
+    assert(Display_Osd_Readback() == 0x11);
+    alarm(0);
+    assert(pthread_mutex_unlock(&hardware_mutex) == 0);
     for (int point = 1; point <= 3; point++) {
         g_hw_stat.source_mode = SOURCE_MODE_HDZERO;
         g_hw_stat.hdz_mode = VR_720P60;
@@ -131,5 +139,5 @@ int main(void) {
     assert(!late_retime);
     assert(g_hw_stat.hdz_mode == VR_1080P30);
     assert(recorded_format == VR_1080P30);
-    puts("camera mode: in-flight updates and direct-entry cache passed");
+    puts("camera mode: OSD readback, in-flight updates and direct-entry cache passed");
 }
