@@ -122,9 +122,6 @@ static lv_obj_t *btn_esp = NULL;
 static lv_obj_t *label_esp = NULL;
 static lv_obj_t *msgbox_update_complete = NULL;
 static lv_obj_t *msgbox_settings_reset = NULL;
-static lv_obj_t *msgbox_release_notes = NULL;
-static lv_obj_t *label_note = NULL;
-static lv_obj_t *alert_img = NULL;
 static fw_select_t fw_select_goggle;
 static fw_select_t fw_select_vtx;
 static fw_select_t *fw_select_current = &fw_select_vtx;
@@ -155,7 +152,6 @@ static atomic_bool autoscan_filesystem = true; // was ATOMIC_VAR_INIT(true) — 
  */
 static void page_version_on_roller(uint8_t key);
 static void page_version_on_click(uint8_t key, int sel);
-static void page_version_on_right_button(bool is_short);
 static void page_version_on_roller_fw_select(uint8_t key);
 static void page_version_on_click_fw_select(uint8_t key, int sel);
 
@@ -424,56 +420,6 @@ int generate_current_version(sys_version_t *sys_ver) {
     return 0;
 }
 
-static bool page_version_find_latest_fw(const char *path, char *latest, size_t size) {
-    bool found = false;
-    DIR *dir = opendir(path);
-    if (dir) {
-        struct dirent *entry = readdir(dir);
-        while (entry != NULL) {
-#if defined(_WIN32)
-            if (0) { // fw scan disabled on Windows (mingw dirent lacks d_type; inert in emulator)
-#else
-            if (entry->d_type == DT_DIR) {
-#endif
-                if (!found || str_compare_versions(entry->d_name, latest) > 0) {
-                    // d_name is owned by DIR and cannot survive closedir().
-                    snprintf(latest, size, "%s", entry->d_name);
-                    found = true;
-                }
-            }
-            entry = readdir(dir);
-        }
-        closedir(dir);
-    }
-    return found;
-}
-
-static int page_version_get_latest_fw_path(const char *device, char *path, size_t size) {
-    char tmp_path[256], sdc_path[256];
-    snprintf(tmp_path, sizeof(tmp_path), "/tmp/FIRMWARE/%s", device);
-    snprintf(sdc_path, sizeof(sdc_path), "/mnt/extsd/FIRMWARE/%s", device);
-
-    char tmp_latest[256], sdc_latest[256];
-    bool has_tmp = page_version_find_latest_fw(tmp_path, tmp_latest, sizeof(tmp_latest));
-    bool has_sdc = page_version_find_latest_fw(sdc_path, sdc_latest, sizeof(sdc_latest));
-
-    if (has_tmp && has_sdc) {
-        if (str_compare_versions(tmp_latest, sdc_latest) > 0) {
-            has_sdc = false;
-        } else {
-            has_tmp = false;
-        }
-    }
-
-    if (has_tmp) {
-        return snprintf(path, size, "%s/%s", tmp_path, tmp_latest);
-    } else if (has_sdc) {
-        return snprintf(path, size, "%s/%s", sdc_path, sdc_latest);
-    } else {
-        return 0;
-    }
-}
-
 static void page_version_fw_select_reset(fw_select_t *fw_select) {
     if (fw_select->count) {
         for (int i = 0; i < fw_select->count; ++i) {
@@ -489,7 +435,7 @@ static void page_version_fw_select_reset(fw_select_t *fw_select) {
     }
 }
 
-static int page_version_get_latest_fw_files(fw_select_t *fw_select, const char *pattern, bool has_release_notes) {
+static int page_version_get_latest_fw_files(fw_select_t *fw_select, const char *pattern) {
     DIR *dir = opendir(fw_select->path);
     if (dir) {
         struct dirent *entry = readdir(dir);
@@ -518,8 +464,6 @@ static int page_version_get_latest_fw_files(fw_select_t *fw_select, const char *
                             fw_select->zipped = true;
                         }
                     }
-                } else if (strstr(entry->d_name, "release.notes")) {
-                    fw_select->ready = true;
                 }
             }
 
@@ -527,13 +471,7 @@ static int page_version_get_latest_fw_files(fw_select_t *fw_select, const char *
         }
         closedir(dir);
 
-        if (has_release_notes) {
-            if (!fw_select->ready) {
-                page_version_fw_select_reset(fw_select);
-            } else if (fw_select->count > 1) {
-                str_qsort(&fw_select->files[0], fw_select->count);
-            }
-        } else if (fw_select->count > 0) {
+        if (fw_select->count > 0) {
             fw_select->ready = true;
         }
     }
@@ -542,24 +480,17 @@ static int page_version_get_latest_fw_files(fw_select_t *fw_select, const char *
 }
 
 static void page_version_fw_scan_for_updates() {
-    bool has_online_goggle_update = false;
-    bool has_online_vtx_update = false;
-    char buf[1024];
-
 #if defined HDZGOGGLE
     const char *local_filename = "HDZERO_GOGGLE";
-    const char *remote_filename = "GOGGLE";
 #elif defined HDZBOXPRO
     const char *local_filename = "HDZERO_BOXPRO";
-    const char *remote_filename = "BoxPro";
 #elif defined HDZGOGGLE2
     const char *local_filename = "HDZERO_GOGGLE2";
-    const char *remote_filename = "GOGGLE2";
 #endif
 
     page_version_fw_select_reset(&fw_select_goggle);
     snprintf(fw_select_goggle.path, sizeof(fw_select_goggle.path), "/mnt/extsd");
-    page_version_get_latest_fw_files(&fw_select_goggle, local_filename, false);
+    page_version_get_latest_fw_files(&fw_select_goggle, local_filename);
 
     if (fw_select_goggle.ready) {
         fw_select_goggle.alt_title = _lang("SD Card");
@@ -568,114 +499,13 @@ static void page_version_fw_scan_for_updates() {
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
     page_version_fw_select_reset(&fw_select_vtx);
     snprintf(fw_select_vtx.path, sizeof(fw_select_vtx.path), "/mnt/extsd");
-    page_version_get_latest_fw_files(&fw_select_vtx, "HDZERO_TX", false);
+    page_version_get_latest_fw_files(&fw_select_vtx, "HDZERO_TX");
 
     if (fw_select_vtx.ready) {
         fw_select_vtx.alt_title = _lang("SD Card");
     }
 #endif
 
-    if (g_setting.wifi.enable) {
-        if (!fw_select_goggle.ready) {
-            has_online_goggle_update =
-                0 < page_version_get_latest_fw_path(remote_filename, fw_select_goggle.path, sizeof(fw_select_goggle.path)) &&
-                0 < page_version_get_latest_fw_files(&fw_select_goggle, ".bin", true);
-        }
-
-#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
-        if (!fw_select_vtx.ready) {
-            has_online_vtx_update =
-                0 < page_version_get_latest_fw_path("VTX", fw_select_vtx.path, sizeof(fw_select_vtx.path)) &&
-                0 < page_version_get_latest_fw_files(&fw_select_vtx, ".zip", true);
-        }
-#endif
-
-        if (has_online_goggle_update || has_online_vtx_update) {
-            snprintf(buf, sizeof(buf), "%s\n%s.",
-                     _lang("To view release notes select any of the Update buttons"),
-                     _lang("then press the Func button to display or hide the release notes"));
-            lv_label_set_text(label_note, buf);
-        } else if (fw_select_goggle.alt_title || fw_select_vtx.alt_title) {
-            snprintf(buf, sizeof(buf), "%s\n%s.",
-                     _lang("Remove any update binary files from the root of SD Card in"),
-                     _lang("order to install the latest online downloaded firmware files"));
-            lv_label_set_text(label_note, buf);
-        }
-    } else {
-        lv_label_set_text(label_note, "");
-    }
-}
-
-static bool page_version_release_notes_active() {
-    return !lv_obj_has_flag(msgbox_release_notes, LV_OBJ_FLAG_HIDDEN);
-}
-
-static void page_version_release_notes_show(fw_select_t *fw_select) {
-    static char buff[512];
-    static char tbuff[128];
-    static char mbuff[2048];
-
-    snprintf(buff, sizeof(buff), "%s/release.notes", fw_select->path);
-    FILE *notes = fopen(buff, "r");
-
-    if (notes) {
-        int max_msg_box_width = UI_VERSION_RELEASE_NOTES_MAX_SIZE;
-        int max_line_length = 1;
-        size_t written = 0;
-        size_t nbytes = 0;
-        size_t rbytes = 0;
-        char *line = NULL;
-
-        while (-1 != (rbytes = getline(&line, &nbytes, notes)) && written < sizeof(mbuff)) {
-            max_line_length = rbytes > max_line_length ? rbytes : max_line_length;
-            // Read until buffer only contains 256 characters are left.
-            if (sizeof(mbuff) - written > 256) {
-                if (memcpy(&mbuff[written], line, rbytes)) {
-                    written += rbytes;
-                }
-            } else {
-                snprintf(mbuff, sizeof(mbuff), "\n\n%s.", _lang("Visit https://github.com/hdzero for the complete list of changes"));
-                break;
-            }
-        }
-        free(line);
-        fclose(notes);
-
-        lv_obj_t *title = lv_msgbox_get_title(msgbox_release_notes);
-        lv_obj_t *message = lv_msgbox_get_text(msgbox_release_notes);
-        int msg_box_width = ((max_line_length / 10)) * 100;
-        if (msg_box_width > UI_VERSION_RELEASE_NOTES_MAX_SIZE) {
-            msg_box_width = UI_VERSION_RELEASE_NOTES_MAX_SIZE;
-        } else if (msg_box_width < UI_VERSION_RELEASE_NOTES_MIN_SIZE) {
-            msg_box_width = UI_VERSION_RELEASE_NOTES_MIN_SIZE;
-        }
-
-        snprintf(tbuff, sizeof(tbuff), "%s: %s", _lang("Release Notes"), fs_basename(fw_select->path));
-        lv_label_set_text_static(title, tbuff);
-        lv_label_set_text_static(message, mbuff);
-        lv_obj_set_style_text_font(message, UI_PAGE_LABEL_FONT, 0);
-        lv_obj_set_width(msgbox_release_notes, msg_box_width);
-        lv_obj_clear_flag(msgbox_release_notes, LV_OBJ_FLAG_HIDDEN);
-
-        // Mark file as read and remove alert only if there are
-        // no binary files detected on the root of the sd card.
-        if (!fw_select->alt_title) {
-            snprintf(buff, sizeof(buff), "touch %s/release.notes.checked", fw_select->path);
-            if (!fs_file_exists(buff)) {
-                if (0 == system_exec(buff)) {
-                    lv_obj_add_flag(alert_img, LV_OBJ_FLAG_HIDDEN);
-                }
-            }
-        }
-
-        // Disable scrolling
-        pp_version.p_arr.max = 0;
-    }
-}
-static void page_version_release_notes_hide() {
-    // Restore scrolling
-    pp_version.p_arr.max = ROW_COUNT;
-    lv_obj_add_flag(msgbox_release_notes, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void page_version_fw_select_toggle_panel(fw_select_t *fw_select) {
@@ -687,7 +517,6 @@ static void page_version_fw_select_toggle_panel(fw_select_t *fw_select) {
         pp_version.p_arr = fw_select_current->this;
         pp_version.on_roller = page_version_on_roller_fw_select;
         pp_version.on_click = page_version_on_click_fw_select;
-        pp_version.on_right_button = NULL;
     } else {
         for (int i = 0; i < pp_version.p_arr.max; ++i) {
             lv_obj_add_flag(pp_version.p_arr.panel[i], LV_OBJ_FLAG_HIDDEN);
@@ -699,7 +528,6 @@ static void page_version_fw_select_toggle_panel(fw_select_t *fw_select) {
         pp_version.p_arr = fw_select_current->page;
         pp_version.on_roller = page_version_on_roller;
         pp_version.on_click = page_version_on_click;
-        pp_version.on_right_button = page_version_on_right_button;
     }
 }
 
@@ -938,54 +766,15 @@ static lv_obj_t *page_version_create(lv_obj_t *parent, panel_arr_t *arr) {
     msgbox_settings_reset = create_msgbox_item(_lang("Settings reset"), buf);
     lv_obj_add_flag(msgbox_settings_reset, LV_OBJ_FLAG_HIDDEN);
 
-    msgbox_release_notes = create_msgbox_item(_lang("Release Notes"), _lang("Empty"));
-    lv_obj_add_flag(msgbox_release_notes, LV_OBJ_FLAG_HIDDEN);
-
-    label_note = lv_label_create(cont);
-    lv_label_set_text(label_note, "");
-    lv_obj_set_style_text_font(label_note, UI_PAGE_LABEL_FONT, 0);
-    lv_obj_set_style_text_align(label_note, LV_TEXT_ALIGN_LEFT, 0);
-    lv_obj_set_style_text_color(label_note, lv_color_hex(TEXT_COLOR_DEFAULT), 0);
-    lv_obj_set_style_pad_top(label_note, UI_PAGE_TEXT_PAD, 0);
-    lv_label_set_long_mode(label_note, LV_LABEL_LONG_WRAP);
-    lv_obj_set_grid_cell(label_note, LV_GRID_ALIGN_START, 1, 4, LV_GRID_ALIGN_START, 6, 2);
-
     page_version_fw_scan_for_updates();
     page_version_fw_select_create(_lang("Goggle"), &fw_select_goggle, flash_goggle);
     page_version_fw_select_create("VTX", &fw_select_vtx, flash_vtx);
 
-    snprintf(page_name, sizeof(page_name), "%s   ", _lang("Firmware"));
+    snprintf(page_name, sizeof(page_name), "%s", _lang("Firmware"));
     pp_version.name = page_name;
     pp_version.p_arr.max = ROW_COUNT;
 
     return page;
-}
-
-static void page_version_on_created() {
-    alert_img = lv_img_create(pp_version.label);
-    char filename[256];
-    osd_resource_path(filename, "%s", OSD_RESOURCE_720, ALERT_IMG);
-    lv_img_set_src(alert_img, filename);
-
-    lv_obj_add_flag(alert_img, LV_OBJ_FLAG_FLOATING);
-    lv_obj_clear_flag(alert_img, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(alert_img, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_set_pos(alert_img, UI_VERSION_FIRMWARE_ALERT_SIZE, 0);
-
-    /**
-     * If user reads release notes, then we can remove the alert.
-     */
-    static char checked[1024];
-    snprintf(checked, sizeof(checked), "%s/release.notes.checked", fw_select_goggle.path);
-    if (fs_file_exists(checked)) {
-        lv_obj_add_flag(alert_img, LV_OBJ_FLAG_HIDDEN);
-    } else {
-        static char notes[1024];
-        snprintf(notes, sizeof(notes), "%s/release.notes", fw_select_goggle.path);
-        if (fs_file_exists(notes)) {
-            lv_obj_clear_flag(alert_img, LV_OBJ_FLAG_HIDDEN);
-        }
-    }
 }
 
 static void page_version_on_update(uint32_t delta_ms) {
@@ -1065,7 +854,6 @@ static void page_version_enter() {
 }
 
 static void page_version_exit() {
-    lv_obj_add_flag(msgbox_release_notes, LV_OBJ_FLAG_HIDDEN);
     page_version_fw_select_hide(&fw_select_vtx);
     page_version_fw_select_hide(&fw_select_goggle);
     autoscan_filesystem = true;
@@ -1086,85 +874,69 @@ static void page_version_on_click(uint8_t key, int sel) {
     FILE *fp;
     int dat[16];
 
-    if (!page_version_release_notes_active()) {
-        version_update_title();
-        if (sel == ROW_CUR_VERSION) {
-            fp = fopen("/tmp/wr_reg", "r");
-            if (fp) {
-                while (fgets(buf, 80, fp)) {
-                    sscanf(buf, "%x %x %x", &dat[0], &dat[1], &dat[2]);
-                    DM5680_WriteReg(dat[0], dat[1], dat[2]);
-                    LOGI("DM5680 REG[%02x,%02x]<-%02x", dat[0], dat[1], dat[2]);
-                    usleep(100000);
-                }
-                fclose(fp);
-                // system_exec("rm /tmp/wr_reg");
-            }
-
-            fp = fopen("/tmp/rd_reg", "r");
-            if (!fp)
-                return;
+    version_update_title();
+    if (sel == ROW_CUR_VERSION) {
+        fp = fopen("/tmp/wr_reg", "r");
+        if (fp) {
             while (fgets(buf, 80, fp)) {
-                sscanf(buf, "%x %x", &dat[0], &dat[1]);
-                DM5680_ReadReg(dat[0], dat[1]);
-                sleep(1);
-                LOGI("DM5680_0 REG[%02x,%02x]-> %02x", dat[0], dat[1], rx_status[0].rx_regval);
-                LOGI("DM5680_1 REG[%02x,%02x]-> %02x", dat[0], dat[1], rx_status[1].rx_regval);
+                sscanf(buf, "%x %x %x", &dat[0], &dat[1], &dat[2]);
+                DM5680_WriteReg(dat[0], dat[1], dat[2]);
+                LOGI("DM5680 REG[%02x,%02x]<-%02x", dat[0], dat[1], dat[2]);
+                usleep(100000);
             }
             fclose(fp);
-        } else if (sel == ROW_RESET_ALL_SETTINGS) {
-            if (reset_all_settings_confirm) {
-                settings_reset();
-                reset_all_settings_reset_label_text();
-                lv_obj_clear_flag(msgbox_settings_reset, LV_OBJ_FLAG_HIDDEN);
-                app_state_push(APP_STATE_USER_INPUT_DISABLED);
-            } else {
-                snprintf(buf, sizeof(buf), "#FFFF00 %s#", _lang("Click to confirm or Scroll to cancel"));
-                lv_label_set_text(btn_reset_all_settings, buf);
-                reset_all_settings_confirm = CONFIRMATION_CONFIRMED;
-            }
-        } else if (sel == ROW_UPDATE_VTX) {
-            page_version_fw_scan_for_updates();
-            snprintf(buf, sizeof(buf), "VTX %s", _lang("Firmware"));
-            page_version_fw_select_show(buf, &fw_select_vtx);
-        } else if (sel == ROW_UPDATE_GOGGLE) {
-            if (!reboot_flag) {
-                page_version_fw_scan_for_updates();
-                snprintf(buf, sizeof(buf), "%s %s", _lang("Goggle"), _lang("Firmware"));
-                page_version_fw_select_show(buf, &fw_select_goggle);
-            }
-        } else if (sel == ROW_UPDATE_ESP32) {
-            lv_obj_clear_flag(bar_esp, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_add_flag(label_esp, LV_OBJ_FLAG_HIDDEN);
-            snprintf(buf, sizeof(buf), "%s...", _lang("Flashing"));
-            lv_label_set_text(btn_esp, buf);
-            lv_timer_handler();
-            esp_loader_error_t ret = flash_elrs();
-            lv_obj_add_flag(bar_esp, LV_OBJ_FLAG_HIDDEN);
-            lv_obj_clear_flag(label_esp, LV_OBJ_FLAG_HIDDEN);
-            if (ret == ESP_LOADER_SUCCESS) {
-                snprintf(buf, sizeof(buf), "#00FF00 %s#", _lang("SUCCESS"));
-                lv_label_set_text(btn_esp, buf);
-            } else {
-                snprintf(buf, sizeof(buf), "#FF0000 %s#", _lang("FAILED"));
-                lv_label_set_text(btn_esp, buf);
-            }
-            page_version_enter();
+            // system_exec("rm /tmp/wr_reg");
         }
-    }
-}
 
-void page_version_on_right_button(bool is_short) {
-    if (is_short) {
-        if (!page_version_release_notes_active()) {
-            if (pp_version.p_arr.cur == ROW_UPDATE_VTX) {
-                page_version_release_notes_show(&fw_select_vtx);
-            } else if (pp_version.p_arr.cur == ROW_UPDATE_GOGGLE) {
-                page_version_release_notes_show(&fw_select_goggle);
-            }
-        } else {
-            page_version_release_notes_hide();
+        fp = fopen("/tmp/rd_reg", "r");
+        if (!fp)
+            return;
+        while (fgets(buf, 80, fp)) {
+            sscanf(buf, "%x %x", &dat[0], &dat[1]);
+            DM5680_ReadReg(dat[0], dat[1]);
+            sleep(1);
+            LOGI("DM5680_0 REG[%02x,%02x]-> %02x", dat[0], dat[1], rx_status[0].rx_regval);
+            LOGI("DM5680_1 REG[%02x,%02x]-> %02x", dat[0], dat[1], rx_status[1].rx_regval);
         }
+        fclose(fp);
+    } else if (sel == ROW_RESET_ALL_SETTINGS) {
+        if (reset_all_settings_confirm) {
+            settings_reset();
+            reset_all_settings_reset_label_text();
+            lv_obj_clear_flag(msgbox_settings_reset, LV_OBJ_FLAG_HIDDEN);
+            app_state_push(APP_STATE_USER_INPUT_DISABLED);
+        } else {
+            snprintf(buf, sizeof(buf), "#FFFF00 %s#", _lang("Click to confirm or Scroll to cancel"));
+            lv_label_set_text(btn_reset_all_settings, buf);
+            reset_all_settings_confirm = CONFIRMATION_CONFIRMED;
+        }
+    } else if (sel == ROW_UPDATE_VTX) {
+        page_version_fw_scan_for_updates();
+        snprintf(buf, sizeof(buf), "VTX %s", _lang("Firmware"));
+        page_version_fw_select_show(buf, &fw_select_vtx);
+    } else if (sel == ROW_UPDATE_GOGGLE) {
+        if (!reboot_flag) {
+            page_version_fw_scan_for_updates();
+            snprintf(buf, sizeof(buf), "%s %s", _lang("Goggle"), _lang("Firmware"));
+            page_version_fw_select_show(buf, &fw_select_goggle);
+        }
+    } else if (sel == ROW_UPDATE_ESP32) {
+        lv_obj_clear_flag(bar_esp, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(label_esp, LV_OBJ_FLAG_HIDDEN);
+        snprintf(buf, sizeof(buf), "%s...", _lang("Flashing"));
+        lv_label_set_text(btn_esp, buf);
+        lv_timer_handler();
+        esp_loader_error_t ret = flash_elrs();
+        lv_obj_add_flag(bar_esp, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(label_esp, LV_OBJ_FLAG_HIDDEN);
+        if (ret == ESP_LOADER_SUCCESS) {
+            snprintf(buf, sizeof(buf), "#00FF00 %s#", _lang("SUCCESS"));
+            lv_label_set_text(btn_esp, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "#FF0000 %s#", _lang("FAILED"));
+            lv_label_set_text(btn_esp, buf);
+        }
+        page_version_enter();
     }
 }
 
@@ -1341,13 +1113,11 @@ page_pack_t pp_version = {
     .p_arr = {
         .cur = 0,
     },
-    .name = "Firmware   ", // Spaces are necessary to include alert icon. Note name will be overwritten when page_version_create() is called
+    .name = "Firmware", // Note name will be overwritten when page_version_create() is called
     .create = page_version_create,
     .enter = page_version_enter,
     .exit = page_version_exit,
-    .on_created = page_version_on_created,
     .on_update = page_version_on_update,
     .on_roller = page_version_on_roller,
     .on_click = page_version_on_click,
-    .on_right_button = page_version_on_right_button,
 };
