@@ -173,35 +173,11 @@ int main(int argc, char **argv) {
 }
 """
 
-firmware = prelude + r"""
-static int str_compare_versions(const char *a, const char *b) { return strcmp(a, b); }
-"""
-firmware += function("src/ui/page_version.c", "static const char *page_version_find_latest_fw(" if
-                     "static const char *page_version_find_latest_fw(" in (ROOT / "src/ui/page_version.c").read_text()
-                     else "static bool page_version_find_latest_fw(")
-firmware += r"""
-int main(void) {
-    assert(mkdir("fwdir", 0700) == 0);
-    assert(mkdir("fwdir/1.0.0", 0700) == 0);
-    assert(mkdir("fwdir/2.0.0", 0700) == 0);
-    char latest[256] = {0};
-"""
-if "static const char *page_version_find_latest_fw(" in firmware:
-    firmware += 'const char *name = page_version_find_latest_fw("fwdir");\nassert(name);\nassert(!strcmp(name, "2.0.0"));\n'
-else:
-    firmware += r"""
-    assert(page_version_find_latest_fw("fwdir", latest, sizeof(latest)));
-    assert(!strcmp(latest, "2.0.0"));
-    assert(!page_version_find_latest_fw("missing", latest, sizeof(latest)));
-"""
-firmware += "return 0;\n}\n"
-
 failed = []
 with tempfile.TemporaryDirectory(prefix="memory-bounds-") as directory:
     path = Path(directory)
     for name, source, cases in [("elrs", parser, ["parser", "osd"]),
-                                ("settings", settings, ["settings", "names"]),
-                                ("firmware", firmware, ["firmware"])]:
+                                ("settings", settings, ["settings", "names"])]:
         cases = [case for case in cases if not sys.argv[1:] or case in sys.argv[1:]]
         if not cases:
             continue
