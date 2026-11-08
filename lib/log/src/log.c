@@ -20,6 +20,7 @@ static size_t console_offset;
 static size_t dropped_file, dropped_console;
 static atomic_bool file_opened;
 static pthread_once_t log_once = PTHREAD_ONCE_INIT;
+static bool worker_started;
 static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 // Storage must never be accessed while holding the producer's buffer lock.
 static pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -96,7 +97,10 @@ static void *log_sync_thread(void *arg) {
 static void log_init_thread(void) {
     pthread_t tid;
     if (!pthread_create(&tid, NULL, log_sync_thread, NULL)) {
+        worker_started = true;
         pthread_detach(tid);
+    } else {
+        dprintf(STDERR_FILENO, "[logger] worker unavailable; using console only\n");
     }
 }
 
@@ -141,6 +145,8 @@ int log_printf(const char *file, const char *func, int line, const int level, co
                  buf);
 
     size_t length = strnlen(buffer, sizeof(buffer) - 1);
+    if (!worker_started)
+        return (int)log_write(STDOUT_FILENO, buffer, length);
     pthread_mutex_lock(&log_mutex);
     log_enqueue(offline_buffer, sizeof(offline_buffer), &offline_offset, &dropped_file, buffer, length);
     log_enqueue(console_buffer, sizeof(console_buffer), &console_offset, &dropped_console, buffer, length);
@@ -156,6 +162,8 @@ bool log_file_opened() {
 
 bool log_file_open(const char *filename) {
     pthread_once(&log_once, log_init_thread);
+    if (!worker_started)
+        return false;
     int fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0666);
     if (fd < 0)
         return false;
