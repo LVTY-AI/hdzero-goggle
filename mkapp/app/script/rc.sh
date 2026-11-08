@@ -2,6 +2,15 @@
 
 PLATFORM="$(cat /mnt/app/platform)"
 
+# Preserve earlier boots, with a separate owner for SDK/child console output.
+# HDZGOGGLE.log is owned exclusively by the application's buffered file logger.
+function rotate_console_log()
+{
+	if [ -f "$1" ] && [ "$(wc -c < "$1")" -ge 4194304 ]; then
+		mv -f "$1" "$1.1"
+	fi
+}
+
 function insmod_all()
 {
 	insmod /mnt/app/ko/gpio_keys_hdzero.ko
@@ -114,7 +123,8 @@ aww 0x050967c0 0x110e6100
 #record process
 source /mnt/app//app/record/record-env.sh
 if [ -e /mnt/extsd/RECORD.log ]; then
-	/mnt/app/app/record/record > /mnt/extsd/RECORD.log 2>&1 &
+	rotate_console_log /mnt/extsd/RECORD.log
+	/mnt/app/app/record/record >> /mnt/extsd/RECORD.log 2>&1 &
 else
 	/mnt/app/app/record/record &
 fi
@@ -148,7 +158,8 @@ if [ -e /mnt/extsd/develop.sh ]; then
 	/mnt/extsd/develop.sh
 else
 	if [ -e /mnt/extsd/HDZGOGGLE.log ]; then
-		/mnt/app/app/HDZGOGGLE > /mnt/extsd/HDZGOGGLE.log 2>&1 &
+		rotate_console_log /mnt/extsd/HDZGOGGLE-console.log
+		/mnt/app/app/HDZGOGGLE >> /mnt/extsd/HDZGOGGLE-console.log 2>&1 &
 	else
 		/mnt/app/app/HDZGOGGLE &
 	fi
