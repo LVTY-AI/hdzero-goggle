@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <log/log.h>
+#include <log/dvr_trace.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -1138,6 +1139,7 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
     log_open();
+    dvr_trace_init();
 
     RecordContext_t recCtx;
     ZeroMemory(&recCtx, sizeof(recCtx));

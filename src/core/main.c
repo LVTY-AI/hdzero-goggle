@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <log/log.h>
+#include <log/dvr_trace.h>
 #include <lvgl/lvgl.h>
 #include <minIni.h>
 
@@ -236,6 +237,7 @@ void lvgl_init() {
 }
 
 int main(int argc, char *argv[]) {
+    dvr_trace_init();
     pthread_mutex_init(&lvgl_mutex, NULL);
 
 #ifdef EMULATOR_BUILD

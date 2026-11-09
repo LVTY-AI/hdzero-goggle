@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <log/log.h>
+#include <log/dvr_trace.h>
 #include <minIni.h>
 
 #include "../conf/targets.h"
@@ -378,28 +379,12 @@ void dvr_star() {
     pthread_mutex_unlock(&dvr_mutex);
 }
 
-// Append one line to a persistent DVR-format trace on the SD card so the rare
-// "MP4 setting recorded as .ts" handoff failure can be diagnosed from logs
-// after the fact. Best-effort: silently skipped when no card is mounted.
+// Never perform debug storage I/O while a DVR caller may hold UI/control locks.
 static void dvr_dbg_log(const char *fmt, ...) {
-    FILE *fp = fopen("/mnt/extsd/dvr_dbg.log", "a");
-    if (fp == NULL)
-        return;
-
-    time_t now = time(NULL);
-    char ts[20];
-    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", localtime(&now));
-    fprintf(fp, "%s [app] ", ts);
-
     va_list ap;
     va_start(ap, fmt);
-    vfprintf(fp, fmt, ap);
+    dvr_trace_vlog("app", fmt, ap);
     va_end(ap);
-
-    fputc('\n', fp);
-    fflush(fp);
-    fsync(fileno(fp));
-    fclose(fp);
 }
 
 static void dvr_update_record_conf() {
