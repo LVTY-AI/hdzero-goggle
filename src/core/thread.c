@@ -168,7 +168,7 @@ static void check_source_signal(int vtmg_change) {
     if ((g_source_info.source == SOURCE_HDZERO) && vtmg_change) {
         LOGI("HDZero VTMG change (A)\n");
         dvr_cmd(DVR_STOP);
-        system_script(REC_STOP_LIVE);
+        dvr_stop_live();
         cnt = 0;
         signal_loss_at = 0;
     }
@@ -213,7 +213,6 @@ static void check_source_signal(int vtmg_change) {
             if (cnt >= SIGNAL_ACCQ_DURATION_THR) {
                 cnt = 0;
                 LOGI("Signal accquired");
-                sdcard_update_free_size();
                 if (dvr_space_allows_start()) {
                     dvr_cmd(DVR_START);
                 }
@@ -232,7 +231,6 @@ static void *thread_peripheral(void *ptr) {
             j = 0;
 
             fans_auto_ctrl();
-            detect_sdcard();
             if (k++ == 4) {
                 k = 0;
                 battery_update();
@@ -245,15 +243,6 @@ static void *thread_peripheral(void *ptr) {
                 g_temperature.left = nct_read_temperature(NCT_LEFT) + 100;
                 g_temperature.right = nct_read_temperature(NCT_RIGHT);
 #endif
-                dvr_update_status();
-                // Keep the cached free-space figure current while a card is
-                // mounted: rolling recording holds the card near its low-water
-                // mark, and every other refresh site fires only on insertion or
-                // a format. Guarded, because statfs() on an unmounted /mnt/extsd
-                // would report the rootfs instead.
-                if (g_sdcard_enable) {
-                    sdcard_update_free_size();
-                }
             }
             // detect HDZERO
             record_vtmg_change = HDZERO_detect();
@@ -299,6 +288,17 @@ static void *thread_peripheral(void *ptr) {
 
 //////////////////////////////////////////////////////////////////////
 // local
+static void *thread_storage(void *unused) {
+    (void)unused;
+    for (;;) {
+        detect_sdcard();
+        // Slow mount/free-space queries must not delay fan/temperature polling.
+        if (g_sdcard_enable) sdcard_update_free_size();
+        usleep(250000);
+    }
+    return NULL;
+}
+
 static threads_obj_t threads_obj;
 
 static void threads_instance(threads_obj_t *obj) {
@@ -310,6 +310,10 @@ static void threads_instance(threads_obj_t *obj) {
 
 int create_threads() {
     int ret = 0;
+    pthread_t storage;
+    int storage_result = pthread_create(&storage, NULL, thread_storage, NULL);
+    if (!storage_result) pthread_detach(storage);
+    else LOGE("Storage polling thread unavailable: %d", storage_result);
     threads_obj_t *obj = &threads_obj;
     threads_instance(obj);
     for (int i = 0; i < THREAD_COUNT; i++) {

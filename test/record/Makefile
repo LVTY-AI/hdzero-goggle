@@ -13,6 +13,14 @@ test_dvr_trace: test_dvr_trace.c ../../lib/log/src/dvr_trace.c ../../lib/log/inc
 run_dvr_trace: test_dvr_trace
 	./test_dvr_trace
 
+test_record_control: test_record_control.c ../../lib/log/src/record_control.c ../../lib/log/include/log/record_control.h
+	$(CC) $(CFLAGS) -I../../lib/log/include test_record_control.c ../../lib/log/src/record_control.c -o $@
+
+.PHONY: run_record_control
+run_record_control: test_record_control test_dvr_naming
+	./test_record_control
+	./test_dvr_naming
+
 test_avshare_reset: test_avshare_reset.c
 	$(CC) $(CFLAGS) $< -o $@
 
@@ -32,4 +40,4 @@ run: all
 	./test_dvr_naming
 
 clean:
-	rm -f test_avshare_reset test_dvr_naming test_dvr_trace
+	rm -f test_avshare_reset test_dvr_naming test_dvr_trace test_record_control

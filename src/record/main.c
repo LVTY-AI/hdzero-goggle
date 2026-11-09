@@ -4,10 +4,14 @@
 #include <fcntl.h>
 #include <log/log.h>
 #include <log/dvr_trace.h>
+#include <log/record_control.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <minIni.h>
 
 #include "avshare.h"
 #include "confparser.h"
@@ -251,6 +255,10 @@ inline static bool record_isArecording(RecordContext_t *recCtx) {
     return record_isGoing(recCtx->vv) && recCtx->params.enableAudio;
 }
 
+static int record_close_error;
+static bool control_paused;
+static int control_queue = -1;
+
 static void record_closeFile(RecordContext_t *recCtx, const char *reason) {
     char filePath[256] = "";
     snprintf(filePath, sizeof(filePath), "%s", recCtx->ff->ofmtContext->url);
@@ -260,6 +268,7 @@ static void record_closeFile(RecordContext_t *recCtx, const char *reason) {
                 reason, filePath, recCtx->nbFramesTotal,
                 (unsigned long long)bytes);
     FFPackCloseResult_t result = ffpack_close(recCtx->ff);
+    if (result.flush < 0 || result.trailer < 0 || result.io < 0) record_close_error = EIO;
     recCtx->ff = NULL;
     rec_dbg_log("record_close end reason=%s file='%s' flush=%d trailer=%d io=%d",
                 reason, filePath, result.flush, result.trailer, result.io);
@@ -974,6 +983,7 @@ static inline void live_stop(RecordContext_t *recCtx) {
 }
 
 static inline void live_run(RecordContext_t *recCtx) {
+    if (control_paused) return;
     if (avshare_connected(MEDIA_VIDEO)) {
         if (recCtx->enableLive && !vi2live_started(recCtx->vvLive)) {
             live_start(recCtx);
@@ -1032,15 +1042,82 @@ void record_checkConf(RecordContext_t *recCtx, char *confSet) {
         strcpy(recCtx->confFile, exeConf);
 }
 
+static int record_control_config(RecordContext_t *ctx, const record_control_request_t *request) {
+    char prefix[128];
+    snprintf(prefix, sizeof(prefix), "/tmp/hdz-dvr-control/%u/", request->owner);
+    size_t length = strlen(prefix);
+    unsigned generation;
+    int consumed = 0;
+    if (strncmp(request->config, prefix, length) ||
+        sscanf(request->config + length, "record-%u.conf%n", &generation, &consumed) != 1 ||
+        !generation || request->config[length + consumed] != '\0') return EINVAL;
+    prefix[length - 1] = '\0';
+    struct stat st;
+    if (lstat(prefix, &st) || !S_ISDIR(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077))
+        return EACCES;
+    int fd = open(request->config, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) return errno;
+    int error = fstat(fd, &st) || !S_ISREG(st.st_mode) || st.st_uid != geteuid() ||
+                st.st_size <= 0 || st.st_size > 65536 ? EINVAL : 0;
+    close(fd);
+    if (!error) snprintf(ctx->confFile, sizeof(ctx->confFile), "%s", request->config);
+    return error;
+}
+
+static bool record_control_run(RecordContext_t *ctx) {
+    record_control_request_t request;
+    if (control_queue < 0) return false;
+    int received = record_control_receive(control_queue, &request);
+    if (received <= 0) return false;
+    if (kill((pid_t)request.owner, 0) != 0) return true;
+    int error = 0;
+    if (request.command == RECORD_START || request.command == RECORD_CONFIG || request.command == RECORD_LIVE_STOP)
+        error = record_control_config(ctx, &request);
+    if (!error) switch (request.command) {
+    case RECORD_START:
+        if (ctx->ff) { error = EBUSY; break; }
+        char container[8];
+        ini_gets("record", "type", "", container, sizeof(container), ctx->confFile);
+        if (strcmp(container, "ts") && strcmp(container, "mp4")) { error = EINVAL; break; }
+        conf_loadRecordParams(ctx->confFile, &ctx->params);
+        record_checkDisk(ctx);
+        record_run(ctx, REC_statRun);
+        if (!ctx->ff) error = EIO;
+        else control_paused = false;
+        break;
+    case RECORD_STOP:
+    case RECORD_PAUSE:
+    case RECORD_LIVE_STOP:
+        record_close_error = 0;
+        record_run(ctx, REC_statStop);
+        if (request.command != RECORD_STOP) {
+            control_paused = request.command == RECORD_PAUSE;
+            live_stop(ctx);
+        }
+        error = record_close_error;
+        if (ctx->ff) error = EBUSY;
+        break;
+    default: break;
+    }
+    // Completion is sent only after encoder stop and file/trailer/IO close return.
+    if (record_control_reply(control_queue, &request, error, ctx->ff != NULL))
+        LOGE("DVR completion reply failed: %d", errno);
+    return true;
+}
+
 void main_loop(RecordContext_t *recCtx, bool retryLegacyConf) {
     bool isExit = false;
     uint32_t tkIdle = 0;
     uint32_t tkNow = 0;
 
+    control_queue = record_control_open(true);
+    if (control_queue < 0) LOGE("DVR control unavailable: %d", errno);
+
     gogglemsg_init(false, MTYPE_RECORD);
     gogglemsg_flush(MTYPE_RECORD);
 
     while (!isExit) {
+        if (record_control_run(recCtx)) continue;
         int nMsg = gogglemsg_recv(MTYPE_RECORD);
 
         switch (nMsg) {
@@ -1048,6 +1125,7 @@ void main_loop(RecordContext_t *recCtx, bool retryLegacyConf) {
             isExit = true;
             break;
         case MSG_cmdSTART:
+            if (control_paused) break;
             if (!record_isGoing(recCtx->vv)) {
                 if (retryLegacyConf &&
                     strcmp(recCtx->confFile, REC_confDEFAULT) == 0) {
@@ -1072,6 +1150,7 @@ void main_loop(RecordContext_t *recCtx, bool retryLegacyConf) {
             tkIdle = tkNow;
             break;
         case REC_cmdSAVE:
+            if (strncmp(recCtx->confFile, "/tmp/hdz-dvr-control/", 21) == 0) break;
             conf_saveRecordParams(recCtx->confFile, &recCtx->params);
             if (recCtx->vv != NULL) {
                 conf_saveVencParams(recCtx->confFile, &recCtx->vv->veParams);
@@ -1089,6 +1168,7 @@ void main_loop(RecordContext_t *recCtx, bool retryLegacyConf) {
             ai2ao_stop(recCtx->ao, !record_isArecording(recCtx));
             break;
         case LIVE_cmdSTART:
+            if (control_paused) break;
             recCtx->enableLive = true;
             // for debug only
             if (!vi2live_started(recCtx->vvLive)) {

@@ -515,6 +515,7 @@ static void try_crossover_probe(void) {
 
         LOGI("auto-detect crossover: HDZ->analog (analog_ch=%u rssi=%u mv)",
              (uint8_t)entry->analog_channel + 1, rssi_mv);
+        if (dvr_defer_transition(NULL, 0)) return;
         // We're on thread_peripheral here; app_switch_to_analog touches LVGL
         // (osd_show, lvgl_switch_to_720p, lv_timer_handler), so grab the
         // mutex like the input thread does for the same operation.
@@ -522,7 +523,6 @@ static void try_crossover_probe(void) {
         g_setting.source.analog_channel = (uint8_t)entry->analog_channel + 1;
         ini_putl("source", "analog_channel",
                  g_setting.source.analog_channel, SETTING_INI);
-        dvr_cmd(DVR_STOP);
         app_switch_to_analog(0);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_AV_MODULE;
@@ -547,6 +547,7 @@ static void try_crossover_probe(void) {
 
         LOGI("auto-detect crossover: analog->HDZ (band=%d ch=%u bw=%u)",
              entry->hdz_band, (uint8_t)entry->hdz_channel + 1, locked_bw);
+        if (dvr_defer_transition(NULL, 0)) return;
         pthread_mutex_lock(&lvgl_mutex);
         g_hdz_detected_bw = locked_bw; // live open uses the bw that locked
         g_setting.source.hdzero_band = (uint8_t)entry->hdz_band;
@@ -554,7 +555,6 @@ static void try_crossover_probe(void) {
                  g_setting.source.hdzero_band, SETTING_INI);
         g_setting.scan.channel = (uint8_t)entry->hdz_channel + 1;
         ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
-        dvr_cmd(DVR_STOP);
         app_switch_to_hdzero(true);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_HDZERO;

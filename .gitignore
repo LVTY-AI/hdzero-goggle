@@ -30,3 +30,5 @@ emu-out/
 # runtime-written config (the app creates this in its working dir)
 /setting.ini
 /test/record/test_dvr_trace
+/test/record/test_dvr_naming
+/test/record/test_record_control

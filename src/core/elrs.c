@@ -167,7 +167,11 @@ static const scan_freq_entry_t *find_freq_entry_by_elrs_index(uint8_t index) {
     return find_freq_entry_by_mhz(freq_table[index]);
 }
 
-static void change_channel_hdzero(uint8_t const band, uint8_t const channel) {
+static void change_channel_hdzero_locked(uint8_t band, uint8_t channel);
+static void hdz_channel_after_dvr(uintptr_t value) {
+    change_channel_hdzero_locked((uint8_t)(value >> 8), (uint8_t)value);
+}
+static void change_channel_hdzero_locked(uint8_t const band, uint8_t const channel) {
     uint8_t max_channel = (band == SETTING_SOURCES_HDZERO_BAND_LOWBAND)
                               ? 8 : BASE_CH_NUM;
     if (channel == 0 || channel > max_channel) {
@@ -179,27 +183,33 @@ static void change_channel_hdzero(uint8_t const band, uint8_t const channel) {
         (g_setting.scan.channel & 0x7F) != channel ||
         g_source_info.source != SOURCE_HDZERO ||
         g_app_state != APP_STATE_VIDEO) {
+        if (dvr_defer_transition(hdz_channel_after_dvr, ((uintptr_t)band << 8) | channel)) return;
         g_setting.source.hdzero_band = band;
         ini_putl("source", "hdzero_band", g_setting.source.hdzero_band, SETTING_INI);
         g_setting.scan.channel = channel;
         ini_putl("scan", "channel", g_setting.scan.channel, SETTING_INI);
         beep();
-        pthread_mutex_lock(&lvgl_mutex);
-        dvr_cmd(DVR_STOP);
         app_switch_to_hdzero(true);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_HDZERO;
         dvr_select_audio_source(g_setting.record.audio_source);
         dvr_enable_line_out(true);
-        pthread_mutex_unlock(&lvgl_mutex);
     }
+}
+
+static void change_channel_hdzero(uint8_t band, uint8_t channel) {
+    pthread_mutex_lock(&lvgl_mutex);
+    change_channel_hdzero_locked(band, channel);
+    pthread_mutex_unlock(&lvgl_mutex);
 }
 
 static void channel_channel_hdzero(uint8_t const channel) {
     change_channel_hdzero(g_setting.source.hdzero_band, channel);
 }
 
-static void change_channel_analog(uint8_t const channel) {
+static void change_channel_analog_locked(uint8_t channel);
+static void analog_channel_after_dvr(uintptr_t channel) { change_channel_analog_locked((uint8_t)channel); }
+static void change_channel_analog_locked(uint8_t const channel) {
     if (channel == 0 || channel > ANALOG_CHANNEL_NUM) {
         LOGE("Invalid analog channel %d", channel);
         return;
@@ -219,18 +229,22 @@ static void change_channel_analog(uint8_t const channel) {
     }
 #endif
     if (g_setting.source.analog_channel != channel || g_app_state != APP_STATE_VIDEO) {
+        if (dvr_defer_transition(analog_channel_after_dvr, channel)) return;
         g_setting.source.analog_channel = channel;
         ini_putl("source", "analog_channel", g_setting.source.analog_channel, SETTING_INI);
         beep();
-        pthread_mutex_lock(&lvgl_mutex);
-        dvr_cmd(DVR_STOP);
         app_switch_to_analog(0);
         app_state_push(APP_STATE_VIDEO);
         g_source_info.source = SOURCE_AV_MODULE;
         dvr_select_audio_source(g_setting.record.audio_source);
         dvr_enable_line_out(true);
-        pthread_mutex_unlock(&lvgl_mutex);
     }
+}
+
+static void change_channel_analog(uint8_t channel) {
+    pthread_mutex_lock(&lvgl_mutex);
+    change_channel_analog_locked(channel);
+    pthread_mutex_unlock(&lvgl_mutex);
 }
 
 void elrs_init() {
