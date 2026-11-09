@@ -603,7 +603,15 @@ void (*roller_callback)(uint8_t key) = &tune_channel;
 void roller_up(void);
 void roller_down(void);
 
-static void press_after_dvr(uintptr_t unused) { (void)unused; btn_press(); }
+static void press_after_dvr(uintptr_t unused) {
+    (void)unused;
+    // The continuation already runs with lvgl_mutex held; do not re-enter btn_press.
+    if (g_app_state == APP_STATE_MAINMENU && !g_scanning) {
+        g_autoscan_exit = true;
+        app_exit_menu();
+        app_state_push(APP_STATE_VIDEO);
+    }
+}
 
 void btn_press(void) // long press left key
 {
