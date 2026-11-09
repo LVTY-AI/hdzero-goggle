@@ -676,6 +676,10 @@ static void *dvr_worker(void *unused) {
 }
 
 void dvr_init(void) {
+#ifdef EMULATOR_BUILD
+    control.initialized = true;
+    return; // No native recorder/MPP process exists in the SDL emulator.
+#endif
     pthread_mutex_lock(&dvr_mutex);
     if (!control.initialized) {
         control.initialized = true;
@@ -708,6 +712,9 @@ void dvr_stop_live(void) {
 }
 
 bool dvr_defer_transition(void (*resume)(uintptr_t), uintptr_t argument) {
+#ifdef EMULATOR_BUILD
+    return false;
+#endif
     pthread_mutex_lock(&dvr_mutex);
     bool ready = control.resuming || (control.paused && control.confirmed_idle && !control.desired && control.stop == control.stopped &&
                  !atomic_load(&control_error) && atomic_load(&control_phase) == DVR_IDLE);
