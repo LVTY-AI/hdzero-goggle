@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/msg.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <minIni.h>
@@ -1276,6 +1277,9 @@ failed:
     pthread_mutex_destroy(&recCtx.mutex);
     disk_sdstat_delete();
     avshare_uninit();
+    // Only after the writer and capture are down: a request still waiting on
+    // this queue then fails at once and the app reconnects to our successor.
+    if (control_queue >= 0) msgctl(control_queue, IPC_RMID, NULL);
 
     LOGD("exit done");
     log_close();
