@@ -706,7 +706,7 @@ int HDZERO_detect() // return = 1: vtmg to V536 changed
             // 1. Change fps
             Display_HDZ_t(camera.mode, camera.is_43);
             dvr_update_vi_conf(camera.mode);
-            system_script(REC_STOP_LIVE);
+            dvr_stop_live();
             ret = 1;
         }
 

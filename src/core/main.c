@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include <log/log.h>
+#include <log/dvr_trace.h>
 #include <lvgl/lvgl.h>
 #include <minIni.h>
 
@@ -21,6 +22,7 @@ SDL_mutex *global_sdl_mutex;
 
 #include "bmi270/accel_gyro.h"
 #include "core/app_state.h"
+#include "core/dvr.h"
 #include "core/common.hh"
 #include "core/elrs.h"
 #include "core/ht.h"
@@ -236,6 +238,8 @@ void lvgl_init() {
 }
 
 int main(int argc, char *argv[]) {
+    dvr_trace_init();
+    dvr_init();
     pthread_mutex_init(&lvgl_mutex, NULL);
 
 #ifdef EMULATOR_BUILD
@@ -336,6 +340,23 @@ int main(int argc, char *argv[]) {
 
     for (;;) {
         pthread_mutex_lock(&lvgl_mutex);
+        dvr_poll();
+        static lv_obj_t *dvr_status;
+        static const char *dvr_previous;
+        const char *dvr_message = dvr_transition_status();
+        if (dvr_message && !dvr_status) {
+            dvr_status = lv_label_create(lv_layer_top());
+            lv_obj_set_style_bg_color(dvr_status, lv_color_black(), 0);
+            lv_obj_set_style_bg_opa(dvr_status, LV_OPA_90, 0);
+            lv_obj_set_style_text_color(dvr_status, lv_color_hex(0xffff70), 0);
+            lv_obj_align(dvr_status, LV_ALIGN_TOP_MID, 0, 30);
+        }
+        if (dvr_status && dvr_previous != dvr_message) {
+            lv_label_set_text(dvr_status, dvr_message ? dvr_message : "");
+            if (dvr_message) lv_obj_clear_flag(dvr_status, LV_OBJ_FLAG_HIDDEN);
+            else lv_obj_add_flag(dvr_status, LV_OBJ_FLAG_HIDDEN);
+            dvr_previous = dvr_message;
+        }
         main_menu_update();
         rtc_persist_tick();
         sleep_reminder();

@@ -1,9 +1,25 @@
 CC ?= cc
 CFLAGS ?= -std=gnu11 -Wall -Wextra -Wno-unused-parameter
+.DEFAULT_GOAL := all
 
 .PHONY: all run clean
 
 all: test_avshare_reset test_dvr_naming
+
+test_dvr_trace: test_dvr_trace.c ../../lib/log/src/dvr_trace.c ../../lib/log/include/log/dvr_trace.h
+	$(CC) $(CFLAGS) -DDVR_TRACE_PATH='"dvr-trace-fifo"' -I../../lib/log/include test_dvr_trace.c ../../lib/log/src/dvr_trace.c -pthread -o $@
+
+.PHONY: run_dvr_trace
+run_dvr_trace: test_dvr_trace
+	./test_dvr_trace
+
+test_record_control: test_record_control.c ../../lib/log/src/record_control.c ../../lib/log/include/log/record_control.h
+	$(CC) $(CFLAGS) -I../../lib/log/include test_record_control.c ../../lib/log/src/record_control.c -o $@
+
+.PHONY: run_record_control
+run_record_control: test_record_control test_dvr_naming
+	./test_record_control
+	./test_dvr_naming
 
 test_avshare_reset: test_avshare_reset.c
 	$(CC) $(CFLAGS) $< -o $@
@@ -16,12 +32,12 @@ else
 NAMING_LDFLAGS = -Wl,--gc-sections
 endif
 
-test_dvr_naming: test_dvr_naming.c ../../src/core/dvr.c ../../src/driver/rtc.h
-	$(CC) $(CFLAGS) $(NAMING_CPPFLAGS) $(NAMING_CFLAGS) $< $(NAMING_LDFLAGS) -pthread -o $@
+test_dvr_naming: test_dvr_naming.c ../../src/core/dvr.c ../../src/driver/rtc.h ../../lib/log/src/dvr_trace.c
+	$(CC) $(CFLAGS) $(NAMING_CPPFLAGS) $(NAMING_CFLAGS) $< ../../lib/log/src/dvr_trace.c $(NAMING_LDFLAGS) -pthread -o $@
 
 run: all
 	./test_avshare_reset
 	./test_dvr_naming
 
 clean:
-	rm -f test_avshare_reset test_dvr_naming
+	rm -f test_avshare_reset test_dvr_naming test_dvr_trace test_record_control

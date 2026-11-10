@@ -1,6 +1,7 @@
 //#define LOG_NDEBUG 0
 #define LOG_TAG "CfgParser"
 #include <log/log.h>
+#include <log/dvr_trace.h>
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -13,29 +14,13 @@
 #include "confparser.h"
 #include "minIni.h"
 
-// Persistent DVR-format trace shared with the goggle app (see dvr.c). Lets the
-// rare "MP4 recorded as .ts" handoff failure be diagnosed from the record
-// daemon's side after the fact. Best-effort; skipped when no card is mounted.
+// Same bounded asynchronous trace as the app; never delay recorder control.
 void rec_dbg_log(const char* fmt, ...)
 {
-    FILE* fp = fopen("/mnt/extsd/dvr_dbg.log", "a");
-    if (fp == NULL)
-        return;
-
-    time_t now = time(NULL);
-    char ts[20];
-    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", localtime(&now));
-    fprintf(fp, "%s [rec] ", ts);
-
     va_list ap;
     va_start(ap, fmt);
-    vfprintf(fp, fmt, ap);
+    dvr_trace_vlog("rec", fmt, ap);
     va_end(ap);
-
-    fputc('\n', fp);
-    fflush(fp);
-    fsync(fileno(fp));
-    fclose(fp);
 }
 
 #define SEC_RECORD      "record"

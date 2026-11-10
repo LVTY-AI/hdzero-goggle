@@ -22,13 +22,18 @@ static uint32_t beep_at; // when the last reminder beeped, or sleep began
 
 bool isSleeping = false;
 
+static void sleep_after_dvr(uintptr_t unused) {
+    (void)unused;
+    go_sleep();
+}
+
 void go_sleep() {
+    if (dvr_defer_transition(sleep_after_dvr, 0)) return;
     LOGI("Entering sleep mode");
     previousState = g_app_state;
     app_state_push(APP_STATE_SLEEP);
 
     // Stop DVR
-    dvr_cmd(DVR_STOP);
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
     dvr_update_vi_conf(VR_1080P30);
 #elif defined(HDZBOXPRO)
@@ -62,7 +67,10 @@ void go_sleep() {
     beep_at = time_ms();
 }
 
+static void wake_after_dvr(uintptr_t unused) { (void)unused; wake_up(); }
+
 void wake_up() {
+    if (dvr_defer_transition(wake_after_dvr, 0)) return;
     LOGI("Exiting sleep mode");
     isSleeping = false;
     screen_set_inhibited(SCREEN_INHIBIT_SLEEP, false);

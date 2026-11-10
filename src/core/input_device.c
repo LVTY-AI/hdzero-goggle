@@ -148,7 +148,6 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
                              bool deliberate,
                              int analog_ch) {
     if (r->protocol == PROTOCOL_HDZ) {
-        dvr_cmd(DVR_STOP);
 
         // Persist the new band+channel FIRST so a subsequent source switch
         // (app_switch_to_hdzero(true)) tunes directly to it instead of the
@@ -195,7 +194,6 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
         if (send_msp && msp_channel_update())
             vtx_sent_osd_show(deliberate);
     } else if (r->protocol == PROTOCOL_ANALOG) {
-        dvr_cmd(DVR_STOP);
 
         bool channel_changed = false;
         if (entry->analog_channel >= 0) {
@@ -222,7 +220,6 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
         if (send_msp && msp_channel_update())
             vtx_sent_osd_show(deliberate);
     } else {
-        dvr_cmd(DVR_STOP);
         // No signal: stay on current source, but tune to the entry's
         // matching protocol channel so subsequent navigation makes sense.
         if (g_source_info.source == SOURCE_HDZERO && entry->hdz_channel >= 0) {
@@ -240,6 +237,8 @@ static void apply_freq_entry(const scan_freq_entry_t *entry,
     }
 }
 #endif
+
+static void tune_after_dvr(uintptr_t action) { tune_channel((uint8_t)action); }
 
 void tune_channel(uint8_t action) {
     static uint8_t channel = 0;
@@ -283,6 +282,8 @@ void tune_channel(uint8_t action) {
 #endif
 
     LOGI("tune_channel:%d", action);
+    if (((tune_state == 2 && (action == DIAL_KEY_CLICK || action == DIAL_KEY_PRESS)) ||
+         g_setting.source.auto_protocol_detect) && dvr_defer_transition(tune_after_dvr, action)) return;
 
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     if (g_setting.source.auto_protocol_detect &&
@@ -476,7 +477,6 @@ void tune_channel(uint8_t action) {
                 ini_putl("source", "hdzero_band", nband, SETTING_INI);
                 g_setting.scan.channel = nch1;
                 ini_putl("scan", "channel", nch1, SETTING_INI);
-                dvr_cmd(DVR_STOP);
                 // Auto/Both: switch at the currently open bandwidth. If the new
                 // channel's VTX is on the other one, the bw-reacquire watchdog
                 // (scan_core_hdz_bw_tick) settles it within ~2s behind the
@@ -500,7 +500,6 @@ void tune_channel(uint8_t action) {
             if (g_setting.source.analog_channel != channel) {
                 g_setting.source.analog_channel = channel;
                 ini_putl("source", "analog_channel", g_setting.source.analog_channel, SETTING_INI);
-                dvr_cmd(DVR_STOP);
                 rtc6715.set_ch(g_setting.source.analog_channel - 1);
                 bool const send_msp = action == DIAL_KEY_PRESS ||
                                       (action == DIAL_KEY_CLICK && g_setting.elrs.auto_send_vtx);
@@ -604,14 +603,27 @@ void (*roller_callback)(uint8_t key) = &tune_channel;
 void roller_up(void);
 void roller_down(void);
 
+static void press_after_dvr(uintptr_t unused) {
+    (void)unused;
+    // The continuation already runs with lvgl_mutex held; do not re-enter btn_press.
+    if (g_app_state == APP_STATE_MAINMENU && !g_scanning) {
+        g_autoscan_exit = true;
+        app_exit_menu();
+        app_state_push(APP_STATE_VIDEO);
+    }
+}
+
 void btn_press(void) // long press left key
 {
+    if (dvr_input_blocked()) return;
     LOGI("btn_press (%d)", g_app_state);
     if (g_scanning || (g_init_done != 1)) // no long pree Enter before done with init
         return;
 
     if (g_app_state == APP_STATE_USER_INPUT_DISABLED)
         return;
+
+    if (g_app_state == APP_STATE_MAINMENU && dvr_defer_transition(press_after_dvr, 0)) return;
 
     pthread_mutex_lock(&lvgl_mutex);
 
@@ -668,6 +680,7 @@ void btn_press(void) // long press left key
 
 void btn_click(void) // short press enter key
 {
+    if (dvr_input_blocked()) return;
     LOGI("btn_click (%d)", g_app_state);
     if (g_init_done != 1) // no short pree Enter before done with init
         return;
@@ -723,6 +736,7 @@ void btn_click(void) // short press enter key
 }
 
 void rbtn_click(right_button_t click_type) {
+    if (dvr_input_blocked()) return;
     if (g_init_done != 1)
         return;
 
@@ -810,6 +824,7 @@ void rbtn_click(right_button_t click_type) {
 }
 
 void roller_up(void) {
+    if (dvr_input_blocked()) return;
     LOGI("roller up (%d)", g_app_state);
 
     if (g_scanning)
@@ -845,6 +860,7 @@ void roller_up(void) {
 }
 
 void roller_down(void) {
+    if (dvr_input_blocked()) return;
     LOGI("roller down (%d)", g_app_state);
 
     if (g_scanning)

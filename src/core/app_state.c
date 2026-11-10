@@ -32,7 +32,13 @@ void app_state_push(app_state_t state) {
     g_app_state = state;
 }
 
+static void menu_after_dvr(uintptr_t unused) {
+    (void)unused;
+    app_switch_to_menu();
+}
+
 void app_switch_to_menu() {
+    if (dvr_defer_transition(menu_after_dvr, 0)) return;
     if (g_app_state == APP_STATE_IMS) {
         ims_save();
         set_slider_value();
@@ -41,7 +47,6 @@ void app_switch_to_menu() {
     app_state_push(APP_STATE_MAINMENU);
 
     // Stop recording if switching to menu mode from video mode regardless
-    dvr_cmd(DVR_STOP);
 
 #if defined HDZGOGGLE
     dvr_update_vi_conf(VR_1080P30);
@@ -67,10 +72,16 @@ void app_switch_to_menu() {
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     scan_core_notify_analog_powered_off();
 #endif
-    system_script(REC_STOP_LIVE);
+    dvr_stop_live();
 }
 
+static void exit_menu_after_dvr(uintptr_t unused) { (void)unused; app_exit_menu(); }
+static void analog_after_dvr(uintptr_t av) { app_switch_to_analog((bool)av); }
+static void hdmi_after_dvr(uintptr_t unused) { (void)unused; app_switch_to_hdmi_in(); }
+static void hdz_after_dvr(uintptr_t use_default) { app_switch_to_hdzero((bool)use_default); }
+
 void app_exit_menu() {
+    if (dvr_defer_transition(exit_menu_after_dvr, 0)) return;
     if (SOURCE_HDZERO == g_source_info.source) {
         progress_bar.start = 1;
         app_switch_to_hdzero(true);
@@ -82,6 +93,7 @@ void app_exit_menu() {
 }
 
 void app_switch_to_analog(bool is_av_in) {
+    if (dvr_defer_transition(analog_after_dvr, is_av_in)) return;
     dvr_update_vi_conf(VR_720P50);
     osd_fhd(0);
     osd_show(true);
@@ -142,10 +154,11 @@ void app_switch_to_analog(bool is_av_in) {
     dvr_enable_line_out(true);
 
     sleep(1);
-    system_script(REC_STOP_LIVE);
+    dvr_stop_live();
 }
 
 void app_switch_to_hdmi_in() {
+    if (dvr_defer_transition(hdmi_after_dvr, 0)) return;
     rtc6715.init(0, 0);
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     scan_core_notify_analog_powered_off();
@@ -175,7 +188,7 @@ void app_switch_to_hdmi_in() {
     g_setting.autoscan.last_source = SETTING_AUTOSCAN_SOURCE_HDMI_IN;
     ini_putl("autoscan", "last_source", g_setting.autoscan.last_source, SETTING_INI);
 
-    system_script(REC_STOP_LIVE);
+    dvr_stop_live();
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -183,6 +196,7 @@ void app_switch_to_hdmi_in() {
 //    true = load from g_settings
 //    false = user selected from auto scan page
 void app_switch_to_hdzero(bool is_default) {
+    if (dvr_defer_transition(hdz_after_dvr, is_default)) return;
     int ch;
 
     rtc6715.init(0, 0);
@@ -270,7 +284,7 @@ void app_switch_to_hdzero(bool is_default) {
     // The peripheral detector can retime again after Display_* releases the
     // hardware lock. Do not overwrite its newer DVR format with our entry mode.
     dvr_update_vi_conf(CAM_MODE);
-    system_script(REC_STOP_LIVE);
+    dvr_stop_live();
 
     osd_detecting_show(false); // restore the normal channel tag
 }
@@ -288,5 +302,5 @@ void hdzero_switch_channel(int channel) {
     osd_show(true);
     lv_timer_handler();
 
-    system_script(REC_STOP_LIVE);
+    dvr_stop_live();
 }

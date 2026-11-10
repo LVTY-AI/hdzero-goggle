@@ -301,7 +301,28 @@ static void disable_auto_protocol_detect(void) {
 // Forward declaration; the definition sits below the select helpers.
 static void source_switch_settled(void);
 
+static void page_source_select_hdzero(void);
+static void page_source_select_hdmi(void);
+static void page_source_select_av_in(void);
+static void page_source_select_analog(void);
+static void page_source_on_click(uint8_t key, int sel);
+static void source_after_dvr(uintptr_t selection) {
+    switch (selection) {
+    case 0: page_source_select_hdzero(); break;
+    case 1: page_source_select_hdmi(); break;
+    case 2: page_source_select_av_in(); break;
+    case 3: page_source_select_analog(); break;
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    case 4: page_source_select_auto_detect(); break;
+#endif
+    case 5: source_toggle(); break;
+    case 6: source_cycle(); break;
+    }
+}
+static void source_click_after_dvr(uintptr_t selection) { page_source_on_click(0, (int)selection); }
+
 static void page_source_select_hdzero() {
+    if (dvr_defer_transition(source_after_dvr, 0)) return;
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
@@ -321,6 +342,7 @@ static void page_source_select_hdzero() {
 }
 
 static void page_source_select_hdmi() {
+    if (dvr_defer_transition(source_after_dvr, 1)) return;
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
@@ -330,6 +352,7 @@ static void page_source_select_hdmi() {
 }
 
 static void page_source_select_av_in() {
+    if (dvr_defer_transition(source_after_dvr, 2)) return;
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
@@ -342,6 +365,7 @@ static void page_source_select_av_in() {
 }
 
 static void page_source_select_analog() {
+    if (dvr_defer_transition(source_after_dvr, 3)) return;
 #if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
     disable_auto_protocol_detect();
 #endif
@@ -360,6 +384,7 @@ static void page_source_select_analog() {
 // probe both protocols at the next freq-table entry. Non-static: the boot
 // Auto Scan path (start_running) enters Auto Detect through it as well.
 void page_source_select_auto_detect() {
+    if (dvr_defer_transition(source_after_dvr, 4)) return;
     g_setting.source.auto_protocol_detect = true;
     settings_put_bool("source", "auto_protocol_detect", true);
 
@@ -489,6 +514,7 @@ static void source_switch_settled(void) {
 void source_toggle() {
     if (source_switch_settling())
         return;
+    if (dvr_defer_transition(source_after_dvr, 5)) return;
     beep_dur(BEEP_SHORT);
     switch (g_source_info.source) {
     case SOURCE_HDZERO:
@@ -510,6 +536,7 @@ void source_toggle() {
 void source_cycle() {
     if (source_switch_settling())
         return;
+    if (dvr_defer_transition(source_after_dvr, 6)) return;
     beep_dur(BEEP_SHORT);
     switch (g_source_info.source) {
     case SOURCE_HDZERO:
@@ -533,6 +560,11 @@ void source_cycle() {
 }
 
 static void page_source_on_click(uint8_t key, int sel) {
+    bool changing = sel == ROW_HDZERO || sel == ROW_ANALOG || sel == ROW_HDMI || sel == ROW_AV;
+#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
+    changing |= sel == ROW_AUTO_DETECT;
+#endif
+    if (changing && dvr_defer_transition(source_click_after_dvr, (uintptr_t)sel)) return;
     switch (sel) {
     case ROW_HDZERO:
         page_source_select_hdzero();
