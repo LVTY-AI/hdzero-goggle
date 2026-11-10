@@ -623,7 +623,13 @@ static void *dvr_worker(void *unused) {
             if (!config_ok) error = EIO;
             else {
                 written_vi = vi_generation;
-                if (start && snapshot.source != SOURCE_HDMI_IN) {
+                bool reassert_osd = start;
+#if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
+                // The goggles run HDMI In with the overlay plane off. Box Pro's
+                // Source_HDMI_in() turns it on itself, so re-asserting agrees there.
+                reassert_osd = start && snapshot.source != SOURCE_HDMI_IN;
+#endif
+                if (reassert_osd) {
                     Display_Osd(snapshot.record.osd);
                     (void)Display_Osd_Readback();
                 }
