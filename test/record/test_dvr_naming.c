@@ -134,16 +134,27 @@ static void end_recorder(pid_t pid) {
     waitpid(pid, NULL, 0);
 }
 
-static bool transition_completes(unsigned before) {
-    assert(dvr_defer_transition(continue_transition, 42) && dvr_input_blocked());
-    for (int i = 0; i < 600 && continued == before; i++) {
-        dvr_poll();
-        usleep(10000);
+// Poll until the deferred transition runs, then let the unpause its resume
+// queues land, or the next defer can find the recorder still paused.
+static bool continues(unsigned before) {
+    for (int i = 0; i < 600 && continued == before; i++, usleep(10000)) dvr_poll();
+    for (int i = 0; i < 300; i++, usleep(10000)) {
+        pthread_mutex_lock(&dvr_mutex);
+        bool settled = (!control.live_stop && !control.paused) || atomic_load(&recorder_unavailable);
+        pthread_mutex_unlock(&dvr_mutex);
+        if (settled) break;
     }
     return continued == before + 1 && !dvr_input_blocked();
 }
 
+static bool transition_completes(unsigned before) {
+    assert(dvr_defer_transition(continue_transition, 42) && dvr_input_blocked());
+    return continues(before);
+}
+
 static void check_recorder_replaced(void) {
+    app_state_t saved_state = g_app_state;
+    g_app_state = APP_STATE_VIDEO; // So each resume queues the unpause, as on the goggles.
     memset(&control, 0, sizeof(control));
     config_file = "test_dvr_naming.c"; // Any small file stands in for the stock record.conf.
     pid_t recorder = start_recorder();
@@ -164,11 +175,21 @@ static void check_recorder_replaced(void) {
     recorder = start_recorder();
     while (atomic_load(&recorder_unavailable)) usleep(10000);
     assert(recorder_pid == (unsigned)recorder);
+    // A press deferred as the recorder dies must survive unavailable -> available
+    // even when the UI is too busy to poll in between.
+    unsigned before = continued;
+    end_recorder(recorder);
+    assert(dvr_defer_transition(continue_transition, 42));
+    while (!atomic_load(&recorder_unavailable)) usleep(10000);
+    recorder = start_recorder();
+    while (atomic_load(&recorder_unavailable)) usleep(10000);
+    assert(continues(before));
     end_recorder(recorder);
     msgctl(msgget(RECORD_CONTROL_KEY, 0), IPC_RMID, NULL);
     char cleanup[64];
     snprintf(cleanup, sizeof(cleanup), "rm -rf /tmp/hdz-dvr-control/%d", (int)getpid());
     assert(system(cleanup) == 0);
+    g_app_state = saved_state;
 }
 
 static void check_recording(int expected) {

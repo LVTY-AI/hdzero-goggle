@@ -543,7 +543,9 @@ static void recorder_set_unavailable(bool unavailable, const char *why) {
     bool changed = atomic_exchange(&recorder_unavailable, unavailable) != unavailable;
     if (unavailable) {
         control.desired = false;
-        control.pause = false;
+        // A pending continuation still needs its pause: if a recorder answers
+        // before dvr_poll proceeds, that pause is what lets the transition finish.
+        if (!control.resume) control.pause = false;
         record_pending = false;
     } else {
         start_refusal_logged = false;
