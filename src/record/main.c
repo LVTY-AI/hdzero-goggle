@@ -1072,6 +1072,8 @@ static bool record_control_run(RecordContext_t *ctx) {
     if (received <= 0) return false;
     if (kill((pid_t)request.owner, 0) != 0) return true;
     int error = 0;
+    char accepted[sizeof(ctx->confFile)];
+    snprintf(accepted, sizeof(accepted), "%s", ctx->confFile);
     if (request.command == RECORD_START || request.command == RECORD_CONFIG || request.command == RECORD_LIVE_STOP)
         error = record_control_config(ctx, &request);
     if (!error) switch (request.command) {
@@ -1100,6 +1102,11 @@ static bool record_control_run(RecordContext_t *ctx) {
         break;
     default: break;
     }
+    // A refused START or CONFIG leaves the recorder on the config it last
+    // accepted, so the app can delete the others. LIVE_STOP keeps its new config
+    // even after a close error: it belongs to the source now on screen.
+    if (error && request.command != RECORD_LIVE_STOP)
+        snprintf(ctx->confFile, sizeof(ctx->confFile), "%s", accepted);
     // Completion is sent only after encoder stop and file/trailer/IO close return.
     if (record_control_reply(control_queue, &request, error, ctx->ff != NULL))
         LOGE("DVR completion reply failed: %d", errno);
