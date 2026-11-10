@@ -719,12 +719,11 @@ static void *dvr_worker(void *unused) {
                     error = control_transaction(queue, start ? RECORD_START : live_stop ? RECORD_LIVE_STOP : RECORD_CONFIG, epoch, &reply, DVR_ACK_ABANDON_S);
                     if (error == ECANCELED)
                         error = control_transaction(queue, RECORD_CONFIG, epoch, &reply, DVR_ACK_ABANDON_S);
-                    // A refused START or CONFIG leaves the recorder on the config it last
-                    // accepted (record_control_run). Keep only that one and the current
-                    // template: auto-record retries a refused START every second.
-                    bool adopted = !error || (error > 0 && live_stop && !start);
-                    if ((adopted || error < 0) && acked_conf[0] && strcmp(acked_conf, runtime_conf)) unlink(acked_conf);
-                    if (adopted || error < 0) snprintf(acked_conf, sizeof(acked_conf), "%s", adopted ? runtime_conf : "");
+                    // A refusing recorder stays on the config it last accepted
+                    // (record_control_run). Keep only that one and the current template:
+                    // auto-record retries a refused START every second.
+                    if (error <= 0 && acked_conf[0] && strcmp(acked_conf, runtime_conf)) unlink(acked_conf);
+                    if (error <= 0) snprintf(acked_conf, sizeof(acked_conf), "%s", error ? "" : runtime_conf);
                     if (strcmp(old_conf, acked_conf)) unlink(old_conf);
                     if (error >= 0) {
                         recording = reply.recording;
