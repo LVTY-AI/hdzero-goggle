@@ -28,6 +28,7 @@ void app_switch_to_menu() {}
 void app_exit_menu() {}
 void submenu_exit() {}
 void dvr_cmd(osd_dvr_cmd_t cmd) {}
+bool dvr_defer_transition(void (*resume)(uintptr_t), uintptr_t argument) { return false; }
 void dvr_update_vi_conf(video_resolution_t fmt) {}
 void screen_set_inhibited(uint32_t reasons, bool inhibited) {}
 void HDZero_Close() {}

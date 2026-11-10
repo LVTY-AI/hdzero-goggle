@@ -41,6 +41,8 @@ static void inject(int point) {
 void DM5680_SetFPS(uint8_t mode) { fps_calls++; inject(1); }
 void DM6302_openM0(uint32_t on) {}
 void dvr_update_vi_conf(video_resolution_t mode) { recorded_format = mode; inject(2); }
+void dvr_stop_live(void) { inject(3); }
+bool dvr_defer_transition(void (*resume)(uintptr_t), uintptr_t argument) { return false; }
 int system_exec(const char *command) { return 0; }
 int system_script(const char *command) { inject(3); return 0; }
 int i2c_write(int port, uint8_t dev, uint8_t reg, uint8_t value) {
