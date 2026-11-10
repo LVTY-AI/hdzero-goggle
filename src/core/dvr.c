@@ -544,13 +544,19 @@ static bool prepare_runtime_conf(void) {
 
 static void *dvr_worker(void *unused) {
     (void)unused;
-    int queue;
-    while ((queue = record_control_open(false)) < 0) {
-        if (errno == EACCES) { atomic_store(&control_error, EACCES); return NULL; }
+    int queue, error;
+    record_control_reply_t reply;
+    for (;;) {
+        while ((queue = record_control_open(false)) < 0) {
+            if (errno == EACCES) { atomic_store(&control_error, EACCES); return NULL; }
+            usleep(100000);
+        }
+        error = control_transaction(queue, RECORD_HELLO, 0, &reply);
+        // A recorder may replace its predecessor's queue during startup. Only
+        // this unbound, read-only handshake is safe to retry after queue loss.
+        if (error != EIDRM && error != EINVAL) break;
         usleep(100000);
     }
-    record_control_reply_t reply;
-    int error = control_transaction(queue, RECORD_HELLO, 0, &reply);
     if (!error && !prepare_runtime_conf()) error = EIO;
     if (error) { atomic_store(&control_error, error); return NULL; }
     bool recording = reply.recording;
