@@ -58,6 +58,7 @@ static struct {
 static atomic_uint control_phase, control_error;
 static char runtime_conf[RECORD_CONTROL_PATH];
 static char pending_conf[RECORD_CONTROL_PATH];
+static char acked_conf[RECORD_CONTROL_PATH]; // The config the recorder last accepted.
 static const char *config_file = REC_CONF;
 enum { DVR_OFFLINE, DVR_IDLE, DVR_CONFIGURING, DVR_WAITING };
 
@@ -720,7 +721,13 @@ static void *dvr_worker(void *unused) {
                     error = control_transaction(queue, start ? RECORD_START : live_stop ? RECORD_LIVE_STOP : RECORD_CONFIG, epoch, &reply, DVR_ACK_ABANDON_S);
                     if (error == ECANCELED)
                         error = control_transaction(queue, RECORD_CONFIG, epoch, &reply, DVR_ACK_ABANDON_S);
-                    if (error <= 0) unlink(old_conf); // Accepted, or its recorder is gone.
+                    // A refused START or CONFIG leaves the recorder on the config it last
+                    // accepted (record_control_run). Keep only that one and the current
+                    // template: auto-record retries a refused START every second.
+                    bool adopted = !error || (error > 0 && live_stop && !start);
+                    if ((adopted || error < 0) && acked_conf[0] && strcmp(acked_conf, runtime_conf)) unlink(acked_conf);
+                    if (adopted || error < 0) snprintf(acked_conf, sizeof(acked_conf), "%s", adopted ? runtime_conf : "");
+                    if (strcmp(old_conf, acked_conf)) unlink(old_conf);
                     if (error >= 0) {
                         recording = reply.recording;
                         pthread_mutex_lock(&dvr_mutex);
