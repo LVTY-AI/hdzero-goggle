@@ -3,6 +3,14 @@
 source /mnt/app/app/record/record-env.sh
 /mnt/app/app/record/gogglecmd -rec quit
 /mnt/app/app/record/gogglecmd -sds quit
+# Wait for the old recorder and sdstat to exit: a new one started while the
+# old one is alive quits as "already running" and leaves DVR without a recorder.
+n=0
+while pidof record >/dev/null || pidof sdstat >/dev/null; do
+    [ "$n" -lt 15 ] || break
+    sleep 1
+    n=$((n + 1))
+done
 
 if [ -e /mnt/extsd/resource ]; then
     cp -r /mnt/extsd/resource /tmp/
