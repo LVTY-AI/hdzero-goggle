@@ -32,8 +32,8 @@ else
 NAMING_LDFLAGS = -Wl,--gc-sections
 endif
 
-test_dvr_naming: test_dvr_naming.c ../../src/core/dvr.c ../../src/driver/rtc.h ../../lib/log/src/dvr_trace.c
-	$(CC) $(CFLAGS) $(NAMING_CPPFLAGS) $(NAMING_CFLAGS) $< ../../lib/log/src/dvr_trace.c $(NAMING_LDFLAGS) -pthread -o $@
+test_dvr_naming: test_dvr_naming.c ../../src/core/dvr.c ../../src/driver/rtc.h ../../lib/log/src/dvr_trace.c ../../lib/log/src/record_control.c
+	$(CC) $(CFLAGS) $(NAMING_CPPFLAGS) $(NAMING_CFLAGS) $< ../../lib/log/src/dvr_trace.c ../../lib/log/src/record_control.c $(NAMING_LDFLAGS) -pthread -o $@
 
 run: all
 	./test_avshare_reset

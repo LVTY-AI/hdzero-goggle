@@ -27,7 +27,8 @@ void dvr_update_status();
 void dvr_init(void);
 void dvr_poll(void);
 void dvr_stop_live(void);
-// True defers this whole transition until a matched recorder STOP acknowledgment.
+// True defers this whole transition until a matched recorder STOP acknowledgment,
+// or until the recorder has been unreachable or refusing to stop for a few seconds.
 // Continuations run on the main UI thread with lvgl_mutex held; NULL means retry by caller.
 bool dvr_defer_transition(void (*resume)(uintptr_t), uintptr_t argument);
 const char *dvr_transition_status(void);

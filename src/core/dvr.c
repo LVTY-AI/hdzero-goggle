@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -475,9 +476,29 @@ static unsigned monotonic_seconds(void) {
     return (unsigned)ts.tv_sec;
 }
 
-static int control_transaction(int queue, unsigned command, unsigned epoch, record_control_reply_t *reply) {
+// How long a pending transition waits for a missing, replaced or stuck
+// recorder before DVR is treated as stopped and the transition goes ahead.
+#ifndef DVR_RECORDER_GRACE_S
+#define DVR_RECORDER_GRACE_S 5
+#endif
+#define DVR_ACK_LATE_S 15    // Show the "delayed" message.
+#define DVR_ACK_ABANDON_S 30 // A recorder this late is treated as gone.
+#define DVR_HELLO_WAIT_S 2   // Per attempt while (re)connecting.
+
+static unsigned recorder_pid; // The recorder that answered the last HELLO.
+static atomic_bool recorder_unavailable;
+static bool start_refusal_logged;
+
+static int transport_lost(void) {
+    return errno > 0 ? -errno : -EIO;
+}
+
+// A negative result means the recorder or its queue is gone (removed, replaced,
+// exited or silent for `limit` seconds): the worker reconnects. Zero or a
+// positive result is the recorder's own answer, or ECANCELED before sending.
+static int control_transaction(int queue, unsigned command, unsigned epoch, record_control_reply_t *reply,
+                               unsigned limit) {
     static unsigned sequence;
-    static unsigned recorder;
     record_control_request_t request = {.type = RECORD_CONTROL_TYPE, .magic = RECORD_CONTROL_MAGIC,
         .owner = (unsigned)getpid(), .cookie = (unsigned)getpid() ^ (unsigned)time(NULL),
         .sequence = ++sequence, .command = command};
@@ -493,22 +514,77 @@ static int control_transaction(int queue, unsigned command, unsigned epoch, reco
             if (cancelled) return ECANCELED;
         }
         if (record_control_send(queue, &request) == 0) break;
-        if (errno != EINTR && errno != EAGAIN) return errno;
-        if (monotonic_seconds() - began >= 5) return EAGAIN;
+        if (errno != EINTR && errno != EAGAIN) return transport_lost();
+        if (monotonic_seconds() - began >= 5) return -EAGAIN;
         usleep(10000);
     }
     for (;;) {
         int result = record_control_ack(queue, &request, reply);
-        if (result < 0) return errno;
+        if (result < 0) return transport_lost();
         if (result > 0) {
-            if (recorder && recorder != reply->recorder) return ESRCH;
-            recorder = reply->recorder;
+            if (recorder_pid && recorder_pid != reply->recorder) return -ESRCH;
+            recorder_pid = reply->recorder;
             return reply->error;
         }
-        // A late ACK is still required: a timeout never authorizes source teardown.
-        if (monotonic_seconds() - began >= 15) atomic_store(&control_error, ETIMEDOUT);
+        if (recorder_pid && kill((pid_t)recorder_pid, 0) != 0 && errno == ESRCH) return -ESRCH;
+        // A late ACK is still awaited: only an abandoned recorder, after the
+        // reconnect grace, lets a source teardown go ahead without it.
+        unsigned waited = monotonic_seconds() - began;
+        if (waited >= DVR_ACK_LATE_S) atomic_store(&control_error, ETIMEDOUT);
+        if (waited >= limit) return -ETIMEDOUT;
         usleep(10000);
     }
+}
+
+// Unavailable means DVR is treated as stopped: transitions go ahead without the
+// recorder and START is refused. It clears once a recorder answers again.
+static void recorder_set_unavailable(bool unavailable, const char *why) {
+    pthread_mutex_lock(&dvr_mutex);
+    bool changed = atomic_exchange(&recorder_unavailable, unavailable) != unavailable;
+    if (unavailable) {
+        control.desired = false;
+        control.pause = false;
+        record_pending = false;
+    } else {
+        start_refusal_logged = false;
+    }
+    pthread_mutex_unlock(&dvr_mutex);
+    if (unavailable) atomic_store(&control_error, 0);
+    if (!changed) return;
+    if (unavailable) LOGE("DVR recorder unavailable (%s): DVR treated as stopped", why);
+    else LOGI("DVR recorder available (%s)", why);
+    dvr_dbg_log("recorder %s (%s)", unavailable ? "unavailable" : "available", why);
+}
+
+// Open the recorder's queue and complete a HELLO, retrying until one answers.
+static void recorder_connect(int *queue, record_control_reply_t *reply) {
+    unsigned began = monotonic_seconds();
+    recorder_pid = 0;
+    for (;;) {
+        *queue = record_control_open(false);
+        if (*queue >= 0 && control_transaction(*queue, RECORD_HELLO, 0, reply, DVR_HELLO_WAIT_S) >= 0) return;
+        if (monotonic_seconds() - began >= DVR_RECORDER_GRACE_S)
+            recorder_set_unavailable(true, "not reachable");
+        usleep(100000);
+    }
+}
+
+// Take the state a (possibly new) recorder reports. A replacement starts
+// unpaused and idle, so a transition still waiting must pause it again.
+static bool recorder_adopt(const record_control_reply_t *reply, unsigned previous) {
+    bool recording = reply->recording;
+    pthread_mutex_lock(&dvr_mutex);
+    if (previous && !(recording && reply->recorder == previous)) control.desired = false;
+    control.pause = control.pause || (control.paused && control.resume);
+    control.paused = false;
+    control.stopped = control.stop;
+    control.confirmed_idle = !recording;
+    dvr_is_recording = recording;
+    record_pending = control.desired && !recording;
+    pthread_mutex_unlock(&dvr_mutex);
+    if (previous) LOGI("DVR recorder %u connected (was %u), recording=%d", reply->recorder, previous, (int)recording);
+    if (!reply->error && !recording) recorder_set_unavailable(false, "connected");
+    return recording;
 }
 
 static bool prepare_runtime_conf(void) {
@@ -524,7 +600,7 @@ static bool prepare_runtime_conf(void) {
     snprintf(dir, sizeof(dir), "/tmp/hdz-dvr-control/%u", (unsigned)getpid());
     if (mkdir(dir, 0700) != 0) return false;
     snprintf(runtime_conf, sizeof(runtime_conf), "%s/record.conf", dir);
-    int in = open(REC_CONF, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    int in = open(config_file, O_RDONLY | O_CLOEXEC | O_NOFOLLOW); // Still REC_CONF here.
     int out = open(runtime_conf, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
     bool ok = in >= 0 && out >= 0;
     char buffer[4096];
@@ -546,26 +622,28 @@ static void *dvr_worker(void *unused) {
     (void)unused;
     int queue, error;
     record_control_reply_t reply;
-    for (;;) {
-        while ((queue = record_control_open(false)) < 0) {
-            if (errno == EACCES) { atomic_store(&control_error, EACCES); return NULL; }
-            usleep(100000);
-        }
-        error = control_transaction(queue, RECORD_HELLO, 0, &reply);
-        // A recorder may replace its predecessor's queue during startup. Only
-        // this unbound, read-only handshake is safe to retry after queue loss.
-        if (error != EIDRM && error != EINVAL) break;
-        usleep(100000);
+    recorder_connect(&queue, &reply);
+    if (!prepare_runtime_conf()) {
+        recorder_set_unavailable(true, "no runtime config");
+        return NULL;
     }
-    if (!error && !prepare_runtime_conf()) error = EIO;
-    if (error) { atomic_store(&control_error, error); return NULL; }
-    bool recording = reply.recording;
-    unsigned written_vi = 0;
+    bool recording = recorder_adopt(&reply, 0), connected = true, refusing = false;
+    unsigned written_vi = 0, refusing_since = 0;
+    int logged_error = 0;
     unsigned last_health = monotonic_seconds();
-    pthread_mutex_lock(&dvr_mutex);
-    control.confirmed_idle = !recording;
-    pthread_mutex_unlock(&dvr_mutex);
     for (;;) {
+        if (!connected) {
+            // The storage scripts quit the recorder and start a new one; a crash
+            // or hang ends the same way. Reconnect and re-issue pending work.
+            unsigned previous = recorder_pid;
+            recorder_connect(&queue, &reply);
+            recording = recorder_adopt(&reply, previous);
+            connected = true;
+            written_vi = 0; // The new recorder has not seen our configuration.
+            refusing = false;
+            logged_error = 0;
+            last_health = monotonic_seconds();
+        }
         pthread_mutex_lock(&dvr_mutex);
         bool stop = control.stop != control.stopped || (recording && !control.desired);
         bool start = control.desired && !recording && !control.resume && !control.pause && !control.paused &&
@@ -577,32 +655,32 @@ static void *dvr_worker(void *unused) {
         control.star = false;
         pthread_mutex_unlock(&dvr_mutex);
         error = 0;
-        if (stop) {
-            error = control_transaction(queue, RECORD_STOP, epoch, &reply);
-            if (!error && reply.recording) error = EBUSY;
-            if (!error) {
+        if (stop || pause) {
+            error = control_transaction(queue, stop ? RECORD_STOP : RECORD_PAUSE, epoch, &reply, DVR_ACK_ABANDON_S);
+            if (error >= 0 && !reply.recording) {
+                // The recorder closed its writer (and, for PAUSE, live capture).
+                // A close error is reported, never retried.
+                if (error) LOGW("DVR %s finished with error %d", stop ? "stop" : "pause", error);
+                else recorder_set_unavailable(false, "stopped");
+                error = 0;
                 recording = false;
                 pthread_mutex_lock(&dvr_mutex);
-                control.stopped = epoch;
+                if (stop) control.stopped = epoch;
+                else {
+                    control.pause = false;
+                    control.paused = true;
+                }
                 control.confirmed_idle = true;
                 pthread_mutex_unlock(&dvr_mutex);
-            }
-        } else if (pause) {
-            error = control_transaction(queue, RECORD_PAUSE, epoch, &reply);
-            if (!error && reply.recording) error = EBUSY;
-            if (!error) {
-                recording = false;
-                pthread_mutex_lock(&dvr_mutex);
-                control.pause = false;
-                control.paused = true;
-                control.confirmed_idle = true;
-                pthread_mutex_unlock(&dvr_mutex);
+            } else if (error >= 0) {
+                recording = true;
+                if (!error) error = EBUSY;
             }
         } else if (start || vi_generation != written_vi || live_stop) {
             atomic_store(&control_phase, DVR_CONFIGURING);
             // Edit a private copy, then publish a new immutable RAM snapshot.
             // The recorder can still be using the preceding path for live capture.
-            char old_conf[RECORD_CONTROL_PATH];
+            char old_conf[RECORD_CONTROL_PATH], next_conf[RECORD_CONTROL_PATH];
             snprintf(old_conf, sizeof(old_conf), "%s", runtime_conf);
             FILE *in = fopen(old_conf, "r"), *out = fopen(pending_conf, "wx");
             config_ok = in && out;
@@ -616,12 +694,15 @@ static void *dvr_worker(void *unused) {
             if (config_ok) dvr_write_vi_conf(vi);
             if (start && config_ok) config_ok &= dvr_update_record_conf(&snapshot);
             static unsigned config_sequence;
-            char *slash = strrchr(runtime_conf, '/');
-            snprintf(slash + 1, sizeof(runtime_conf) - (slash + 1 - runtime_conf),
-                     "record-%u.conf", ++config_sequence);
-            if (config_ok && rename(pending_conf, runtime_conf)) config_ok = false;
-            if (!config_ok) error = EIO;
-            else {
+            snprintf(next_conf, sizeof(next_conf), "%s", runtime_conf);
+            char *slash = strrchr(next_conf, '/');
+            snprintf(slash + 1, sizeof(next_conf) - (slash + 1 - next_conf), "record-%u.conf", ++config_sequence);
+            if (config_ok && rename(pending_conf, next_conf)) config_ok = false;
+            if (!config_ok) {
+                unlink(pending_conf); // Let the next attempt create it again.
+                error = EIO;
+            } else {
+                snprintf(runtime_conf, sizeof(runtime_conf), "%s", next_conf);
                 written_vi = vi_generation;
                 bool reassert_osd = start;
 #if defined(HDZGOGGLE) || defined(HDZGOGGLE2)
@@ -634,16 +715,16 @@ static void *dvr_worker(void *unused) {
                     (void)Display_Osd_Readback();
                 }
                 {
-                    error = control_transaction(queue, start ? RECORD_START : live_stop ? RECORD_LIVE_STOP : RECORD_CONFIG, epoch, &reply);
+                    error = control_transaction(queue, start ? RECORD_START : live_stop ? RECORD_LIVE_STOP : RECORD_CONFIG, epoch, &reply, DVR_ACK_ABANDON_S);
                     if (error == ECANCELED)
-                        error = control_transaction(queue, RECORD_CONFIG, epoch, &reply);
-                    if (!error) {
-                        unlink(old_conf);
+                        error = control_transaction(queue, RECORD_CONFIG, epoch, &reply, DVR_ACK_ABANDON_S);
+                    if (error <= 0) unlink(old_conf); // Accepted, or its recorder is gone.
+                    if (error >= 0) {
                         recording = reply.recording;
                         pthread_mutex_lock(&dvr_mutex);
                         bool still_requested = control.desired && control.stop == epoch;
                         pthread_mutex_unlock(&dvr_mutex);
-                        if (start && still_requested && !recording) error = EIO;
+                        if (start && still_requested && !recording && !error) error = EIO;
                         if (start && recording) dvr_recording_start = time(NULL);
                         if (live_stop) {
                             pthread_mutex_lock(&dvr_mutex);
@@ -655,34 +736,46 @@ static void *dvr_worker(void *unused) {
                 }
             }
         } else if (star) dvr_write_star();
-        else if (recording && monotonic_seconds() - last_health >= 1) {
-            error = control_transaction(queue, RECORD_HELLO, epoch, &reply);
+        else if (monotonic_seconds() - last_health >= 1) {
+            // Also while idle, so a replaced recorder is found before the next transition.
+            error = control_transaction(queue, RECORD_HELLO, epoch, &reply, DVR_ACK_ABANDON_S);
             last_health = monotonic_seconds();
-            if (!error && !reply.recording) {
-                recording = false;
-                pthread_mutex_lock(&dvr_mutex);
-                control.desired = false;
-                control.confirmed_idle = true;
-                pthread_mutex_unlock(&dvr_mutex);
+            if (error >= 0) {
+                if (recording && !reply.recording) {
+                    pthread_mutex_lock(&dvr_mutex);
+                    control.desired = false;
+                    control.confirmed_idle = true;
+                    pthread_mutex_unlock(&dvr_mutex);
+                }
+                recording = reply.recording;
             }
+        }
+        if (error < 0) {
+            LOGW("DVR recorder %u lost (error %d), reconnecting", recorder_pid, -error);
+            dvr_dbg_log("recorder %u lost error=%d", recorder_pid, -error);
+            connected = false;
+            recording = false;
+            error = 0;
         }
         if (error == ECANCELED) error = 0;
         pthread_mutex_lock(&dvr_mutex);
+        if (error) control.desired = false; // A failed command never retries START by itself.
         dvr_is_recording = recording;
         record_pending = control.desired && !recording;
         if (recording) control.confirmed_idle = false;
         pthread_mutex_unlock(&dvr_mutex);
-        atomic_store(&control_error, error);
+        // Only a recorder that keeps refusing to stop holds transitions back,
+        // and only for the grace period; other failures are logged and dropped.
+        bool refused = error && (stop || pause);
+        if (refused && !refusing) refusing_since = monotonic_seconds();
+        if (refused && monotonic_seconds() - refusing_since >= DVR_RECORDER_GRACE_S)
+            recorder_set_unavailable(true, "recorder does not stop");
+        if (error && error != logged_error) LOGE("DVR control error %d", error);
+        if (error || recording) logged_error = error; // Repeats (auto-record retries) log once.
+        refusing = refused;
+        atomic_store(&control_error, refused && !atomic_load(&recorder_unavailable) ? error : 0);
         atomic_store(&control_phase, DVR_IDLE);
-        if (error) {
-            // Stop/config errors do not permit dependent hardware changes or retries of START.
-            pthread_mutex_lock(&dvr_mutex);
-            control.desired = false;
-            control.confirmed_idle = false;
-            pthread_mutex_unlock(&dvr_mutex);
-            while (true) usleep(100000);
-        }
-        usleep(10000);
+        usleep(error ? 500000 : 10000);
     }
     return NULL;
 }
@@ -699,7 +792,7 @@ void dvr_init(void) {
         control.vi_generation = 1;
         pthread_t worker;
         if (pthread_create(&worker, NULL, dvr_worker, NULL) == 0) pthread_detach(worker);
-        else atomic_store(&control_error, EAGAIN);
+        else atomic_store(&recorder_unavailable, true);
     }
     pthread_mutex_unlock(&dvr_mutex);
 }
@@ -728,8 +821,9 @@ bool dvr_defer_transition(void (*resume)(uintptr_t), uintptr_t argument) {
     return false;
 #endif
     pthread_mutex_lock(&dvr_mutex);
-    bool ready = control.resuming || (control.paused && control.confirmed_idle && !control.desired && control.stop == control.stopped &&
-                 !atomic_load(&control_error) && atomic_load(&control_phase) == DVR_IDLE);
+    bool ready = control.resuming || atomic_load(&recorder_unavailable) ||
+                 (control.paused && control.confirmed_idle && !control.desired && control.stop == control.stopped &&
+                  !atomic_load(&control_error) && atomic_load(&control_phase) == DVR_IDLE);
     if (!ready) {
         if (!control.resume && resume) { control.resume = resume; control.argument = argument; }
         control.desired = false;
@@ -745,10 +839,12 @@ void dvr_poll(void) {
     void (*resume)(uintptr_t) = NULL;
     uintptr_t argument = 0;
     pthread_mutex_lock(&dvr_mutex);
-    if (control.resume && control.paused && control.confirmed_idle && control.stop == control.stopped &&
-        atomic_load(&control_phase) == DVR_IDLE && !atomic_load(&control_error)) {
+    bool unavailable = atomic_load(&recorder_unavailable);
+    if (control.resume && (unavailable || (control.paused && control.confirmed_idle && control.stop == control.stopped &&
+        atomic_load(&control_phase) == DVR_IDLE && !atomic_load(&control_error)))) {
         resume = control.resume; argument = control.argument; control.resume = NULL;
         control.resuming = true;
+        if (unavailable) control.pause = false; // Proceeding without the recorder.
     }
     pthread_mutex_unlock(&dvr_mutex);
     if (resume) {
@@ -784,7 +880,10 @@ void dvr_cmd(osd_dvr_cmd_t cmd) {
     if (cmd != DVR_STOP) snapshot = dvr_snapshot();
     pthread_mutex_lock(&dvr_mutex);
     bool start = cmd == DVR_START || (cmd == DVR_TOGGLE && !control.desired);
-    if (start && !control.resume && !control.resuming && !control.pause && !control.paused) {
+    if (start && atomic_load(&recorder_unavailable)) {
+        if (!start_refusal_logged) LOGW("DVR start refused: recorder unavailable");
+        start_refusal_logged = true;
+    } else if (start && !control.resume && !control.resuming && !control.pause && !control.paused) {
         control.snapshot = snapshot;
         control.desired = true;
         control.confirmed_idle = false;

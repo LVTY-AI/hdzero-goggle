@@ -1,7 +1,11 @@
 #include <assert.h>
+#include <signal.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/msg.h>
+#include <sys/wait.h>
 
 #include "driver/rtc.h"
 
@@ -12,6 +16,10 @@ int test_has_valid_date(const struct rtc_date *rd);
 #define sync test_sync
 #define rtc_get_clock test_get_clock
 #define rtc_has_valid_date test_has_valid_date
+#define DVR_RECORDER_GRACE_S 1
+#if defined(__linux__) // The worker insists on a tmpfs /tmp for its private config.
+#define statfs(path, fs) ((fs)->f_type = 0x01021994, 0)
+#endif
 #include "../../src/core/dvr.c"
 #undef sync
 #undef rtc_get_clock
@@ -23,6 +31,10 @@ hw_status_t g_hw_stat;
 source_info_t g_source_info;
 static video_resolution_t test_camera = VR_720P60;
 camera_video_t camera_video_snapshot(void) { return (camera_video_t){.mode = test_camera}; }
+bool g_sdcard_enable, g_sdcard_ready;
+bool sdcard_is_full(void) { return false; }
+void Display_Osd(bool enable) {}
+uint8_t Display_Osd_Readback(void) { return 0; }
 
 static struct rtc_date current_clock;
 static int clock_valid = 1;
@@ -103,6 +115,62 @@ static void check_deferred_stop(void) {
     assert(continued == 1 && !dvr_input_blocked());
 }
 
+// A stand-in recorder process on the real control queue, like the storage
+// scripts' quit-then-restart: each one replaces its predecessor's queue.
+static pid_t start_recorder(void) {
+    pid_t pid = fork();
+    if (pid) return pid;
+    int queue = record_control_open(true);
+    if (queue < 0) _exit(1);
+    for (record_control_request_t request;;) {
+        if (record_control_receive(queue, &request) == 1)
+            record_control_reply(queue, &request, 0, request.command == RECORD_START);
+        usleep(1000);
+    }
+}
+
+static void end_recorder(pid_t pid) {
+    kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
+}
+
+static bool transition_completes(unsigned before) {
+    assert(dvr_defer_transition(continue_transition, 42) && dvr_input_blocked());
+    for (int i = 0; i < 600 && continued == before; i++) {
+        dvr_poll();
+        usleep(10000);
+    }
+    return continued == before + 1 && !dvr_input_blocked();
+}
+
+static void check_recorder_replaced(void) {
+    memset(&control, 0, sizeof(control));
+    config_file = "test_dvr_naming.c"; // Any small file stands in for the stock record.conf.
+    pid_t recorder = start_recorder();
+    dvr_init();
+    while (recorder_pid != (unsigned)recorder) usleep(10000);
+    // Idle in the menu while a storage operation replaces the recorder and its queue.
+    int queue = msgget(RECORD_CONTROL_KEY, 0);
+    pid_t replaced = recorder;
+    recorder = start_recorder();
+    while (msgget(RECORD_CONTROL_KEY, 0) == queue) usleep(1000);
+    end_recorder(replaced);
+    assert(transition_completes(continued));
+    assert(recorder_pid == (unsigned)recorder && !atomic_load(&recorder_unavailable));
+    end_recorder(recorder); // No successor: the transition proceeds after the grace.
+    assert(transition_completes(continued) && atomic_load(&recorder_unavailable));
+    dvr_cmd(DVR_START);
+    assert(!control.desired);
+    recorder = start_recorder();
+    while (atomic_load(&recorder_unavailable)) usleep(10000);
+    assert(recorder_pid == (unsigned)recorder);
+    end_recorder(recorder);
+    msgctl(msgget(RECORD_CONTROL_KEY, 0), IPC_RMID, NULL);
+    char cleanup[64];
+    snprintf(cleanup, sizeof(cleanup), "rm -rf /tmp/hdz-dvr-control/%d", (int)getpid());
+    assert(system(cleanup) == 0);
+}
+
 static void check_recording(int expected) {
     setting_record_naming_t preference = g_setting.record.naming;
     recording_naming = -1;
@@ -163,7 +231,8 @@ int main(void) {
     check_deferred_stop();
     current_clock = synced;
     check_recording(SETTING_NAMING_ELRS);
+    check_recorder_replaced();
 
-    puts("DVR config/naming, encoder modes, failed writes and ACK-gated transitions passed");
+    puts("DVR config/naming, encoder modes, failed writes, ACK-gated transitions and recorder replacement passed");
     return 0;
 }
