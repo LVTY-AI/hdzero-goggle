@@ -191,6 +191,19 @@ function update_fpga()
 	rmmod /mnt/app/ko/w25q128.ko
 }
 
+# Run this install with the base system's own tar. Plain "tar" can be a link
+# to the BusyBox on the app partition, the partition this install erases and
+# rewrites, and a damaged copy there fails every install at the archive check
+# below. A directory holding only that one link goes first in PATH, so
+# hdz_upgrade_app.sh, which calls tar by name, gets the same tar. If the base
+# system's tar is missing or does not run, nothing changes.
+SYS_TAR=/usr/bin/tar
+if [ -x "$SYS_TAR" ] && "$SYS_TAR" --version > /dev/null 2>&1; then
+	mkdir -p /tmp/hdz_tar
+	ln -sf "$SYS_TAR" /tmp/hdz_tar/tar
+	export PATH="/tmp/hdz_tar:$PATH"
+fi
+
 # If firmware file was NOT supplied then default to primary location for emergency restore
 if [ -z "$HDZ_BIN" ]; then
 	if [ `ls ${WILDCARD_HDZ_BIN} | grep bin | wc -l` -eq 1 ]
