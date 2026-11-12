@@ -866,10 +866,7 @@ void dvr_poll(void) {
 
 const char *dvr_transition_status(void) {
     if (atomic_load(&control_error)) return "DVR: recorder delayed/error - keep card inserted";
-    pthread_mutex_lock(&dvr_mutex);
-    bool pending = control.resume != NULL;
-    pthread_mutex_unlock(&dvr_mutex);
-    return pending ? "DVR: waiting for recorder to finish" : NULL;
+    return NULL;
 }
 
 bool dvr_space_allows_start(void) {
