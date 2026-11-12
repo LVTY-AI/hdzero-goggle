@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include <log/log.h>
+#include <log/dvr_trace.h>
 #include <minIni.h>
 
 #include "../conf/ui.h"
@@ -493,6 +494,7 @@ static void page_storage_on_click(uint8_t key, int sel) {
         if (!page_storage.disable_controls) {
             btn_group_toggle_sel(&page_storage.logging);
             g_setting.storage.logging = btn_group_get_sel(&page_storage.logging) == 0;
+            dvr_trace_set_enabled(g_setting.storage.logging);
             settings_put_bool("storage", "logging", g_setting.storage.logging);
 
             if (g_setting.storage.logging) {

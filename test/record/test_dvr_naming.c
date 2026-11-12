@@ -160,6 +160,10 @@ static void check_recorder_replaced(void) {
     pid_t recorder = start_recorder();
     dvr_init();
     while (recorder_pid != (unsigned)recorder) usleep(10000);
+    dvr_trace_set_enabled(true);
+    for (int i = 0; i < 300 && !atomic_load(&recorder_trace_enabled); i++) usleep(10000);
+    assert(atomic_load(&recorder_trace_enabled));
+    dvr_trace_set_enabled(false);
     // Idle in the menu while a storage operation replaces the recorder and its queue.
     int queue = msgget(RECORD_CONTROL_KEY, 0);
     pid_t replaced = recorder;
