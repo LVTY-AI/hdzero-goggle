@@ -435,10 +435,19 @@ static void page_version_fw_select_reset(fw_select_t *fw_select) {
     }
 }
 
+// Hidden names are never firmware candidates: macOS leaves a ._ copy of every file
+// it writes to a card, and that copy's name contains the real file's name.
+static struct dirent *readdir_visible(DIR *dir) {
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL && entry->d_name[0] == '.')
+        ;
+    return entry;
+}
+
 static int page_version_get_latest_fw_files(fw_select_t *fw_select, const char *pattern) {
     DIR *dir = opendir(fw_select->path);
     if (dir) {
-        struct dirent *entry = readdir(dir);
+        struct dirent *entry = readdir_visible(dir);
         while (entry != NULL) {
 #if defined(_WIN32)
             if (0) { // fw scan disabled on Windows (mingw dirent lacks d_type; inert in emulator)
@@ -467,7 +476,7 @@ static int page_version_get_latest_fw_files(fw_select_t *fw_select, const char *
                 }
             }
 
-            entry = readdir(dir);
+            entry = readdir_visible(dir);
         }
         closedir(dir);
 
