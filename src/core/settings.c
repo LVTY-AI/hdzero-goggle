@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include <log/log.h>
+#include <log/dvr_trace.h>
 #include <minIni.h>
 
 #include "../conf/targets.h"
@@ -727,6 +728,7 @@ void settings_load(void) {
             LOGI("---- boot ----");
         }
     }
+    dvr_trace_set_enabled(g_setting.storage.logging);
 
 #ifdef HDZBOXPRO
     char buf[64];

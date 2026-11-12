@@ -19,6 +19,7 @@
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2, "DVR trace counters require lock-free atomics");
 typedef struct {
     time_t when;
+    unsigned generation;
     char text[TRACE_TEXT_SIZE];
 } trace_record_t;
 
@@ -26,6 +27,23 @@ static trace_record_t queue[TRACE_QUEUE_SIZE];
 static unsigned head, count;
 static pthread_mutex_t queue_mutex = PTHREAD_MUTEX_INITIALIZER;
 static atomic_uint initialized, running, queued, dropped, errors, written;
+// Odd generations enable tracing; a switch change invalidates old records.
+static atomic_uint generation;
+
+bool dvr_trace_enabled(void) {
+    return (atomic_load(&generation) & 1) != 0;
+}
+
+void dvr_trace_set_enabled(bool enabled) {
+    pthread_mutex_lock(&queue_mutex);
+    unsigned previous = atomic_load(&generation);
+    if ((previous & 1) != (unsigned)enabled) {
+        atomic_store(&generation, previous + 1);
+        head = count = 0;
+        atomic_store_explicit(&queued, 0, memory_order_relaxed);
+    }
+    pthread_mutex_unlock(&queue_mutex);
+}
 
 void dvr_trace_get_stats(dvr_trace_stats_t *stats) {
     stats->queued = atomic_load_explicit(&queued, memory_order_relaxed);
@@ -35,6 +53,7 @@ void dvr_trace_get_stats(dvr_trace_stats_t *stats) {
 }
 
 static void store_record(const trace_record_t *record) {
+    if (record->generation != atomic_load(&generation)) return;
     static unsigned reported_drops, reported_errors;
     unsigned lost = atomic_load_explicit(&dropped, memory_order_relaxed);
     unsigned failed = atomic_load_explicit(&errors, memory_order_relaxed);
@@ -57,6 +76,7 @@ static void store_record(const trace_record_t *record) {
     }
     size_t done = 0;
     while (done < length) {
+        if (record->generation != atomic_load(&generation)) break;
         ssize_t n = write(fd, line + done, length - done);
         if (n < 0 && errno == EINTR)
             continue;
@@ -65,6 +85,7 @@ static void store_record(const trace_record_t *record) {
         done += (size_t)n;
     }
     int closed = close(fd);
+    if (record->generation != atomic_load(&generation)) return;
     // This is a debug trace, not recording data: never force an SD flush.
     if (done != length || closed != 0) {
         atomic_fetch_add_explicit(&errors, 1, memory_order_relaxed);
@@ -118,11 +139,13 @@ void dvr_trace_init(void) {
 }
 
 void dvr_trace_vlog(const char *role, const char *fmt, va_list ap) {
+    unsigned current = atomic_load(&generation);
+    if (!(current & 1)) return;
     if (!atomic_load_explicit(&running, memory_order_acquire)) {
         atomic_fetch_add_explicit(&dropped, 1, memory_order_relaxed);
         return;
     }
-    trace_record_t record = {.when = time(NULL)};
+    trace_record_t record = {.when = time(NULL), .generation = current};
     int prefix = snprintf(record.text, sizeof(record.text), "[%.8s] ", role);
     int length = vsnprintf(record.text + prefix, sizeof(record.text) - prefix, fmt, ap);
     if (length < 0)
@@ -133,7 +156,9 @@ void dvr_trace_vlog(const char *role, const char *fmt, va_list ap) {
         atomic_fetch_add_explicit(&dropped, 1, memory_order_relaxed);
         return;
     }
-    if (count == TRACE_QUEUE_SIZE) {
+    if (current != atomic_load(&generation)) {
+        // The switch changed while the record was being formatted.
+    } else if (count == TRACE_QUEUE_SIZE) {
         atomic_fetch_add_explicit(&dropped, 1, memory_order_relaxed);
     } else {
         queue[(head + count) % TRACE_QUEUE_SIZE] = record;

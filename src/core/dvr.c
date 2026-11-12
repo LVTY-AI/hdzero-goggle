@@ -487,6 +487,7 @@ static unsigned monotonic_seconds(void) {
 #define DVR_HELLO_WAIT_S 2   // Per attempt while (re)connecting.
 
 static unsigned recorder_pid; // The recorder that answered the last HELLO.
+static atomic_bool recorder_trace_enabled;
 static atomic_bool recorder_unavailable;
 static bool start_refusal_logged;
 
@@ -502,7 +503,7 @@ static int control_transaction(int queue, unsigned command, unsigned epoch, reco
     static unsigned sequence;
     record_control_request_t request = {.type = RECORD_CONTROL_TYPE, .magic = RECORD_CONTROL_MAGIC,
         .owner = (unsigned)getpid(), .cookie = (unsigned)getpid() ^ (unsigned)time(NULL),
-        .sequence = ++sequence, .command = command};
+        .sequence = ++sequence, .command = command, .trace_enabled = dvr_trace_enabled()};
     if (!request.cookie) request.cookie = 1;
     snprintf(request.config, sizeof(request.config), "%s", runtime_conf);
     atomic_store(&control_phase, DVR_WAITING);
@@ -525,6 +526,7 @@ static int control_transaction(int queue, unsigned command, unsigned epoch, reco
         if (result > 0) {
             if (recorder_pid && recorder_pid != reply->recorder) return -ESRCH;
             recorder_pid = reply->recorder;
+            recorder_trace_enabled = request.trace_enabled;
             return reply->error;
         }
         if (recorder_pid && kill((pid_t)recorder_pid, 0) != 0 && errno == ESRCH) return -ESRCH;
@@ -744,8 +746,9 @@ static void *dvr_worker(void *unused) {
                 }
             }
         } else if (star) dvr_write_star();
-        else if (monotonic_seconds() - last_health >= 1) {
+        else if (dvr_trace_enabled() != recorder_trace_enabled || monotonic_seconds() - last_health >= 1) {
             // Also while idle, so a replaced recorder is found before the next transition.
+            // Carry Logging changes without waiting for another DVR operation.
             error = control_transaction(queue, RECORD_HELLO, epoch, &reply, DVR_ACK_ABANDON_S);
             last_health = monotonic_seconds();
             if (error >= 0) {

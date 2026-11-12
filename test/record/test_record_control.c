@@ -10,12 +10,12 @@ int main(void) {
     int queue = record_control_open(true);
     assert(queue >= 0 && record_control_open(false) == queue);
     record_control_request_t request = {.type = RECORD_CONTROL_TYPE, .magic = RECORD_CONTROL_MAGIC,
-        .owner = getpid(), .cookie = 77, .sequence = 1, .command = RECORD_STOP};
+        .owner = getpid(), .cookie = 77, .sequence = 1, .command = RECORD_STOP, .trace_enabled = 1};
     record_control_request_t received;
     record_control_reply_t reply;
     assert(record_control_send(queue, &request) == 0);
     assert(record_control_receive(queue, &received) == 1);
-    assert(received.sequence == request.sequence);
+    assert(received.sequence == request.sequence && received.trace_enabled == 1);
     assert(record_control_ack(queue, &request, &reply) == 0); // Not completed merely because sent/received.
     record_control_request_t stale = request;
     stale.cookie++;

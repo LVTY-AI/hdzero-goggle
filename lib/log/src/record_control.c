@@ -33,6 +33,7 @@ int record_control_receive(int queue, record_control_request_t *request) {
         return 0;
     if (n != PAYLOAD(*request) || request->magic != RECORD_CONTROL_MAGIC ||
         !request->owner || !request->cookie || !request->sequence ||
+        request->trace_enabled > 1 ||
         request->command < RECORD_HELLO || request->command > RECORD_PAUSE ||
         !memchr(request->config, '\0', sizeof(request->config)))
         return -1;

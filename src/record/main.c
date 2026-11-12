@@ -1071,6 +1071,7 @@ static bool record_control_run(RecordContext_t *ctx) {
     int received = record_control_receive(control_queue, &request);
     if (received <= 0) return false;
     if (kill((pid_t)request.owner, 0) != 0) return true;
+    dvr_trace_set_enabled(request.trace_enabled != 0);
     int error = 0;
     char accepted[sizeof(ctx->confFile)];
     snprintf(accepted, sizeof(accepted), "%s", ctx->confFile);

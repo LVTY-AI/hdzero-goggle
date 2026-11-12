@@ -6,13 +6,14 @@
 
 #define RECORD_CONTROL_KEY 0x48445203
 #define RECORD_CONTROL_TYPE 3
-#define RECORD_CONTROL_MAGIC 0x48445201u
+#define RECORD_CONTROL_MAGIC 0x48445202u
 #define RECORD_CONTROL_PATH 160
 enum record_control_command { RECORD_HELLO = 1, RECORD_START, RECORD_STOP, RECORD_LIVE_STOP,
                               RECORD_CONFIG, RECORD_PAUSE };
 typedef struct {
     long type;
     uint32_t magic, owner, cookie, sequence, command;
+    uint32_t trace_enabled;
     char config[RECORD_CONTROL_PATH];
 } record_control_request_t;
 typedef struct {
