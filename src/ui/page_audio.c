@@ -17,6 +17,7 @@
 #include "ui/ui_style.h"
 #include "util/filesystem.h"
 #include "util/system.h"
+#include "util/wav_info.h"
 #include "wav_test.h"
 
 #define AUDIO_VOLUME_MIN 0
@@ -30,7 +31,6 @@
 #define AUDIO_TEST_ARECORD "/mnt/app/app/record/audio/arecord"
 #define AUDIO_TEST_COUNT 4
 #define AUDIO_TEST_SECONDS 5            // live stream / record length
-#define AUDIO_TEST_DVR_SAMPLE_MS 10000  // bundled test WAV length
 // full button width: the solid-grey button has no border, so the progress
 // fill spans edge to edge (clipped to the rounded corners by the button).
 #define AUDIO_TEST_FILL_MAX_W (UI_AUDIO_TEST_BUTTON_WIDTH)
@@ -588,7 +588,9 @@ static void *page_audio_test_thread(void *arg) {
     case AUDIO_TEST_DVR:
         dvr_mute_live_audio();
         page_audio_enable_dac_playback();
-        audio_test_phase_duration_ms = AUDIO_TEST_DVR_SAMPLE_MS;
+        // The clip may be the bundled one or a copy on the SD card; 0 (unknown)
+        // fills the bar to full width.
+        audio_test_phase_duration_ms = wav_info_duration_ms(page_audio_test_sample_path());
         audio_test_phase = AUDIO_TEST_PHASE_PLAYING;
         page_audio_play_wav(page_audio_test_sample_path());
         page_audio_disable_dac_playback(live_audio_was_enabled);
