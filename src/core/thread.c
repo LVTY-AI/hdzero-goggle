@@ -48,7 +48,8 @@ static void detect_sdcard(void) {
 
     bool ok_to_execute =
         page_storage_was_sd_repair_invoked() &&
-        !page_storage_is_sd_repair_active();
+        !page_storage_is_sd_repair_active() &&
+        !page_storage_is_sd_format_active();
 
     // Only run this logic when page storage repair thread
     // has been invoked at least once and that the sdcard
