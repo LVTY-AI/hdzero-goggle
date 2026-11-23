@@ -97,7 +97,13 @@ static lv_obj_t *page_fans_create(lv_obj_t *parent, panel_arr_t *arr) {
 
     create_select_item(arr, cont);
 
-    create_btn_group_item(&btn_group_fans, cont, 2, _lang("Auto Control"), _lang("On"), _lang("Off"), "", "", rows++);
+    create_btn_group_item(&btn_group_fans, cont, 2, _lang("Auto Control"), _lang("On"), _lang("Off"), "", "", rows);
+    // Align the options with the fan sliders, which span columns 3 and 4.
+    for (int i = 0; i < btn_group_fans.valid; i++) {
+        lv_obj_set_grid_cell(btn_group_fans.btn_a[i].container, LV_GRID_ALIGN_START, i + 3, 1,
+                             LV_GRID_ALIGN_CENTER, rows, 1);
+    }
+    rows++;
     btn_group_set_sel(&btn_group_fans, !g_setting.fans.auto_mode);
 
     create_slider_item(&slider_group[0], cont, _lang("Top Fan"), MAX_FAN_TOP, 2, rows++);
