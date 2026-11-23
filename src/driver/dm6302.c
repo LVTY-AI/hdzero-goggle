@@ -1192,25 +1192,25 @@ typedef struct _MACRO0 {
 typedef struct _MACRO1 {
     unsigned short ical;
     unsigned short rcal;
-    unsigned long bandgap;
-    unsigned long tempsensor;
+    uint32_t bandgap;
+    uint32_t tempsensor;
     unsigned char rsvd[116];
 } MACRO1_T;
 
 typedef struct _RX_CAL {
     unsigned short freq_start;
     unsigned short freq_stop;
-    unsigned long iqmismatch[3];
-    unsigned long im2;
+    uint32_t iqmismatch[3];
+    uint32_t im2;
     unsigned char rsvd[12];
 } RX_CAL_T;
 
 typedef struct _TX_CAL {
     unsigned short freq_start;
     unsigned short freq_stop;
-    unsigned long dcoc_i;
-    unsigned long dcoc_q;
-    unsigned long iqmismatch;
+    uint32_t dcoc_i;
+    uint32_t dcoc_q;
+    uint32_t iqmismatch;
     unsigned char rsvd[16];
 } TX_CAL_T;
 
@@ -1233,16 +1233,38 @@ typedef union _EFUSE {
     } macro;
 } EFUSE_T;
 
-EFUSE_T efuse0, efuse1;
+_Static_assert(sizeof(MACRO0_T) == EFUSE_SIZE && sizeof(MACRO1_T) == EFUSE_SIZE &&
+               sizeof(MACRO2_T) == EFUSE_SIZE, "DM6302 calibration layout");
 
-void DM6302_EFUSE1(uint8_t SEL6302) {
-    int i, j;
+static EFUSE_T efuse0, efuse1;
+
+static bool efuse_rx_band(const RX_CAL_T *rx) {
+    return rx->freq_start >= 5000 && rx->freq_start < rx->freq_stop && rx->freq_stop <= 6000;
+}
+
+// Read one byte through the FPGA SPI bridge. Do not hang source entry if the
+// selected chip never clears busy.
+static bool efuse_read_byte(uint8_t chip, int macro, int byte, uint8_t *out) {
     uint32_t r0, r1, rdat_sel;
-    int efuse_rdy = 1;
+    SPI_Write(chip, 0x3, 0x7D0, (macro << 11) | (byte << 4) | 1);
+    for (int poll = 0; poll < 32; poll++) {
+        SPI_Read(0x3, 0x7D4, &r0, &r1);
+        rdat_sel = chip == 1 ? r0 : r1;
+        if (!(rdat_sel & 1)) {
+            SPI_Read(0x3, 0x7D8, &r0, &r1);
+            *out = (uint8_t)(chip == 1 ? r0 : r1);
+            return true;
+        }
+    }
+    LOGW("DM6302 chip %u: eFuse busy at macro %d byte %d", chip, macro, byte);
+    return false;
+}
 
+static bool DM6302_EFUSE1(uint8_t SEL6302) {
     EFUSE_T *efuse_sel = (SEL6302 == 1) ? (&efuse0) : (&efuse1);
-
-    memset((char *)efuse_sel, 0, sizeof(EFUSE_T));
+    bool read_ok = false;
+    unsigned rx_mask = 0;
+    memset(efuse_sel, 0, sizeof(*efuse_sel));
 
     // EFUSE_RST = 1;
     SPI_Write(SEL6302, 0x6, 0xFF0, 0x00000019);
@@ -1251,107 +1273,36 @@ void DM6302_EFUSE1(uint8_t SEL6302) {
     LOGI("EFUSE1 %d, s1", SEL6302);
 
     SPI_Write(SEL6302, 0x6, 0xFF0, 0x00000018);
-    for (j = 66; j < 68 /*EFUSE_SIZE*/; j++) // read macro 0
-    {
-        // EFUSE_CFG = (0<<11) | (j<<4) | 0x1;
-        SPI_Write(SEL6302, 0x3, 0x7D0, (j << 4) | 0x1);
-
-        // while(EFUSE_RDY&1);
-        while (efuse_rdy) {
-            SPI_Read(0x3, 0x7D4, &r0, &r1);
-            rdat_sel = (SEL6302 == 1) ? r0 : r1;
-            efuse_rdy = rdat_sel & 1;
-        }
-        efuse_rdy = 1;
-
-        // efuse.data[0][j] = EFUSE_DAT;
-        SPI_Read(0x3, 0x7D8, &r0, &r1);
-        rdat_sel = (SEL6302 == 1) ? r0 : r1;
-        efuse_sel->dat[0][j] = rdat_sel & 0xFF;
+    for (int j = 66; j < 68; j++) {
+        if (!efuse_read_byte(SEL6302, 0, j, &efuse_sel->dat[0][j]))
+            goto finish;
     }
-
-    LOGI("EFUSE1 %d, s2", SEL6302);
-
-    for (j = 0; j < 12 /*EFUSE_SIZE*/; j++) // read macro 1
-    {
-        // EFUSE_CFG = (1<<11) | (j<<4) | 0x1;
-        SPI_Write(SEL6302, 0x3, 0x7D0, (1 << 11) | (j << 4) | 0x1);
-
-        // while(EFUSE_RDY&1);
-        while (efuse_rdy) {
-            SPI_Read(0x3, 0x7D4, &r0, &r1);
-            rdat_sel = (SEL6302 == 1) ? r0 : r1;
-            efuse_rdy = rdat_sel & 1;
-        }
-        efuse_rdy = 1;
-
-        // efuse.data[1][j] = EFUSE_DAT;
-        SPI_Read(0x3, 0x7D8, &r0, &r1);
-        rdat_sel = (SEL6302 == 1) ? r0 : r1;
-        efuse_sel->dat[1][j] = rdat_sel & 0xFF;
+    unsigned bands = efuse_sel->macro.m0.band_num;
+    if (bands > EFUSE_NUM - 2) {
+        LOGW("DM6302 chip %u: invalid eFuse band count %u", SEL6302, bands);
+        goto finish;
     }
-
-    LOGI("EFUSE1 %d, s3, %d", SEL6302, efuse_sel->macro.m0.band_num);
-
-    // for(i=2; i<efuse.macro.m0.band_num+2; i++) // read macro 2~11
-    // efuse_sel->macro.m0.band_num = (efuse_sel->macro.m0.band_num >> 8) | (efuse_sel->macro.m0.band_num << 8);
-    for (i = 2; i < efuse_sel->macro.m0.band_num + 2; i++) // read macro 2~11
-    {
-        for (j = 0; j < 20 /*EFUSE_SIZE*/; j++) {
-            // EFUSE_CFG = (i<<11) | (j<<4) | 0x1;
-            SPI_Write(SEL6302, 0x3, 0x7D0, (i << 11) | (j << 4) | 0x1);
-
-            // while(EFUSE_RDY&1);
-            while (efuse_rdy) {
-                SPI_Read(0x3, 0x7D4, &r0, &r1);
-                rdat_sel = (SEL6302 == 1) ? r0 : r1;
-                efuse_rdy = rdat_sel & 1;
-            }
-            efuse_rdy = 1;
-
-            // efuse.data[i][j] = EFUSE_DAT;
-            SPI_Read(0x3, 0x7D8, &r0, &r1);
-            rdat_sel = (SEL6302 == 1) ? r0 : r1;
-            efuse_sel->dat[i][j] = rdat_sel & 0xFF;
-
-            if (j == 3) {
-                // efuse_sel->macro.m2[i-2].rx1.freq_start = (efuse_sel->macro.m2[i-2].rx1.freq_start >> 8) | (efuse_sel->macro.m2[i-2].rx1.freq_start << 8);
-                // efuse_sel->macro.m2[i-2].rx1.freq_stop = (efuse_sel->macro.m2[i-2].rx1.freq_stop >> 8) | (efuse_sel->macro.m2[i-2].rx1.freq_stop << 8);
-                if (efuse_sel->macro.m2[i - 2].rx1.freq_start < 5000 || efuse_sel->macro.m2[i - 2].rx1.freq_stop > 6000)
-                    break;
-            }
-        }
-
-        LOGI("EFUSE1 %d, s3-%i", SEL6302, i);
-
-        for (j = 64; j < 84 /*EFUSE_SIZE*/; j++) {
-            // EFUSE_CFG = (i<<11) | (j<<4) | 0x1;
-            SPI_Write(SEL6302, 0x3, 0x7D0, (i << 11) | (j << 4) | 0x1);
-
-            // while(EFUSE_RDY&1);
-            while (efuse_rdy) {
-                SPI_Read(0x3, 0x7D4, &r0, &r1);
-                rdat_sel = (SEL6302 == 1) ? r0 : r1;
-                efuse_rdy = rdat_sel & 1;
-            }
-            efuse_rdy = 1;
-
-            // efuse.data[i][j] = EFUSE_DAT;
-            SPI_Read(0x3, 0x7D8, &r0, &r1);
-            rdat_sel = (SEL6302 == 1) ? r0 : r1;
-            efuse_sel->dat[i][j] = rdat_sel & 0xFF;
-
-            if (j == 67) {
-                // efuse_sel->macro.m2[i-2].rx2.freq_start = (efuse_sel->macro.m2[i-2].rx2.freq_start >> 8) | (efuse_sel->macro.m2[i-2].rx2.freq_start << 8);
-                // efuse_sel->macro.m2[i-2].rx2.freq_stop = (efuse_sel->macro.m2[i-2].rx2.freq_stop >> 8) | (efuse_sel->macro.m2[i-2].rx2.freq_stop << 8);
-                if (efuse_sel->macro.m2[i - 2].rx2.freq_start < 5000 || efuse_sel->macro.m2[i - 2].rx2.freq_stop > 6000)
-                    break;
+    for (int j = 0; j < 12; j++) {
+        if (!efuse_read_byte(SEL6302, 1, j, &efuse_sel->dat[1][j]))
+            goto finish;
+    }
+    for (unsigned band = 0; band < bands; band++) {
+        MACRO2_T *cal = &efuse_sel->macro.m2[band];
+        for (unsigned rx = 0; rx < 2; rx++) {
+            int offset = rx ? 64 : 0;
+            for (int j = offset; j < offset + 20; j++) {
+                if (!efuse_read_byte(SEL6302, band + 2, j, &efuse_sel->dat[band + 2][j]))
+                    goto finish;
+                if (j == offset + 3 && !efuse_rx_band(rx ? &cal->rx2 : &cal->rx1))
+                    break; // Skip coefficients for other frequency bands.
+                if (j == offset + 19)
+                    rx_mask |= 1u << rx;
             }
         }
     }
-
-    LOGI("EFUSE1 %d, s4", SEL6302);
-
+    LOGI("DM6302 chip %u: eFuse bands=%u 5.8 GHz RX mask=0x%x", SEL6302, bands, rx_mask);
+    read_ok = true;
+finish:
     // EFUSE_CFG = 0;
     SPI_Write(SEL6302, 0x3, 0x7D0, 0x00000000);
     // EFUSE_RST = 0;
@@ -1373,11 +1324,22 @@ void DM6302_EFUSE1(uint8_t SEL6302) {
     // LOGI("ical=%x", efuse_sel->macro.m1.ical);
     // LOGI("rcal=%x", efuse_sel->macro.m1.rcal);
 
-    r1 = ((efuse_sel->macro.m1.ical & 0x1F) << 3) | (efuse_sel->macro.m1.rcal & 0x7);
+    if (!read_ok) {
+        efuse_sel->macro.m0.band_num = 0; // Never apply a partial read in EFUSE2.
+        return false;
+    }
+#if defined(HDZGOGGLE)
+    if (rx_mask != 3)
+        return false;
+#endif
+    uint32_t r1 = ((efuse_sel->macro.m1.ical & 0x1F) << 3) | (efuse_sel->macro.m1.rcal & 0x7);
     // LOGI("rh=%lx", rh);
 
     SPI_Write(SEL6302, 0x6, 0xF14, efuse_sel->macro.m1.bandgap);
     SPI_Write(SEL6302, 0x6, 0xF18, r1);
+    // An incomplete but readable table can still have good trims and RX paths.
+    // Report it as incomplete so startup retries before falling back to those.
+    return rx_mask == 3;
 }
 
 void DM6302_EFUSE2(uint8_t SEL6302) {
@@ -1399,7 +1361,7 @@ void DM6302_EFUSE2(uint8_t SEL6302) {
         LOGI(" rx1: start=%x, stop=%x;  rx2: start=%x, stop=%x", efuse_sel->macro.m2[i].rx1.freq_start, efuse_sel->macro.m2[i].rx1.freq_stop,
              efuse_sel->macro.m2[i].rx2.freq_start, efuse_sel->macro.m2[i].rx2.freq_stop);
 
-        if (efuse_sel->macro.m2[i].rx1.freq_start >= 5000 && efuse_sel->macro.m2[i].rx1.freq_stop <= 6000) {
+        if (efuse_rx_band(&efuse_sel->macro.m2[i].rx1)) {
 #if (0)
             efuse_sel->macro.m2[i].rx1.iqmismatch[0] = ((efuse_sel->macro.m2[i].rx1.iqmismatch[0] >> 24) & 0xFF) |
                                                        ((efuse_sel->macro.m2[i].rx1.iqmismatch[0] >> 8) & 0xFF00) |
@@ -1428,13 +1390,13 @@ void DM6302_EFUSE2(uint8_t SEL6302) {
             SPI_Write(SEL6302, 0x3, 0x998, efuse_sel->macro.m2[i].rx1.iqmismatch[2]);
             SPI_Write(SEL6302, 0x3, 0x980, 0x0000000C);
 
-            LOGI("iqmismatch[0]=%lx", efuse_sel->macro.m2[i].rx1.iqmismatch[0]);
-            LOGI("iqmismatch[1]=%lx", efuse_sel->macro.m2[i].rx1.iqmismatch[1]);
-            LOGI("iqmismatch[2]=%lx", efuse_sel->macro.m2[i].rx1.iqmismatch[2]);
-            LOGI("im2=%lx", efuse_sel->macro.m2[i].rx1.im2);
+            LOGI("iqmismatch[0]=%x", efuse_sel->macro.m2[i].rx1.iqmismatch[0]);
+            LOGI("iqmismatch[1]=%x", efuse_sel->macro.m2[i].rx1.iqmismatch[1]);
+            LOGI("iqmismatch[2]=%x", efuse_sel->macro.m2[i].rx1.iqmismatch[2]);
+            LOGI("im2=%x", efuse_sel->macro.m2[i].rx1.im2);
         }
 
-        if (efuse_sel->macro.m2[i].rx2.freq_start >= 5000 && efuse_sel->macro.m2[i].rx2.freq_stop <= 6000) {
+        if (efuse_rx_band(&efuse_sel->macro.m2[i].rx2)) {
 #if (0)
             efuse_sel->macro.m2[i].rx2.iqmismatch[0] = ((efuse_sel->macro.m2[i].rx2.iqmismatch[0] >> 24) & 0xFF) |
                                                        ((efuse_sel->macro.m2[i].rx2.iqmismatch[0] >> 8) & 0xFF00) |
@@ -1463,10 +1425,10 @@ void DM6302_EFUSE2(uint8_t SEL6302) {
             SPI_Write(SEL6302, 0x3, 0xB98, efuse_sel->macro.m2[i].rx2.iqmismatch[2]);
             SPI_Write(SEL6302, 0x3, 0xB80, 0x0000000C);
 
-            LOGI("iqmismatch[0]=%lx", efuse_sel->macro.m2[i].rx2.iqmismatch[0]);
-            LOGI("iqmismatch[1]=%lx", efuse_sel->macro.m2[i].rx2.iqmismatch[1]);
-            LOGI("iqmismatch[2]=%lx", efuse_sel->macro.m2[i].rx2.iqmismatch[2]);
-            LOGI("im2=%lx", efuse_sel->macro.m2[i].rx2.im2);
+            LOGI("iqmismatch[0]=%x", efuse_sel->macro.m2[i].rx2.iqmismatch[0]);
+            LOGI("iqmismatch[1]=%x", efuse_sel->macro.m2[i].rx2.iqmismatch[1]);
+            LOGI("iqmismatch[2]=%x", efuse_sel->macro.m2[i].rx2.iqmismatch[2]);
+            LOGI("im2=%x", efuse_sel->macro.m2[i].rx2.im2);
         }
     }
 }
@@ -1666,10 +1628,10 @@ void DM6302_DCOC(uint8_t SEL6302) {
 
 // DM6302 init
 int DM6302_init(uint8_t freq, uint8_t bw) {
-    int to_cnt = 0;
-    uint32_t r0 = 1, r1 = 1;
+    int to_cnt;
+    bool calibration_retried = false;
 
-    while (r0) {
+    for (to_cnt = 1;; to_cnt++) {
         DM5680_ResetRF(0);
         usleep(1000);
         DM5680_ResetRF(1);
@@ -1678,24 +1640,35 @@ int DM6302_init(uint8_t freq, uint8_t bw) {
         DM6302_Init0(0);
         LOGI("Init0 done");
 
+        uint32_t r0, r1;
         SPI_Read(0x6, 0xFF0, &r0, &r1);
-        if ((r0 != 0x18) || (r1 != 0x18))
-            r0 = 1;
-        else
-            r0 = 0;
-
-        to_cnt++;
-        if (to_cnt >= 10) {
+        if (r0 == 0x18 && r1 == 0x18) {
+            bool left = DM6302_EFUSE1(1);
+            bool right = DM6302_EFUSE1(2);
+            if (left && right)
+                break;
+            // The chips can answer the page probe while their factory
+            // calibration still reads as zero. Reset the pair once.
+            if (!calibration_retried && to_cnt < 10) {
+                LOGW("DM6302 calibration invalid (left=%d right=%d), retrying RF startup", left, right);
+                calibration_retried = true;
+                DM5680_SetBB(0);
+                usleep(100000);
+                continue;
+            }
+#if defined(HDZGOGGLE)
+            LOGE("DM6302 calibration failed (left=%d right=%d)", left, right);
+            return 1;
+#else
+            LOGW("DM6302 calibration incomplete (left=%d right=%d), continuing with available calibration", left, right);
+            break;
+#endif
+        }
+        if (to_cnt == 10) {
             LOGE("Error: DM6302s have no response.");
             return 1;
         }
     }
-
-    DM6302_EFUSE1(1);
-    LOGI("EFUSE1 1 done");
-
-    DM6302_EFUSE1(2);
-    LOGI("EFUSE1 2 done");
 
     DM6302_Init1(0, bw);
     LOGI("Init1 done");

@@ -745,7 +745,13 @@ void HDZero_open(int bw) {
     if (g_hw_stat.hdzero_open == 0) {
         g_hw_stat.hdz_bw = bw;
         DM5680_SetBR(g_hw_stat.hdz_bw);
-        DM6302_init(0, g_hw_stat.hdz_bw);
+#ifndef EMULATOR_BUILD
+        if (DM6302_init(0, g_hw_stat.hdz_bw) != 0) {
+            HDZero_Close();
+            DM5680_clear_vldflg();
+            return;
+        }
+#endif
         DM5680_SetBB(1);
         g_hw_stat.hdzero_open = 1;
         LOGI("HDZero: open");

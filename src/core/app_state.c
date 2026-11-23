@@ -221,9 +221,11 @@ void app_switch_to_hdzero(bool is_default) {
     HDZero_open(hdzero_effective_bw());
     ch &= 0x7f;
 
-    DM6302_SetChannel(g_setting.source.hdzero_band, ch);
-    DM5680_clear_vldflg();
-    DM5680_req_vldflg();
+    if (g_hw_stat.hdzero_open) {
+        DM6302_SetChannel(g_setting.source.hdzero_band, ch);
+        DM5680_clear_vldflg();
+        DM5680_req_vldflg();
+    }
     progress_bar.start = 0;
 
     const camera_video_t camera = camera_video_snapshot();

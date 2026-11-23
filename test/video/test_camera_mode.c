@@ -16,6 +16,8 @@ static int inject_at;
 static int fps_calls;
 static int recorded_format;
 static bool late_retime;
+static int rf_init_error, channel_tunes;
+static bool baseband_on;
 setting_t g_setting;
 source_info_t g_source_info;
 progress_bar_t progress_bar;
@@ -64,10 +66,10 @@ static void analog_init(bool power, bool audio) {}
 rtc6715_t rtc6715 = {.init = analog_init};
 uint8_t hdzero_effective_bw(void) { return 0; }
 void scan_core_notify_analog_powered_off(void) {}
-int DM6302_init(uint8_t freq, uint8_t bw) { return 0; }
-void DM6302_SetChannel(uint8_t band, uint8_t channel) {}
+int DM6302_init(uint8_t freq, uint8_t bw) { return rf_init_error; }
+void DM6302_SetChannel(uint8_t band, uint8_t channel) { channel_tunes++; }
 void DM5680_SetBR(uint8_t bw) {}
-void DM5680_SetBB(uint8_t on) {}
+void DM5680_SetBB(uint8_t on) { baseband_on = on; }
 void DM5680_ResetRF(uint8_t on) {}
 void DM5680_clear_vldflg(void) {}
 void DM5680_req_vldflg(void) {}
@@ -141,5 +143,15 @@ int main(void) {
     assert(!late_retime);
     assert(g_hw_stat.hdz_mode == VR_1080P30);
     assert(recorded_format == VR_1080P30);
+#if defined(HDZGOGGLE)
+    HDZero_Close();
+    channel_tunes = 0;
+    rf_init_error = 1;
+    app_switch_to_hdzero(true);
+    assert(!g_hw_stat.hdzero_open && !baseband_on && channel_tunes == 0);
+    rf_init_error = 0;
+    app_switch_to_hdzero(true);
+    assert(g_hw_stat.hdzero_open && baseband_on && channel_tunes == 1);
+#endif
     puts("camera mode: OSD readback, in-flight updates and direct-entry cache passed");
 }
