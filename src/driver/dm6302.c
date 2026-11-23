@@ -1263,6 +1263,7 @@ static bool efuse_read_byte(uint8_t chip, int macro, int byte, uint8_t *out) {
 static bool DM6302_EFUSE1(uint8_t SEL6302) {
     EFUSE_T *efuse_sel = (SEL6302 == 1) ? (&efuse0) : (&efuse1);
     bool read_ok = false;
+    unsigned rx_mask = 0;
     memset(efuse_sel, 0, sizeof(*efuse_sel));
 
     // EFUSE_RST = 1;
@@ -1285,7 +1286,6 @@ static bool DM6302_EFUSE1(uint8_t SEL6302) {
         if (!efuse_read_byte(SEL6302, 1, j, &efuse_sel->dat[1][j]))
             goto finish;
     }
-    unsigned rx_mask = 0;
     for (unsigned band = 0; band < bands; band++) {
         MACRO2_T *cal = &efuse_sel->macro.m2[band];
         for (unsigned rx = 0; rx < 2; rx++) {
@@ -1301,11 +1301,7 @@ static bool DM6302_EFUSE1(uint8_t SEL6302) {
         }
     }
     LOGI("DM6302 chip %u: eFuse bands=%u 5.8 GHz RX mask=0x%x", SEL6302, bands, rx_mask);
-#if defined(HDZGOGGLE)
-    read_ok = rx_mask == 3;
-#else
     read_ok = true;
-#endif
 finish:
     // EFUSE_CFG = 0;
     SPI_Write(SEL6302, 0x3, 0x7D0, 0x00000000);
@@ -1332,12 +1328,18 @@ finish:
         efuse_sel->macro.m0.band_num = 0; // Never apply a partial read in EFUSE2.
         return false;
     }
+#if defined(HDZGOGGLE)
+    if (rx_mask != 3)
+        return false;
+#endif
     uint32_t r1 = ((efuse_sel->macro.m1.ical & 0x1F) << 3) | (efuse_sel->macro.m1.rcal & 0x7);
     // LOGI("rh=%lx", rh);
 
     SPI_Write(SEL6302, 0x6, 0xF14, efuse_sel->macro.m1.bandgap);
     SPI_Write(SEL6302, 0x6, 0xF18, r1);
-    return true;
+    // An incomplete but readable table can still have good trims and RX paths.
+    // Report it as incomplete so startup retries before falling back to those.
+    return rx_mask == 3;
 }
 
 void DM6302_EFUSE2(uint8_t SEL6302) {
@@ -1627,9 +1629,7 @@ void DM6302_DCOC(uint8_t SEL6302) {
 // DM6302 init
 int DM6302_init(uint8_t freq, uint8_t bw) {
     int to_cnt;
-#if defined(HDZGOGGLE)
     bool calibration_retried = false;
-#endif
 
     for (to_cnt = 1;; to_cnt++) {
         DM5680_ResetRF(0);
@@ -1647,9 +1647,8 @@ int DM6302_init(uint8_t freq, uint8_t bw) {
             bool right = DM6302_EFUSE1(2);
             if (left && right)
                 break;
-#if defined(HDZGOGGLE)
-            // A G1 can answer the page probe while its factory calibration
-            // still reads as zero. Reset the pair as on menu re-entry, once.
+            // The chips can answer the page probe while their factory
+            // calibration still reads as zero. Reset the pair once.
             if (!calibration_retried && to_cnt < 10) {
                 LOGW("DM6302 calibration invalid (left=%d right=%d), retrying RF startup", left, right);
                 calibration_retried = true;
@@ -1657,10 +1656,12 @@ int DM6302_init(uint8_t freq, uint8_t bw) {
                 usleep(100000);
                 continue;
             }
+#if defined(HDZGOGGLE)
             LOGE("DM6302 calibration failed (left=%d right=%d)", left, right);
             return 1;
 #else
-            break; // Use available calibration on the other hardware profiles.
+            LOGW("DM6302 calibration incomplete (left=%d right=%d), continuing with available calibration", left, right);
+            break;
 #endif
         }
         if (to_cnt == 10) {
