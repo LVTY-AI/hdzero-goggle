@@ -69,6 +69,7 @@ typedef struct {
     lv_obj_t *note;
     bool disable_controls;
     bool is_sd_repair_active;
+    bool is_sd_format_active;
     bool was_sd_repair_invoked;
     bool is_auto_sd_repair_active;
 } page_options_t;
@@ -173,6 +174,10 @@ static format_codes_t page_storage_format_sd() {
     const char *log_file = "/tmp/mkfs.log";
     format_codes_t status = FMC_SUCCESS;
 
+    // Pause the card watcher: the card unmounts and remounts during a format,
+    // and the watcher would start a repair on the half-written card.
+    page_storage.is_sd_format_active = true;
+
     // Temporarily disable logging if needed
     const char *applogfile = NULL;
     if (log_file_opened()) {
@@ -230,6 +235,8 @@ static format_codes_t page_storage_format_sd() {
             settings_open_app_log();
         }
     }
+
+    page_storage.is_sd_format_active = false;
 
     return status;
 }
@@ -645,6 +652,13 @@ bool page_storage_was_sd_repair_invoked() {
  */
 bool page_storage_is_sd_repair_active() {
     return page_storage.is_sd_repair_active;
+}
+
+/**
+ * Returns true if formatting is active.
+ */
+bool page_storage_is_sd_format_active() {
+    return page_storage.is_sd_format_active;
 }
 
 /**

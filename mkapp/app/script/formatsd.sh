@@ -74,12 +74,27 @@ else
         sleep 1
         i=$((i + 1))
     done
-    echo "Formatting $PART as FAT32" >> /tmp/mkfs.log
-    mkfs.vfat -F 32 "$PART" -n "HDZERO" >> /tmp/mkfs.log 2>&1
-    RESULT=$?
+    # The re-read also makes the automounter (udev) mount the partition about
+    # a second later. Let it finish, then unmount, so that mount cannot land
+    # in the middle of mkfs. Something can read the fresh mount for a moment,
+    # so retry for about two seconds.
+    /sbin/udevadm settle --timeout=10 >> /tmp/mkfs.log 2>&1 || sleep 2
+    tries=0
+    while grep -q " /mnt/extsd " /proc/mounts && [ $tries -lt 10 ]; do
+        umount /mnt/extsd 2>/dev/null || usleep 200000
+        tries=$((tries + 1))
+    done
+    # This mkfs does not check for a mounted card itself.
+    if grep -q " /mnt/extsd " /proc/mounts; then
+        echo "SD card is still mounted; not formatting" >> /tmp/mkfs.log
+        RESULT=1
+    else
+        echo "Formatting $PART as FAT32" >> /tmp/mkfs.log
+        mkfs.vfat -F 32 "$PART" -n "HDZERO" >> /tmp/mkfs.log 2>&1
+        RESULT=$?
+    fi
 fi
 echo "mkfs result: $RESULT" >> /tmp/mkfs.log
-echo $RESULT > /tmp/mkfs.result
 
 echo "Mounting SD Card"
 mount "$PART" /mnt/extsd
@@ -98,3 +113,5 @@ fi
 /mnt/app/app/record/record &
 /mnt/app/app/record/sdstat &
 
+# Report last: the app keeps its card watcher paused until this file appears.
+echo $RESULT > /tmp/mkfs.result
