@@ -13,7 +13,6 @@ LDFLAGS += -Wl,--gc-sections
 endif
 
 BINARY = test_motion_wake_$(TARGET)
-CASES = built-in expansion dual av-in av-in-dual hdzero menu hdmi
 
 .PHONY: all run clean
 all: $(BINARY)
@@ -22,7 +21,7 @@ $(BINARY): test_motion_wake.c ../../src/core/ht.c $(wildcard ../../src/core/*.h)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< $(LDFLAGS) $(LDLIBS) -o $@
 
 run: $(BINARY)
-	@set -e; for scenario in $(CASES); do ./$(BINARY) $$scenario; done
+	./$(BINARY)
 
 clean:
 	rm -f test_motion_wake_HDZGOGGLE test_motion_wake_HDZGOGGLE2 test_motion_wake_HDZBOXPRO

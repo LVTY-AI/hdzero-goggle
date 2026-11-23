@@ -23,9 +23,8 @@
 #include "core/settings.h"
 #include "core/sleep_mode.h"
 #include "driver/beep.h"
-#include "driver/dm6302.h"
+#include "driver/dm5680.h"
 #include "driver/hardware.h"
-#include "driver/rtc6715.h"
 #include "driver/screen.h"
 #include "ui/page_common.h"
 #include "util/math.h"
@@ -87,23 +86,42 @@ static void calculate_orientation();
 static void *head_alarm_thread(void *arg);
 
 ///////////////////////////////////////////////////////////////////////////////
-// no motion to disable OLED display
+// Use the input routed to the panel, including in live settings previews.
+// Other inputs may still have cached lock flags while the menu is showing.
+static bool panel_has_live_video(void) {
+    switch (g_hw_stat.source_mode) {
+    case SOURCE_MODE_HDZERO:
+        return rx_status[0].rx_valid || rx_status[1].rx_valid;
+    case SOURCE_MODE_AV:
+        return g_hw_stat.av_valid[g_hw_stat.is_av_in] != 0;
+    case SOURCE_MODE_HDMIIN:
+        return g_hw_stat.hdmiin_valid != 0;
+    case SOURCE_MODE_UI:
+        return false;
+    }
+    return true; // An unrecognized video path is not safe to blank.
+}
+
 static void detect_motion(bool is_moving) {
     static oled_motion_detect_state_t state = OLED_MD_DETECTING;
     static int cnt = 0;
 
+    const bool keep_awake = g_setting.image.auto_off == 4 || panel_has_live_video();
+    if (keep_awake || is_moving) {
+        // Debounce motion-only wake; a returning picture must wake immediately.
+        if (state == OLED_MD_OFF && !keep_awake && ++cnt < 2)
+            return;
+        if (state != OLED_MD_DETECTING)
+            screen.brightness(g_setting.image.oled);
+        if (state == OLED_MD_OFF)
+            screen_set_inhibited(SCREEN_INHIBIT_IDLE, false);
+        state = OLED_MD_DETECTING;
+        cnt = 0;
+        return;
+    }
+
     switch (state) {
     case OLED_MD_DETECTING:
-        if (g_setting.image.auto_off == 4) {
-            // auto_off disabled, bail
-            break;
-        }
-        if (is_moving) {
-            // moving, bail
-            cnt = 0;
-            break;
-        }
-
         cnt++;
 
 #ifdef FAST_SIM
@@ -125,27 +143,14 @@ static void detect_motion(bool is_moving) {
 #ifdef FAST_SIM
         LOGI("PRE OFF %d", cnt);
 #endif
-        if (is_moving) {
-            // we got motion, turn oled back on, start over
-            screen.brightness(g_setting.image.oled);
-            state = OLED_MD_DETECTING;
-            cnt = 0;
-        }
-
         cnt++;
 
         if (cnt == MOTION_DUR_1MINUTE) { // 1-min
             LOGI("OLED OFF for protection.");
             beep();
+            // Blank only the panel. The tuned receiver must keep listening
+            // so a returning signal can wake it without head movement.
             screen_set_inhibited(SCREEN_INHIBIT_IDLE, true);
-
-            if (g_hw_stat.source_mode == SOURCE_MODE_HDZERO) {
-                HDZero_Close(); // Turn off RF
-            }
-            if (g_hw_stat.source_mode == SOURCE_MODE_AV) {
-                rtc6715.init(0, 0);
-            }
-
             state = OLED_MD_OFF;
             cnt = 0;
         }
@@ -155,43 +160,7 @@ static void detect_motion(bool is_moving) {
 #ifdef FAST_SIM
         LOGI("OFF %d", cnt);
 #endif
-        if (!is_moving) {
-            // no motion, stay off
-            cnt = 0;
-            break;
-        }
-
-        cnt++;
-
-        if (cnt == 2) {
-            if (g_hw_stat.source_mode == SOURCE_MODE_HDZERO) {
-                uint8_t ch = g_setting.scan.channel - 1;
-                HDZero_open(hdzero_effective_bw());
-                DM6302_SetChannel(g_setting.source.hdzero_band, ch & 0x7F);
-            }
-#if defined(HDZBOXPRO) || defined(HDZGOGGLE2)
-            bool use_internal_analog = !g_hw_stat.is_av_in;
-#if defined(HDZGOGGLE2)
-            // Match source entry: Dual uses the built-in receiver even when
-            // Expansion is selected. AV-in must leave that receiver off.
-            use_internal_analog = use_internal_analog &&
-                                  (g_setting.source.analog_module != SETTING_SOURCES_ANALOG_MODULE_EXTERNAL ||
-                                   g_setting.source.auto_protocol_detect);
-#endif
-            if (g_hw_stat.source_mode == SOURCE_MODE_AV && use_internal_analog) {
-                rtc6715.init(1, g_setting.record.audio_source == SETTING_RECORD_AUDIO_SOURCE_AV_IN);
-                rtc6715.set_ch(g_setting.source.analog_channel - 1);
-            }
-#endif
-
-            LOGI("OLED ON from protection.");
-
-            screen.brightness(g_setting.image.oled);
-
-            screen_set_inhibited(SCREEN_INHIBIT_IDLE, false);
-            state = OLED_MD_DETECTING;
-            cnt = 0;
-        }
+        cnt = 0;
         break;
 
     default:
