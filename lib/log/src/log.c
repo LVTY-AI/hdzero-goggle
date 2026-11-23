@@ -164,7 +164,9 @@ bool log_file_open(const char *filename) {
     pthread_once(&log_once, log_init_thread);
     if (!worker_started)
         return false;
-    int fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0666);
+    // Close on exec: a program started while logging is on (Wi-Fi, live stream,
+    // SSH) must not inherit the log, or the card stays busy and cannot unmount.
+    int fd = open(filename, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0666);
     if (fd < 0)
         return false;
     pthread_mutex_lock(&file_mutex);
