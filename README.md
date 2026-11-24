@@ -1,5 +1,7 @@
 # ripples' Custom HDZero Goggles Firmware
 
+**v2.0.0 is out!!!** 2.0.0 is not yet available here on Github. To download and install, please go to this [Google Drive Link](https://drive.google.com/drive/folders/14ezBpQo4ZG21I2yrCcF9tBsc_OlxSsZO?usp=share_link)
+
 To install this firmware, head on over to the [releases](https://github.com/LVTY-AI/hdzero-goggle/releases) page and download the latest version for your goggles! I also have backups on [Google Drive](https://drive.google.com/drive/folders/1L3Wu2_ggWYJpjnqjVrTsP1es7GogYQT6?usp=share_link), as well as the recovery firmware files and VTX firmwares on there.
 
 ## A couple of quick FAQ's I get very often:
